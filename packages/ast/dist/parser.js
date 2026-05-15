@@ -1,0 +1,266 @@
+import { Parser, Language } from "web-tree-sitter";
+import { readFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+let parser = null;
+let pythonLanguage = null;
+function findWasmPath() {
+    const candidates = [
+        resolve(__dirname, "../node_modules/tree-sitter-python/tree-sitter-python.wasm"),
+        resolve(__dirname, "../../../node_modules/tree-sitter-python/tree-sitter-python.wasm"),
+        resolve(__dirname, "../../../../node_modules/tree-sitter-python/tree-sitter-python.wasm"),
+    ];
+    for (const p of candidates) {
+        if (existsSync(p))
+            return p;
+    }
+    throw new Error(`tree-sitter-python.wasm not found. Searched:\n${candidates.join("\n")}`);
+}
+export async function initParser() {
+    if (parser)
+        return;
+    await Parser.init();
+    parser = new Parser();
+    const wasmPath = findWasmPath();
+    pythonLanguage = await Language.load(wasmPath);
+    parser.setLanguage(pythonLanguage);
+}
+export function parseSource(source) {
+    if (!parser)
+        throw new Error("Parser not initialized. Call initParser() first.");
+    const tree = parser.parse(source);
+    if (!tree)
+        throw new Error("Failed to parse source");
+    return tree;
+}
+export async function parseFile(filePath) {
+    await initParser();
+    const source = await readFile(filePath, "utf-8");
+    const tree = parseSource(source);
+    const rootNode = tree.rootNode;
+    const functions = [];
+    const classes = [];
+    const imports = [];
+    for (let i = 0; i < rootNode.childCount; i++) {
+        const child = rootNode.child(i);
+        switch (child.type) {
+            case "function_definition":
+                functions.push(extractFunction(child, null));
+                break;
+            case "decorated_definition":
+                handleDecorated(child, functions, classes, null);
+                break;
+            case "class_definition":
+                classes.push(extractClass(child));
+                break;
+            case "import_statement":
+                imports.push(extractImport(child));
+                break;
+            case "import_from_statement":
+                imports.push(extractFromImport(child));
+                break;
+        }
+    }
+    return { file_path: filePath, functions, classes, imports };
+}
+function extractFunction(node, className) {
+    const nameNode = node.childForFieldName("name");
+    const paramsNode = node.childForFieldName("parameters");
+    const returnTypeNode = node.childForFieldName("return_type");
+    const bodyNode = node.childForFieldName("body");
+    const name = nameNode?.text ?? "";
+    const params = paramsNode ? extractParams(paramsNode) : [];
+    const return_type = returnTypeNode?.text ?? null;
+    const is_async = node.type === "function_definition" &&
+        node.parent?.type === "decorated_definition"
+        ? node.previousNamedSibling?.type === "async"
+        : node.text.startsWith("async ");
+    const docstring = extractDocstring(bodyNode);
+    return {
+        name,
+        params,
+        return_type,
+        decorators: [],
+        is_method: className !== null,
+        is_async,
+        class_name: className,
+        start_line: node.startPosition.row + 1,
+        end_line: node.endPosition.row + 1,
+        docstring,
+    };
+}
+function extractParams(node) {
+    const params = [];
+    for (let i = 0; i < node.namedChildCount; i++) {
+        const child = node.namedChild(i);
+        switch (child.type) {
+            case "identifier":
+                params.push({
+                    name: child.text,
+                    type: null,
+                    default_value: null,
+                    is_args: false,
+                    is_kwargs: false,
+                });
+                break;
+            case "typed_parameter": {
+                const nameNode = child.childForFieldName("name") ?? child.namedChild(0);
+                const typeNode = child.childForFieldName("type") ?? child.namedChild(1);
+                params.push({
+                    name: nameNode?.text ?? "",
+                    type: typeNode?.text ?? null,
+                    default_value: null,
+                    is_args: false,
+                    is_kwargs: false,
+                });
+                break;
+            }
+            case "default_parameter": {
+                const nameNode = child.childForFieldName("name");
+                const valueNode = child.childForFieldName("value");
+                params.push({
+                    name: nameNode?.text ?? "",
+                    type: null,
+                    default_value: valueNode?.text ?? null,
+                    is_args: false,
+                    is_kwargs: false,
+                });
+                break;
+            }
+            case "typed_default_parameter": {
+                const nameNode = child.childForFieldName("name");
+                const typeNode = child.childForFieldName("type");
+                const valueNode = child.childForFieldName("value");
+                params.push({
+                    name: nameNode?.text ?? "",
+                    type: typeNode?.text ?? null,
+                    default_value: valueNode?.text ?? null,
+                    is_args: false,
+                    is_kwargs: false,
+                });
+                break;
+            }
+            case "list_splat_pattern":
+                params.push({
+                    name: child.namedChild(0)?.text ?? "",
+                    type: null,
+                    default_value: null,
+                    is_args: true,
+                    is_kwargs: false,
+                });
+                break;
+            case "dictionary_splat_pattern":
+                params.push({
+                    name: child.namedChild(0)?.text ?? "",
+                    type: null,
+                    default_value: null,
+                    is_args: false,
+                    is_kwargs: true,
+                });
+                break;
+        }
+    }
+    return params;
+}
+function extractClass(node) {
+    const nameNode = node.childForFieldName("name");
+    const bodyNode = node.childForFieldName("body");
+    const superclassNode = node.childForFieldName("superclasses");
+    const name = nameNode?.text ?? "";
+    const bases = [];
+    if (superclassNode) {
+        for (let i = 0; i < superclassNode.namedChildCount; i++) {
+            bases.push(superclassNode.namedChild(i).text);
+        }
+    }
+    const methods = [];
+    if (bodyNode) {
+        for (let i = 0; i < bodyNode.namedChildCount; i++) {
+            const child = bodyNode.namedChild(i);
+            if (child.type === "function_definition") {
+                methods.push(extractFunction(child, name));
+            }
+            else if (child.type === "decorated_definition") {
+                const funcNode = child.namedChildren.find((c) => c != null && c.type === "function_definition");
+                if (funcNode) {
+                    const fn = extractFunction(funcNode, name);
+                    fn.decorators = extractDecorators(child);
+                    methods.push(fn);
+                }
+            }
+        }
+    }
+    return {
+        name,
+        methods,
+        decorators: [],
+        start_line: node.startPosition.row + 1,
+        end_line: node.endPosition.row + 1,
+        bases,
+    };
+}
+function handleDecorated(node, functions, classes, className) {
+    const decorators = extractDecorators(node);
+    const innerNode = node.namedChildren.find((c) => c != null && (c.type === "function_definition" || c.type === "class_definition"));
+    if (!innerNode)
+        return;
+    if (innerNode.type === "function_definition") {
+        const fn = extractFunction(innerNode, className);
+        fn.decorators = decorators;
+        functions.push(fn);
+    }
+    else if (innerNode.type === "class_definition") {
+        const cls = extractClass(innerNode);
+        cls.decorators = decorators;
+        classes.push(cls);
+    }
+}
+function extractDecorators(node) {
+    return node.namedChildren
+        .filter((c) => c != null && c.type === "decorator")
+        .map((c) => c.text.slice(1));
+}
+function extractDocstring(bodyNode) {
+    if (!bodyNode || bodyNode.namedChildCount === 0)
+        return null;
+    const firstStmt = bodyNode.namedChild(0);
+    if (firstStmt.type === "expression_statement" &&
+        firstStmt.namedChild(0)?.type === "string") {
+        const raw = firstStmt.namedChild(0).text;
+        return raw.replace(/^['"`]{1,3}|['"`]{1,3}$/g, "").trim();
+    }
+    return null;
+}
+function extractImport(node) {
+    const names = [];
+    for (let i = 0; i < node.namedChildCount; i++) {
+        const child = node.namedChild(i);
+        if (child.type === "dotted_name" || child.type === "aliased_import") {
+            names.push(child.text);
+        }
+    }
+    return {
+        module: names[0] ?? "",
+        names,
+        is_from: false,
+        line: node.startPosition.row + 1,
+    };
+}
+function extractFromImport(node) {
+    const moduleNode = node.childForFieldName("module_name");
+    const module = moduleNode?.text ?? "";
+    const names = [];
+    for (let i = 0; i < node.namedChildCount; i++) {
+        const child = node.namedChild(i);
+        if (child.type === "dotted_name" && child !== moduleNode) {
+            names.push(child.text);
+        }
+        else if (child.type === "aliased_import") {
+            names.push(child.text);
+        }
+    }
+    return { module, names, is_from: true, line: node.startPosition.row + 1 };
+}
+//# sourceMappingURL=parser.js.map

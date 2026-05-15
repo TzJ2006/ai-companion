@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  "exclude": ["test-*.ts", "node_modules"],
+  "references": [
+    { "path": "packages/ast" },
+    { "path": "packages/core" },
+    { "path": "packages/history" },
+    { "path": "packages/render" },
+    { "path": "packages/cli" },
+    { "path": "packages/hook" },
+    { "path": "packages/daemon" }
+  ]
+}
