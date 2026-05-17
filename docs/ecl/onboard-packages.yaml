@@ -1,0 +1,72 @@
+ecl_version: "1.0"
+scope: "packages/"
+generated_at: "2026-05-15T19:10:00Z"
+generated_by: "/cconboard"
+
+feature_guards:
+  - name: "wasm-resolver"
+    key_files:
+      - "packages/ast/src/wasm-resolver.ts"
+      - "packages/ast/src/parser.ts"
+      - "packages/ast/src/ts-parser.ts"
+    invariants:
+      - "resolveWasmPath is the single source of WASM path resolution"
+      - "parser.ts and ts-parser.ts delegate to resolveWasmPath, never inline path search"
+    verification: "npx vitest run .devcompanion/tests/test_wasm-resolver_resolveWasmPath.test.ts"
+
+  - name: "daemon-processor"
+    key_files:
+      - "packages/daemon/src/index.ts"
+      - "packages/daemon/src/processor.ts"
+    invariants:
+      - "startDaemon only handles setup and watchFile — processing logic lives in processor.ts"
+      - "processQueue uses parseFileAuto (multi-language), not hardcoded .py filter"
+    verification: "npx vitest run .devcompanion/tests/test_daemon_processor.test.ts"
+
+  - name: "hook-extensions"
+    key_files:
+      - "packages/hook/src/index.ts"
+    invariants:
+      - "handlePostToolUse accepts supportedExtensions parameter (default includes .py + .ts variants)"
+      - "Extension check uses extname() + Set.has(), not hardcoded endsWith"
+      - "findProjectRoot is exported for testability"
+    verification: "npx vitest run .devcompanion/tests/test_hook_handlePostToolUse.test.ts"
+
+  - name: "onboard-renderer-split"
+    key_files:
+      - "packages/render/src/onboard/index.ts"
+      - "packages/render/src/onboard/overview.ts"
+      - "packages/render/src/onboard/modules.ts"
+      - "packages/render/src/onboard/index-panel.ts"
+      - "packages/render/src/onboard/page.ts"
+      - "packages/render/src/onboard/utils.ts"
+      - "packages/render/src/onboard/types.ts"
+    invariants:
+      - "renderOnboardHtml is the sole public entry point, exported from onboard/index.ts"
+      - "escapeHtml, escapeAttr, slugify live in utils.ts — no duplication"
+      - "Each sub-module is under 150 lines"
+    verification: "npx vitest run .devcompanion/tests/test_onboard_renderOnboardHtml_new.test.ts .devcompanion/tests/test_onboard_utils.test.ts"
+
+  - name: "shared-types"
+    key_files:
+      - "packages/types/src/index.ts"
+      - "packages/types/src/analysis.ts"
+      - "packages/types/src/modularity.ts"
+      - "packages/types/src/history.ts"
+    invariants:
+      - "@aidev/types is the single source of truth for shared interfaces"
+      - "core/analysis/types.ts and core/modularity/types.ts re-export from @aidev/types"
+      - "history/analysis-store.ts and history/modularity-store.ts import from @aidev/types"
+      - "No type definitions are duplicated across packages"
+    verification: "npx tsc --build packages/types packages/history packages/core"
+
+  - name: "ast-parsers"
+    key_files:
+      - "packages/ast/src/parser.ts"
+      - "packages/ast/src/ts-parser.ts"
+      - "packages/ast/src/multi-lang.ts"
+      - "packages/ast/src/identity.ts"
+    invariants:
+      - "parseFileAuto dispatches by extension — adding a language only requires new parser + extension set"
+      - "computeFunctionIdentity is stable: sha256(path + class + name + paramTypes)[0:16]"
+    verification: "npx vitest run .devcompanion/tests/test_ast_computeFunctionIdentity.test.ts .devcompanion/tests/test_ast_findWasmPath.test.ts"

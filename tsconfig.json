@@ -15,6 +15,7 @@
   },
   "exclude": ["test-*.ts", "node_modules"],
   "references": [
+    { "path": "packages/types" },
     { "path": "packages/ast" },
     { "path": "packages/core" },
     { "path": "packages/history" },

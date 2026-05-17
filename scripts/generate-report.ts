@@ -8,10 +8,10 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, relative, extname } from "node:path";
 import { readdir } from "node:fs/promises";
 import { parseFileAuto, getSupportedExtensions, computeFunctionIdentity } from "../packages/ast/src/index.ts";
-import { renderOnboardHtml } from "../packages/render/src/onboard-renderer.ts";
+import { renderOnboardHtml } from "../packages/render/src/onboard/index.ts";
 import type { ParsedModule } from "../packages/ast/src/types.ts";
 import type { ProjectIndex, FunctionIndexEntry } from "../packages/history/src/types.ts";
-import type { ReportData } from "../packages/render/src/onboard-renderer.ts";
+import type { ReportData } from "../packages/render/src/onboard/types.ts";
 
 const PROJECT_ROOT = resolve(import.meta.dirname, "..");
 
@@ -20,7 +20,8 @@ const IGNORED_DIRS = new Set([
   "__pycache__", ".venv", "coverage", ".next",
 ]);
 
-async function collectFiles(dir: string, extensions: Set<string>): Promise<string[]> {
+/** @internal */
+export async function collectFiles(dir: string, extensions: Set<string>): Promise<string[]> {
   const files: string[] = [];
   async function walk(current: string) {
     const entries = await readdir(current, { withFileTypes: true });
@@ -38,7 +39,8 @@ async function collectFiles(dir: string, extensions: Set<string>): Promise<strin
   return files;
 }
 
-async function main() {
+/** @internal */
+export async function main() {
   // Load report data if available
   let reportData: ReportData | undefined;
   const reportDataPath = resolve(PROJECT_ROOT, ".devcompanion/report-data.json");

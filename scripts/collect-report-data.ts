@@ -46,63 +46,53 @@ interface ReportData {
   functions: FunctionReason[];
 }
 
-async function collectTestResults(): Promise<Map<string, TestResult>> {
+/** @internal */
+export async function collectTestResults(): Promise<Map<string, TestResult>> {
   console.log("Running tests...");
   const results = new Map<string, TestResult>();
 
+  let stdout = "";
   try {
-    const { stdout } = await exec("npx", ["vitest", "run", ".devcompanion/tests/", "--reporter=json"], {
+    const result = await exec("npx", ["vitest", "run", ".devcompanion/tests/", "--reporter=json"], {
       cwd: PROJECT_ROOT,
       maxBuffer: 10 * 1024 * 1024,
       timeout: 120000,
+      shell: true,
     });
-
-    const data = JSON.parse(stdout);
-
-    for (const suite of data.testResults) {
-      const fileName = suite.name.split("/").pop()!;
-      const assertions = (suite.assertionResults || []).map((a: any) => ({
-        name: a.fullName || a.title || "unknown",
-        status: a.status === "passed" ? "passed" : "failed",
-        failure_message: a.failureMessages?.[0]?.split("\n")[0],
-      }));
-
-      results.set(fileName, {
-        test_file: fileName,
-        suite_status: suite.status === "passed" ? "passed" : "failed",
-        assertions,
-        error_message: suite.message?.split("\n")[0],
-      });
-    }
+    stdout = result.stdout;
   } catch (e: any) {
-    if (e.stdout) {
-      try {
-        const data = JSON.parse(e.stdout);
-        for (const suite of data.testResults) {
-          const fileName = suite.name.split("/").pop()!;
-          const assertions = (suite.assertionResults || []).map((a: any) => ({
-            name: a.fullName || a.title || "unknown",
-            status: a.status === "passed" ? "passed" : "failed",
-            failure_message: a.failureMessages?.[0]?.split("\n")[0],
-          }));
-          results.set(fileName, {
-            test_file: fileName,
-            suite_status: suite.status === "passed" ? "passed" : "failed",
-            assertions,
-            error_message: suite.message?.split("\n")[0],
-          });
-        }
-      } catch {
-        console.warn("Failed to parse test output");
+    stdout = e.stdout ?? "";
+  }
+
+  try {
+    const jsonStart = stdout.indexOf("{");
+    if (jsonStart >= 0) {
+      const data = JSON.parse(stdout.slice(jsonStart));
+      for (const suite of data.testResults ?? []) {
+        const fileName = suite.name.split(/[/\\]/).pop()!;
+        const assertions = (suite.assertionResults || []).map((a: any) => ({
+          name: a.fullName || a.title || "unknown",
+          status: a.status === "passed" ? "passed" : "failed",
+          failure_message: a.failureMessages?.[0]?.split("\n")[0],
+        }));
+        results.set(fileName, {
+          test_file: fileName,
+          suite_status: suite.status === "passed" ? "passed" : "failed",
+          assertions,
+          error_message: suite.message?.split("\n")[0],
+        });
       }
     }
+  } catch {
+    console.warn("Failed to parse test output");
   }
 
   console.log(`  Collected results for ${results.size} test suites`);
   return results;
 }
 
-async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise<string> {
+/** @internal */
+export async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise<string> {
   const params = fn.params.map(p => `${p.name}: ${p.type ?? "any"}`).join(", ");
   const sig = `${fn.is_async ? "async " : ""}${fn.class_name ? fn.class_name + "." : ""}${fn.name}(${params})${fn.return_type ? ": " + fn.return_type : ""}`;
 
@@ -125,7 +115,8 @@ In ONE sentence (max 20 words), explain what this function likely does. Be speci
   }
 }
 
-function generateHeuristicReason(fn: FunctionSignature): string {
+/** @internal */
+export function generateHeuristicReason(fn: FunctionSignature): string {
   const name = fn.name;
   const params = fn.params.map(p => p.name).join(", ");
 
@@ -164,7 +155,8 @@ function generateHeuristicReason(fn: FunctionSignature): string {
   return `Handles ${name.replace(/([A-Z])/g, " $1").trim().toLowerCase()} operation`;
 }
 
-function getTestFileName(filePath: string, fnName: string, className: string | null): string {
+/** @internal */
+export function getTestFileName(filePath: string, fnName: string, className: string | null): string {
   const fileBase = filePath.split("/").pop()?.replace(/\.(ts|tsx|py)$/, "") ?? "";
   const module = fileBase.split("/").pop() ?? fileBase;
   if (className) {
@@ -173,7 +165,8 @@ function getTestFileName(filePath: string, fnName: string, className: string | n
   return `test_${module}_${fnName}.test.ts`;
 }
 
-async function main() {
+/** @internal */
+export async function main() {
   const testResults = await collectTestResults();
 
   // Scan project for all functions

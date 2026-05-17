@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review: 2026-05-16T23:46:00.540Z</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #0f3460;
+      --fg: #eaeaea;
+      --fg-dim: #a0a0b0;
+      --accent: #4fc3f7;
+      --green: #66bb6a;
+      --green-bg: #1b3d1b;
+      --red: #ef5350;
+      --red-bg: #3d1b1b;
+      --yellow: #ffca28;
+      --yellow-bg: #3d3a1b;
+      --blue-bg: #1b2d3d;
+      --border: #2a2a4a;
+      --radius: 8px;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+
+    h1 { color: var(--accent); font-size: 1.5rem; margin-bottom: 8px; }
+    .session-meta { color: var(--fg-dim); font-size: 0.85rem; margin-bottom: 24px; }
+    .session-meta strong { color: var(--fg); }
+
+    .summary-bar {
+      display: flex; gap: 16px; padding: 12px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 24px; flex-wrap: wrap;
+    }
+    .summary-stat { font-size: 0.85rem; color: var(--fg-dim); }
+    .summary-stat strong { color: var(--accent); font-size: 1.1rem; margin-right: 4px; }
+
+    .reason-group {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .reason-header {
+      display: flex; align-items: baseline; gap: 10px;
+      padding: 14px 18px;
+      cursor: pointer; user-select: none;
+      border-bottom: 1px solid transparent;
+      transition: background 0.15s;
+    }
+    .reason-header:hover { background: var(--surface2); }
+    .reason-arrow {
+      color: var(--accent); font-size: 0.7rem;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .reason-arrow.collapsed { transform: rotate(-90deg); }
+    .reason-text {
+      font-size: 0.95rem; font-weight: 600; color: #fff;
+      flex: 1;
+    }
+    .reason-meta {
+      font-size: 0.75rem; color: var(--fg-dim);
+      white-space: nowrap;
+    }
+    .reason-body { padding: 0 18px 14px 18px; }
+    .reason-body.collapsed { display: none; }
+
+    .file-section { margin-top: 12px; }
+    .file-path {
+      font-size: 0.8rem; font-family: 'Cascadia Code', 'Fira Code', monospace;
+      color: var(--accent); padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+
+    .fn-item { margin-bottom: 2px; }
+    .fn-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer; user-select: none;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+    .fn-header:hover { background: var(--surface2); }
+    .fn-arrow {
+      color: var(--fg-dim); font-size: 0.6rem;
+      transition: transform 0.2s;
+    }
+    .fn-arrow.open { transform: rotate(90deg); }
+    .fn-name {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.85rem; font-weight: 500; color: #fff;
+    }
+    .fn-badge {
+      font-size: 0.7rem; padding: 1px 7px;
+      border-radius: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .fn-badge-add { background: var(--green-bg); color: var(--green); }
+    .fn-badge-modify { background: var(--yellow-bg); color: var(--yellow); }
+    .fn-badge-delete { background: var(--red-bg); color: var(--red); }
+    .fn-badge-rename { background: var(--blue-bg); color: var(--accent); }
+    .fn-lines { font-size: 0.7rem; color: var(--fg-dim); margin-left: auto; }
+
+    .fn-diff {
+      display: none;
+      margin: 4px 0 8px 28px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .fn-diff.open { display: block; }
+
+    .diff-block {
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.8rem; line-height: 1.6;
+    }
+    .diff-line {
+      padding: 1px 12px; white-space: pre-wrap; word-break: break-all;
+    }
+    .diff-del { background: var(--red-bg); color: #ffa4a4; }
+    .diff-add { background: var(--green-bg); color: #a4ffa4; }
+    .diff-sign { display: inline-block; width: 16px; font-weight: bold; opacity: 0.7; }
+    .diff-empty { padding: 12px; color: var(--fg-dim); font-style: italic; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Review: 2026-05-16T23:46:00.540Z</h1>
+    <div class="session-meta">
+      2026-05-16T23:46:00.540Z &middot; cli trigger
+       &middot; <em>74 function-level changes across 23 files</em>
+    </div>
+    <div class="summary-bar">
+      <div class="summary-stat"><strong>74</strong> changes</div>
+      <div class="summary-stat"><strong>23</strong> files</div>
+    </div>
+    
+    <div class="reason-group">
+      <div class="reason-header" onclick="toggleGroup(this)">
+        <span class="reason-arrow">&#9660;</span>
+        <span class="reason-text">Export internal functions for testing + fix test assertions</span>
+        <span class="reason-meta">74 changes &middot; user-provided</span>
+      </div>
+      <div class="reason-body open">
+        
+    <div class="file-section">
+      <div class="file-path">packages/ast/src/parser.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/ast/src/parser.ts-1')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/ast/src/parser.ts-1">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L1–6</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/ast/src/parser.ts-1">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import { resolve, dirname } from &quot;node:path&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { existsSync } from &quot;node:fs&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { fileURLToPath } from &quot;node:url&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-57b9d84c35cebda2-15')">
+        <span class="fn-arrow" id="arrow-fn-57b9d84c35cebda2-15">&#9654;</span>
+        <span class="fn-name">findWasmPath</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L15–17</span>
+      </div>
+      <div class="fn-diff" id="fn-57b9d84c35cebda2-15">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>const __dirname = dirname(fileURLToPath(import.meta.url));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function findWasmPath(): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const candidates = [</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  for (const p of candidates) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (existsSync(p)) return p;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  throw new Error(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `tree-sitter-python.wasm not found. Searched:\n${candidates.join(&quot;\n&quot;)}`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { resolveWasmPath } from &quot;./wasm-resolver.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function findWasmPath(): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return resolveWasmPath(&quot;tree-sitter-python&quot;, &quot;tree-sitter-python.wasm&quot;);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-aea27a3c66cd36ae-19')">
+        <span class="fn-arrow" id="arrow-fn-aea27a3c66cd36ae-19">&#9654;</span>
+        <span class="fn-name">initParser</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L19–27</span>
+      </div>
+      <div class="fn-diff" id="fn-aea27a3c66cd36ae-19">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>const __dirname = dirname(fileURLToPath(import.meta.url));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function findWasmPath(): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const candidates = [</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../../node_modules/tree-sitter-python/tree-sitter-python.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  for (const p of candidates) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (existsSync(p)) return p;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  throw new Error(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `tree-sitter-python.wasm not found. Searched:\n${candidates.join(&quot;\n&quot;)}`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { resolveWasmPath } from &quot;./wasm-resolver.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function findWasmPath(): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return resolveWasmPath(&quot;tree-sitter-python&quot;, &quot;tree-sitter-python.wasm&quot;);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-fa2922a8806e24a8-36')">
+        <span class="fn-arrow" id="arrow-fn-fa2922a8806e24a8-36">&#9654;</span>
+        <span class="fn-name">parseFile</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L36–68</span>
+      </div>
+      <div class="fn-diff" id="fn-fa2922a8806e24a8-36">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractFunction(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-390e8c1349ef1f22-70')">
+        <span class="fn-arrow" id="arrow-fn-390e8c1349ef1f22-70">&#9654;</span>
+        <span class="fn-name">extractFunction</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L70–100</span>
+      </div>
+      <div class="fn-diff" id="fn-390e8c1349ef1f22-70">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractFunction(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractParams(node: SyntaxNode): FunctionParam[] {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-20f63c45ad5840b3-102')">
+        <span class="fn-arrow" id="arrow-fn-20f63c45ad5840b3-102">&#9654;</span>
+        <span class="fn-name">extractParams</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L102–177</span>
+      </div>
+      <div class="fn-diff" id="fn-20f63c45ad5840b3-102">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractClass(node: SyntaxNode): ClassInfo {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-14a3e8b9d5817e31-179')">
+        <span class="fn-arrow" id="arrow-fn-14a3e8b9d5817e31-179">&#9654;</span>
+        <span class="fn-name">extractClass</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L179–219</span>
+      </div>
+      <div class="fn-diff" id="fn-14a3e8b9d5817e31-179">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function handleDecorated(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function handleDecorated(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-af8355efa7d45029-221')">
+        <span class="fn-arrow" id="arrow-fn-af8355efa7d45029-221">&#9654;</span>
+        <span class="fn-name">handleDecorated</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L221–243</span>
+      </div>
+      <div class="fn-diff" id="fn-af8355efa7d45029-221">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function handleDecorated(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function handleDecorated(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-d3dc32555e664beb-245')">
+        <span class="fn-arrow" id="arrow-fn-d3dc32555e664beb-245">&#9654;</span>
+        <span class="fn-name">extractDecorators</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L245–249</span>
+      </div>
+      <div class="fn-diff" id="fn-d3dc32555e664beb-245">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-2894d686fad52ccd-251')">
+        <span class="fn-arrow" id="arrow-fn-2894d686fad52ccd-251">&#9654;</span>
+        <span class="fn-name">extractDocstring</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L251–262</span>
+      </div>
+      <div class="fn-diff" id="fn-2894d686fad52ccd-251">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractDocstring(bodyNode: SyntaxNode | null): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractImport(node: SyntaxNode): ImportInfo {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-b9b6d7480950f98f-264')">
+        <span class="fn-arrow" id="arrow-fn-b9b6d7480950f98f-264">&#9654;</span>
+        <span class="fn-name">extractImport</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L264–278</span>
+      </div>
+      <div class="fn-diff" id="fn-b9b6d7480950f98f-264">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractFromImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractFromImport(node: SyntaxNode): ImportInfo {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-ab392990b6b9acdc-280')">
+        <span class="fn-arrow" id="arrow-fn-ab392990b6b9acdc-280">&#9654;</span>
+        <span class="fn-name">extractFromImport</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L280–295</span>
+      </div>
+      <div class="fn-diff" id="fn-ab392990b6b9acdc-280">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractFromImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractFromImport(node: SyntaxNode): ImportInfo {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/ast/src/ts-parser.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/ast/src/ts-parser.ts-1')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/ast/src/ts-parser.ts-1">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L1–6</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/ast/src/ts-parser.ts-1">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import { resolve, dirname } from &quot;node:path&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { existsSync } from &quot;node:fs&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { fileURLToPath } from &quot;node:url&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-c413a6d165c8f811-15')">
+        <span class="fn-arrow" id="arrow-fn-c413a6d165c8f811-15">&#9654;</span>
+        <span class="fn-name">findTsWasmPath</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L15–17</span>
+      </div>
+      <div class="fn-diff" id="fn-c413a6d165c8f811-15">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>const __dirname = dirname(fileURLToPath(import.meta.url));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const candidates = [</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  for (const p of candidates) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (existsSync(p)) return p;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  throw new Error(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `tree-sitter-typescript.wasm not found. Searched:\n${candidates.join(&quot;\n&quot;)}`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { resolveWasmPath } from &quot;./wasm-resolver.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return resolveWasmPath(&quot;tree-sitter-typescript&quot;, &quot;tree-sitter-typescript.wasm&quot;);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-e24895cd187420e0-19')">
+        <span class="fn-arrow" id="arrow-fn-e24895cd187420e0-19">&#9654;</span>
+        <span class="fn-name">initTsParser</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L19–26</span>
+      </div>
+      <div class="fn-diff" id="fn-e24895cd187420e0-19">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>const __dirname = dirname(fileURLToPath(import.meta.url));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const candidates = [</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    resolve(__dirname, &quot;../../../../node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm&quot;),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  for (const p of candidates) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (existsSync(p)) return p;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  throw new Error(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `tree-sitter-typescript.wasm not found. Searched:\n${candidates.join(&quot;\n&quot;)}`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { resolveWasmPath } from &quot;./wasm-resolver.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return resolveWasmPath(&quot;tree-sitter-typescript&quot;, &quot;tree-sitter-typescript.wasm&quot;);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-b80e74fab2e989fb-35')">
+        <span class="fn-arrow" id="arrow-fn-b80e74fab2e989fb-35">&#9654;</span>
+        <span class="fn-name">parseTsFile</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L35–70</span>
+      </div>
+      <div class="fn-diff" id="fn-b80e74fab2e989fb-35">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsFunction(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-e55fd3435d4b6b4c-73')">
+        <span class="fn-arrow" id="arrow-fn-e55fd3435d4b6b4c-73">&#9654;</span>
+        <span class="fn-name">extractTsFunction</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L73–100</span>
+      </div>
+      <div class="fn-diff" id="fn-e55fd3435d4b6b4c-73">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsFunction(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractArrowFunctions(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractArrowFunctions(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-d6857e74d91336f5-103')">
+        <span class="fn-arrow" id="arrow-fn-d6857e74d91336f5-103">&#9654;</span>
+        <span class="fn-name">extractArrowFunctions</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L103–137</span>
+      </div>
+      <div class="fn-diff" id="fn-d6857e74d91336f5-103">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractArrowFunctions(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function handleExportStatement(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractArrowFunctions(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function handleExportStatement(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-50b382b6cdd8a596-140')">
+        <span class="fn-arrow" id="arrow-fn-50b382b6cdd8a596-140">&#9654;</span>
+        <span class="fn-name">handleExportStatement</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L140–163</span>
+      </div>
+      <div class="fn-diff" id="fn-50b382b6cdd8a596-140">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function handleExportStatement(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function handleExportStatement(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsParams(node: SyntaxNode): FunctionParam[] {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-6a879e028edb1146-166')">
+        <span class="fn-arrow" id="arrow-fn-6a879e028edb1146-166">&#9654;</span>
+        <span class="fn-name">extractTsParams</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L166–203</span>
+      </div>
+      <div class="fn-diff" id="fn-6a879e028edb1146-166">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsParams(node: SyntaxNode): FunctionParam[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsClass(node: SyntaxNode): ClassInfo {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-b2e9bcec169b711a-206')">
+        <span class="fn-arrow" id="arrow-fn-b2e9bcec169b711a-206">&#9654;</span>
+        <span class="fn-name">extractTsClass</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L206–264</span>
+      </div>
+      <div class="fn-diff" id="fn-b2e9bcec169b711a-206">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsMethod(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsClass(node: SyntaxNode): ClassInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsMethod(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-8ae2a560ca0a5fca-267')">
+        <span class="fn-arrow" id="arrow-fn-8ae2a560ca0a5fca-267">&#9654;</span>
+        <span class="fn-name">extractTsMethod</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L267–293</span>
+      </div>
+      <div class="fn-diff" id="fn-8ae2a560ca0a5fca-267">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsMethod(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsMethod(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsDecorators(node: SyntaxNode): string[] {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-220722a217c78950-296')">
+        <span class="fn-arrow" id="arrow-fn-220722a217c78950-296">&#9654;</span>
+        <span class="fn-name">extractTsDecorators</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L296–304</span>
+      </div>
+      <div class="fn-diff" id="fn-220722a217c78950-296">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractJsDoc(node: SyntaxNode): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsDecorators(node: SyntaxNode): string[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractJsDoc(node: SyntaxNode): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-bd7bb96e9e93e8b0-307')">
+        <span class="fn-arrow" id="arrow-fn-bd7bb96e9e93e8b0-307">&#9654;</span>
+        <span class="fn-name">extractJsDoc</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L307–317</span>
+      </div>
+      <div class="fn-diff" id="fn-bd7bb96e9e93e8b0-307">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractJsDoc(node: SyntaxNode): string | null {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractJsDoc(node: SyntaxNode): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsImport(node: SyntaxNode): ImportInfo {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-6de7dbd5cb82ddc6-320')">
+        <span class="fn-arrow" id="arrow-fn-6de7dbd5cb82ddc6-320">&#9654;</span>
+        <span class="fn-name">extractTsImport</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L320–347</span>
+      </div>
+      <div class="fn-diff" id="fn-6de7dbd5cb82ddc6-320">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractTsImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function cleanTypeAnnotation(text: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractTsImport(node: SyntaxNode): ImportInfo {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function cleanTypeAnnotation(text: string): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-ca4fc8d653d9156c-350')">
+        <span class="fn-arrow" id="arrow-fn-ca4fc8d653d9156c-350">&#9654;</span>
+        <span class="fn-name">cleanTypeAnnotation</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L350–352</span>
+      </div>
+      <div class="fn-diff" id="fn-ca4fc8d653d9156c-350">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function cleanTypeAnnotation(text: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function cleanTypeAnnotation(text: string): string {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/cli/src/commands/render.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-6ffb2a4d31dd7d6c-49')">
+        <span class="fn-arrow" id="arrow-fn-6ffb2a4d31dd7d6c-49">&#9654;</span>
+        <span class="fn-name">buildMinimalDiff</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L49–71</span>
+      </div>
+      <div class="fn-diff" id="fn-6ffb2a4d31dd7d6c-49">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildMinimalDiff(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildMinimalDiff(</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/cli/src/main.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/cli/src/main.ts-5')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/cli/src/main.ts-5">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L5–25</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/cli/src/main.ts-5">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>import { analyzeCommand } from &quot;./commands/analyze.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>program.addCommand(analyzeCommand);</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/package.json</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/core/package.json-10')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/core/package.json-10">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L10–18</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/core/package.json-10">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>    &quot;@aidev/history&quot;: &quot;*&quot;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;@aidev/history&quot;: &quot;*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;@aidev/types&quot;: &quot;*&quot;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/src/diff/annotator.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-7a0fb6e58ddb1be0-26')">
+        <span class="fn-arrow" id="arrow-fn-7a0fb6e58ddb1be0-26">&#9654;</span>
+        <span class="fn-name">annotateChanges</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L26–74</span>
+      </div>
+      <div class="fn-diff" id="fn-7a0fb6e58ddb1be0-26">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>          function_name: &quot;&lt;module-level&gt;&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        const label = isConfigFile(diff.file_path) ? &quot;&lt;config-change&gt;&quot; : &quot;&lt;module-level&gt;&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          function_name: label,</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-60a8bede5cba9187-113')">
+        <span class="fn-arrow" id="arrow-fn-60a8bede5cba9187-113">&#9654;</span>
+        <span class="fn-name">inferChangeType</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L113–121</span>
+      </div>
+      <div class="fn-diff" id="fn-60a8bede5cba9187-113">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function deduplicateByFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function deduplicateByFunction(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-c083400c2445af6f-123')">
+        <span class="fn-arrow" id="arrow-fn-c083400c2445af6f-123">&#9654;</span>
+        <span class="fn-name">deduplicateByFunction</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L123–141</span>
+      </div>
+      <div class="fn-diff" id="fn-c083400c2445af6f-123">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function deduplicateByFunction(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractNewContent(hunks: DiffHunk[]): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function deduplicateByFunction(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>function isConfigFile(filePath: string): boolean {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return /\.(json|yaml|yml|toml|ini|env|lock)$/.test(filePath) ||</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    /^(tsconfig|vitest\.config|vite\.config|jest\.config|eslint)/.test(filePath.split(&quot;/&quot;).pop() ?? &quot;&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>}</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractNewContent(hunks: DiffHunk[]): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-6ec3be01770c8398-143')">
+        <span class="fn-arrow" id="arrow-fn-6ec3be01770c8398-143">&#9654;</span>
+        <span class="fn-name">isConfigFile</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L143–146</span>
+      </div>
+      <div class="fn-diff" id="fn-6ec3be01770c8398-143">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractNewContent(hunks: DiffHunk[]): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>function isConfigFile(filePath: string): boolean {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return /\.(json|yaml|yml|toml|ini|env|lock)$/.test(filePath) ||</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    /^(tsconfig|vitest\.config|vite\.config|jest\.config|eslint)/.test(filePath.split(&quot;/&quot;).pop() ?? &quot;&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>}</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractNewContent(hunks: DiffHunk[]): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-5071b12587e0e115-148')">
+        <span class="fn-arrow" id="arrow-fn-5071b12587e0e115-148">&#9654;</span>
+        <span class="fn-name">extractOldContent</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L148–152</span>
+      </div>
+      <div class="fn-diff" id="fn-5071b12587e0e115-148">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractNewContent(hunks: DiffHunk[]): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>function isConfigFile(filePath: string): boolean {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return /\.(json|yaml|yml|toml|ini|env|lock)$/.test(filePath) ||</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    /^(tsconfig|vitest\.config|vite\.config|jest\.config|eslint)/.test(filePath.split(&quot;/&quot;).pop() ?? &quot;&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>}</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractNewContent(hunks: DiffHunk[]): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-63e0f8b31b286db2-155')">
+        <span class="fn-arrow" id="arrow-fn-63e0f8b31b286db2-155">&#9654;</span>
+        <span class="fn-name">extractNewContent</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L155–159</span>
+      </div>
+      <div class="fn-diff" id="fn-63e0f8b31b286db2-155">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function extractNewContent(hunks: DiffHunk[]): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>function isConfigFile(filePath: string): boolean {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  return /\.(json|yaml|yml|toml|ini|env|lock)$/.test(filePath) ||</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    /^(tsconfig|vitest\.config|vite\.config|jest\.config|eslint)/.test(filePath.split(&quot;/&quot;).pop() ?? &quot;&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>}</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function extractNewContent(hunks: DiffHunk[]): string {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/src/diff/parser.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-551602f345575131-29')">
+        <span class="fn-arrow" id="arrow-fn-551602f345575131-29">&#9654;</span>
+        <span class="fn-name">getGitDiff</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L29–57</span>
+      </div>
+      <div class="fn-diff" id="fn-551602f345575131-29">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>  const { stdout } = await execFileAsync(&quot;git&quot;, args, { cwd: projectRoot });</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  args.push(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;--&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)node_modules&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*/dist/*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)dist/*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.tsbuildinfo&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.map&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)package-lock.json&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.html&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const { stdout } = await execFileAsync(&quot;git&quot;, args, {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    cwd: projectRoot,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    maxBuffer: 50 * 1024 * 1024,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  });</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-9851b82e6ca003b0-59')">
+        <span class="fn-arrow" id="arrow-fn-9851b82e6ca003b0-59">&#9654;</span>
+        <span class="fn-name">parseUnifiedDiff</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L59–90</span>
+      </div>
+      <div class="fn-diff" id="fn-9851b82e6ca003b0-59">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>  const { stdout } = await execFileAsync(&quot;git&quot;, args, { cwd: projectRoot });</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  args.push(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;--&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)node_modules&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*/dist/*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)dist/*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.tsbuildinfo&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.map&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)package-lock.json&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;:(exclude)*.html&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  );</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const { stdout } = await execFileAsync(&quot;git&quot;, args, {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    cwd: projectRoot,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    maxBuffer: 50 * 1024 * 1024,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  });</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/src/index.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/core/src/index.ts-20')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/core/src/index.ts-20">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L20–63</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/core/src/index.ts-20">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>export {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  buildAnalysisPrompt,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeHeuristic,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeFunctionWithLlm,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeBatch,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;./analysis/index.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  AnalysisInput,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  AnalysisParam,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  AnalysisOutput,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FunctionAnalysis,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  AnalysisStoreData,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  AnalyzerOptions,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;./analysis/index.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeModularityHeuristic,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  buildModularityPrompt,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeModularityWithLlm,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  analyzeModularityBatch,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  aggregateModuleMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  buildContractFileContent,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  emitContractFiles,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;./modularity/index.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  CohesionMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  CouplingMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  HiddenDependency,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  InterfaceClarity,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  RefactorRecommendation,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  InterfaceContract,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FunctionModularity,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModuleMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModularityStoreData,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModularityInput,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModularityAnalyzerOptions,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;./modularity/index.js&quot;;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/src/test-gen/ts-generator.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-2c4c07b17271397a-20')">
+        <span class="fn-arrow" id="arrow-fn-2c4c07b17271397a-20">&#9654;</span>
+        <span class="fn-name">generateTestSkeleton</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L20–52</span>
+      </div>
+      <div class="fn-diff" id="fn-2c4c07b17271397a-20">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildFunctionTest(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const importPath = sourceFile.replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  lines.push(`import { ${fn.name} } from &quot;../${importPath}&quot;;`);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildFunctionTest(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const importPath = sourceFile.replace(/\\/g, &quot;/&quot;).replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  lines.push(`import { ${fn.name} } from &quot;../../${importPath}&quot;;`);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-1275d898bc99202b-55')">
+        <span class="fn-arrow" id="arrow-fn-1275d898bc99202b-55">&#9654;</span>
+        <span class="fn-name">buildFunctionTest</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L55–79</span>
+      </div>
+      <div class="fn-diff" id="fn-1275d898bc99202b-55">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildFunctionTest(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const importPath = sourceFile.replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  lines.push(`import { ${fn.name} } from &quot;../${importPath}&quot;;`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildClassTest(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const importPath = sourceFile.replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  lines.push(`import { ${className} } from &quot;../${importPath}&quot;;`);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildFunctionTest(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const importPath = sourceFile.replace(/\\/g, &quot;/&quot;).replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  lines.push(`import { ${fn.name} } from &quot;../../${importPath}&quot;;`);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildClassTest(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const importPath = sourceFile.replace(/\\/g, &quot;/&quot;).replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  lines.push(`import { ${className} } from &quot;../../${importPath}&quot;;`);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-88c790076c6a042c-82')">
+        <span class="fn-arrow" id="arrow-fn-88c790076c6a042c-82">&#9654;</span>
+        <span class="fn-name">buildClassTest</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L82–130</span>
+      </div>
+      <div class="fn-diff" id="fn-88c790076c6a042c-82">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildClassTest(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const importPath = sourceFile.replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  lines.push(`import { ${className} } from &quot;../${importPath}&quot;;`);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildClassTest(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const importPath = sourceFile.replace(/\\/g, &quot;/&quot;).replace(/\.ts$/, &quot;.js&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  lines.push(`import { ${className} } from &quot;../../${importPath}&quot;;`);</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-435e5e7756c07cd3-138')">
+        <span class="fn-arrow" id="arrow-fn-435e5e7756c07cd3-138">&#9654;</span>
+        <span class="fn-name">inferTestCases</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L138–197</span>
+      </div>
+      <div class="fn-diff" id="fn-435e5e7756c07cd3-138">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferTestCases(fn: FunctionSignature): TestCase[] {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferMockValue(name: string, type: string | null): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferTestCases(fn: FunctionSignature): TestCase[] {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferMockValue(name: string, type: string | null): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-2a698c33a5695478-199')">
+        <span class="fn-arrow" id="arrow-fn-2a698c33a5695478-199">&#9654;</span>
+        <span class="fn-name">inferMockValue</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L199–215</span>
+      </div>
+      <div class="fn-diff" id="fn-2a698c33a5695478-199">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferMockValue(name: string, type: string | null): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferFromName(name: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferMockValue(name: string, type: string | null): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferFromName(name: string): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-9b75b77573f56fd3-217')">
+        <span class="fn-arrow" id="arrow-fn-9b75b77573f56fd3-217">&#9654;</span>
+        <span class="fn-name">inferFromName</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L217–229</span>
+      </div>
+      <div class="fn-diff" id="fn-9b75b77573f56fd3-217">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferFromName(name: string): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferReturnTypeCheck(returnType: string): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferFromName(name: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferReturnTypeCheck(returnType: string): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-817e5967fc757906-232')">
+        <span class="fn-arrow" id="arrow-fn-817e5967fc757906-232">&#9654;</span>
+        <span class="fn-name">inferReturnTypeCheck</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L232–241</span>
+      </div>
+      <div class="fn-diff" id="fn-817e5967fc757906-232">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function inferReturnTypeCheck(returnType: string): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function inferReturnTypeCheck(returnType: string): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-cbf038517482720c-256')">
+        <span class="fn-arrow" id="arrow-fn-cbf038517482720c-256">&#9654;</span>
+        <span class="fn-name">inferBadValue</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L256–263</span>
+      </div>
+      <div class="fn-diff" id="fn-cbf038517482720c-256">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildTestPath(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const baseName = sourceFile.split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildTestPath(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const baseName = sourceFile.replace(/\\/g, &quot;/&quot;).split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-675872e5add0c14e-266')">
+        <span class="fn-arrow" id="arrow-fn-675872e5add0c14e-266">&#9654;</span>
+        <span class="fn-name">buildTestPath</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L266–274</span>
+      </div>
+      <div class="fn-diff" id="fn-675872e5add0c14e-266">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildTestPath(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const baseName = sourceFile.split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildTestPath(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const baseName = sourceFile.replace(/\\/g, &quot;/&quot;).split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-afc493572180a193-276')">
+        <span class="fn-arrow" id="arrow-fn-afc493572180a193-276">&#9654;</span>
+        <span class="fn-name">buildLlmEnhancePrompt</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L276–305</span>
+      </div>
+      <div class="fn-diff" id="fn-afc493572180a193-276">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildTestPath(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const baseName = sourceFile.split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildTestPath(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const baseName = sourceFile.replace(/\\/g, &quot;/&quot;).split(&quot;/&quot;).pop()?.replace(/\.ts$/, &quot;&quot;) ?? &quot;module&quot;;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/core/tsconfig.json</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/core/tsconfig.json-14')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/core/tsconfig.json-14">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L14–21</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/core/tsconfig.json-14">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>    { &quot;path&quot;: &quot;../types&quot; },</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/daemon/src/index.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-e4ddf888e98cbbd5-7')">
+        <span class="fn-arrow" id="arrow-fn-e4ddf888e98cbbd5-7">&#9654;</span>
+        <span class="fn-name">startDaemon</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L7–22</span>
+      </div>
+      <div class="fn-diff" id="fn-e4ddf888e98cbbd5-7">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import { readFile, writeFile, rename } from &quot;node:fs/promises&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { existsSync, watchFile } from &quot;node:fs&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { getGitDiff, annotateChanges, toChangeRecords } from &quot;@aidev/core&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { initParser, parseFile } from &quot;@aidev/ast&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import type { ReviewSession } from &quot;@aidev/history&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import type { FunctionSignature } from &quot;@aidev/ast&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import { randomUUID } from &quot;node:crypto&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>interface QueueEvent {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  timestamp: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  tool: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  file_path: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  pre_snapshot_path: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reason: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  await initParser();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const processQueue = async () =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (!existsSync(queueFile)) return;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const processingFile = queueFile + &quot;.processing&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    try {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      await rename(queueFile, processingFile);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    } catch {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      return;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const content = await readFile(processingFile, &quot;utf-8&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const events = content</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .trim()</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .split(&quot;\n&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .filter(Boolean)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .map((line) =&gt; JSON.parse(line) as QueueEvent);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (events.length === 0) return;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    console.log(`[daemon] Processing ${events.length} events...`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const changedFiles = [...new Set(events.map((e) =&gt; e.file_path))];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const diffs = await getGitDiff(projectRoot);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const relevantDiffs = diffs.filter((d) =&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      changedFiles.some((f) =&gt; f.endsWith(d.file_path))</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    );</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (relevantDiffs.length === 0) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      console.log(&quot;[daemon] No relevant diffs found, skipping.&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      await writeFile(processingFile, &quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      return;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const functionMap = new Map&lt;string, FunctionSignature[]&gt;();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    for (const diff of relevantDiffs) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      if (diff.file_path.endsWith(&quot;.py&quot;) &amp;&amp; diff.status !== &quot;deleted&quot;) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        try {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const parsed = await parseFile(resolve(projectRoot, diff.file_path));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          functionMap.set(diff.file_path, [</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            ...parsed.functions,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            ...parsed.classes.flatMap((c) =&gt; c.methods),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          ]);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        } catch {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          functionMap.set(diff.file_path, []);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const sessionId = randomUUID();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const reason = events[0]?.reason ?? &quot;auto-captured&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const annotations = annotateChanges(relevantDiffs, functionMap, {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      reason,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      reason_source: &quot;context&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      session_id: sessionId,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const records = toChangeRecords(annotations, sessionId);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const session: ReviewSession = {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      id: sessionId,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      timestamp: new Date().toISOString(),</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      trigger: &quot;hook&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      summary: `Auto-captured: ${records.length} changes in ${changedFiles.length} files`,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      total_changes: records.length,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      files_changed: [...new Set(records.map((r) =&gt; r.file_path))],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      changes: records,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    };</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    await store.saveSession(session);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    await writeFile(processingFile, &quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    console.log(`[daemon] Session saved: ${session.id} (${records.length} changes)`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  };</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    processQueue().catch((err) =&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { watchFile } from &quot;node:fs&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { initParsers } from &quot;@aidev/ast&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { processQueue } from &quot;./processor.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  await initParsers();</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    processQueue(queueFile, projectRoot, store).catch((err) =&gt; {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/history/package.json</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/history/package.json-9')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/history/package.json-9">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L9–17</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/history/package.json-9">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>    &quot;@aidev/ast&quot;: &quot;*&quot;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;@aidev/ast&quot;: &quot;*&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    &quot;@aidev/types&quot;: &quot;*&quot;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/history/src/index.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/history/src/index.ts-7')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/history/src/index.ts-7">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L7–25</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/history/src/index.ts-7">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>export { AnalysisStore } from &quot;./analysis-store.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type { FunctionAnalysis, AnalysisStoreData, AnalysisParam, AnalysisOutput } from &quot;./analysis-store.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export { ModularityStore } from &quot;./modularity-store.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FunctionModularity,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModuleMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ModularityStoreData,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  CohesionMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  CouplingMetrics,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  HiddenDependency,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  InterfaceClarity,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  RefactorRecommendation,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  InterfaceContract,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;./modularity-store.js&quot;;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/history/src/types.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/history/src/types.ts-1')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/history/src/types.ts-1">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L1–9</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/history/src/types.ts-1">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface ChangeRecord {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  id: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  timestamp: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  file_path: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_hash: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_name: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  class_name: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  change_type: &quot;add&quot; | &quot;modify&quot; | &quot;delete&quot; | &quot;rename&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reason: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reason_source: &quot;context&quot; | &quot;llm-inferred&quot; | &quot;user-provided&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  old_content: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  new_content: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  start_line: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  end_line: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_status: &quot;pending&quot; | &quot;pass&quot; | &quot;fail&quot; | &quot;skipped&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_file: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  error_id: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  session_id: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface ReviewSession {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  id: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  timestamp: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  trigger: &quot;hook&quot; | &quot;cli&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  summary: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_changes: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  files_changed: string[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  changes: ChangeRecord[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface FileHistory {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  file_path: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  last_updated: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_records: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  functions: Record&lt;string, FunctionHistory&gt;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface FunctionHistory {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_hash: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_name: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  class_name: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  records: ChangeRecord[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  prev_hashes: string[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface ProjectIndex {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  project_root: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  last_updated: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_sessions: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_changes: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_index: Record&lt;string, FunctionIndexEntry&gt;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface FunctionIndexEntry {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  hash: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  file_path: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_name: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  class_name: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  last_modified: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  change_count: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_status: &quot;pass&quot; | &quot;fail&quot; | &quot;pending&quot; | &quot;skipped&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ChangeRecord,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ReviewSession,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FileHistory,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FunctionHistory,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  ProjectIndex,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  FunctionIndexEntry,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>} from &quot;@aidev/types&quot;;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/history/tsconfig.json</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/history/tsconfig.json-14')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/history/tsconfig.json-14">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L14–21</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/history/tsconfig.json-14">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>    { &quot;path&quot;: &quot;../types&quot; },</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/hook/src/index.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/hook/src/index.ts-1')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/hook/src/index.ts-1">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L1–6</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/hook/src/index.ts-1">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import { join, resolve } from &quot;node:path&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { join, resolve, extname } from &quot;node:path&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-c18b45bd0e8bcfc4-16')">
+        <span class="fn-arrow" id="arrow-fn-c18b45bd0e8bcfc4-16">&#9654;</span>
+        <span class="fn-name">handlePostToolUse</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L16–54</span>
+      </div>
+      <div class="fn-diff" id="fn-c18b45bd0e8bcfc4-16">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>export function handlePostToolUse(stdin: string): void {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  if (!filePath.endsWith(&quot;.py&quot;)) return;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function findProjectRoot(filePath: string): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>const SUPPORTED_EXTENSIONS = new Set([&quot;.py&quot;, &quot;.pyi&quot;, &quot;.ts&quot;, &quot;.tsx&quot;, &quot;.mts&quot;, &quot;.cts&quot;]);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function handlePostToolUse(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  stdin: string,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  supportedExtensions: Set&lt;string&gt; = SUPPORTED_EXTENSIONS</div><div class="diff-line diff-add"><span class="diff-sign">+</span>): void {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  const ext = extname(filePath).toLowerCase();</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  if (!supportedExtensions.has(ext)) return;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function findProjectRoot(filePath: string): string | null {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-e29412a4d7485ca5-56')">
+        <span class="fn-arrow" id="arrow-fn-e29412a4d7485ca5-56">&#9654;</span>
+        <span class="fn-name">findProjectRoot</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L56–67</span>
+      </div>
+      <div class="fn-diff" id="fn-e29412a4d7485ca5-56">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function findProjectRoot(filePath: string): string | null {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function findProjectRoot(filePath: string): string | null {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/render/src/index.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/render/src/index.ts-1')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/render/src/index.ts-1">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L1–5</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/render/src/index.ts-1">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>export { renderOnboardHtml } from &quot;./onboard-renderer.js&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export type { OnboardRenderOptions } from &quot;./onboard-renderer.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export { renderOnboardHtml } from &quot;./onboard/index.js&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export type { OnboardRenderOptions, ReportData, FunctionReasonData } from &quot;./onboard/index.js&quot;;</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/render/src/onboard-renderer.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::packages/render/src/onboard-renderer.ts-0')">
+        <span class="fn-arrow" id="arrow-fn-module::packages/render/src/onboard-renderer.ts-0">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-delete">delete</span>
+        <span class="fn-lines">L0–0</span>
+      </div>
+      <div class="fn-diff" id="fn-module::packages/render/src/onboard-renderer.ts-0">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import type { ProjectIndex, FunctionIndexEntry } from &quot;@aidev/history&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import type { ParsedModule, FunctionSignature, ClassInfo } from &quot;@aidev/ast&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface FunctionReasonData {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  file_path: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  function_name: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  class_name: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  signature: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reason: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reason_source: &quot;llm-inferred&quot; | &quot;user-provided&quot; | &quot;heuristic&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_file: string | null;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_status: &quot;passed&quot; | &quot;failed&quot; | &quot;no-test&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  test_details: Array&lt;{ name: string; status: string; reason?: string }&gt;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface ReportData {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  generated_at: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_functions: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  total_tests: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  tests_passed: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  tests_failed: number;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  functions: FunctionReasonData[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export interface OnboardRenderOptions {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  title?: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  project_root: string;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  modules: ParsedModule[];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  reportData?: ReportData;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>export function renderOnboardHtml(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  index: ProjectIndex,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  options: OnboardRenderOptions</div><div class="diff-line diff-del"><span class="diff-sign">-</span>): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const title = options.title ?? &quot;Project Onboarding Report&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const modules = options.modules;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const reportData = options.reportData;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const totalFunctions = Object.keys(index.function_index).length;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const files = [...new Set(Object.values(index.function_index).map(e =&gt; e.file_path))];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const summaryHtml = renderOverview(totalFunctions, files.length, modules, reportData);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const modulesHtml = renderModules(modules, reportData);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const indexHtml = renderFunctionIndex(index.function_index);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return buildOnboardPage(title, summaryHtml, modulesHtml, indexHtml);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderOverview(totalFunctions: number, totalFiles: number, modules: ParsedModule[], reportData?: ReportData): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const totalClasses = modules.reduce((sum, m) =&gt; sum + m.classes.length, 0);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const totalImports = modules.reduce((sum, m) =&gt; sum + m.imports.length, 0);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const testStats = reportData ? `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card stat-pass&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${reportData.tests_passed}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Tests Passed&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card stat-fail&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${reportData.tests_failed}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Tests Failed&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const reasonLegend = reportData ? `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;reason-legend&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;h3&gt;Reason Source Legend&lt;/h3&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;legend-items&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;legend-item&quot;&gt;&lt;span class=&quot;reason-badge reason-llm&quot;&gt;LLM&lt;/span&gt; AI-inferred from function signature&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;legend-item&quot;&gt;&lt;span class=&quot;reason-badge reason-user&quot;&gt;User&lt;/span&gt; Explicitly provided by developer&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;legend-item&quot;&gt;&lt;span class=&quot;reason-badge reason-heuristic&quot;&gt;Heuristic&lt;/span&gt; Rule-based inference from naming conventions&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  ` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;overview-panel&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;h2&gt;Project Overview&lt;/h2&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;stats-grid&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${totalFiles}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Source Files&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${totalFunctions}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Functions&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${totalClasses}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Classes&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;stat-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-number&quot;&gt;${totalImports}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;stat-label&quot;&gt;Import Statements&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${testStats}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${reasonLegend}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderModules(modules: ParsedModule[], reportData?: ReportData): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const sorted = [...modules].sort((a, b) =&gt; a.file_path.localeCompare(b.file_path));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const reasonMap = new Map&lt;string, FunctionReasonData&gt;();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  if (reportData) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    for (const fr of reportData.functions) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const key = `${fr.file_path}::${fr.class_name ?? &quot;&quot;}::${fr.function_name}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      reasonMap.set(key, fr);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const cards = sorted.map(mod =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const functionsHtml = mod.functions.map(fn =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const key = `${mod.file_path}::${fn.class_name ?? &quot;&quot;}::${fn.name}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      return renderFunctionCard(fn, reasonMap.get(key));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }).join(&quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const classesHtml = mod.classes.map(cls =&gt; renderClassCard(cls, mod.file_path, reasonMap)).join(&quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const counts: string[] = [];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (mod.functions.length &gt; 0) counts.push(`${mod.functions.length} functions`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (mod.classes.length &gt; 0) counts.push(`${mod.classes.length} classes`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (mod.imports.length &gt; 0) counts.push(`${mod.imports.length} imports`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;module-card&quot; id=&quot;file-${slugify(mod.file_path)}&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;module-header&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;h3&gt;&lt;code&gt;${escapeHtml(mod.file_path)}&lt;/code&gt;&lt;/h3&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          &lt;span class=&quot;module-stats&quot;&gt;${counts.join(&quot; · &quot;)}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;div class=&quot;module-body&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          ${classesHtml}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          ${functionsHtml}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;modules-section&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;h2&gt;File Breakdown&lt;/h2&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${cards.join(&quot;\n&quot;)}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderFunctionCard(fn: FunctionSignature, reasonData?: FunctionReasonData): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const params = fn.params.map(p =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    let s = p.name;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (p.type) s += `: ${p.type}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (p.default_value) s += ` = ${p.default_value}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (p.is_args) s = `...${s}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    return escapeHtml(s);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }).join(&quot;, &quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const returnType = fn.return_type ? `: ${escapeHtml(fn.return_type)}` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const asyncBadge = fn.is_async ? '&lt;span class=&quot;badge badge-async&quot;&gt;async&lt;/span&gt;' : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const decorators = fn.decorators.length &gt; 0</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    ? fn.decorators.map(d =&gt; `&lt;span class=&quot;decorator&quot;&gt;@${escapeHtml(d)}&lt;/span&gt;`).join(&quot; &quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  let reasonHtml = &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  if (reasonData) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const badgeClass = `reason-${reasonData.reason_source === &quot;llm-inferred&quot; ? &quot;llm&quot; : reasonData.reason_source === &quot;user-provided&quot; ? &quot;user&quot; : &quot;heuristic&quot;}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const badgeLabel = reasonData.reason_source === &quot;llm-inferred&quot; ? &quot;LLM&quot; : reasonData.reason_source === &quot;user-provided&quot; ? &quot;User&quot; : &quot;Heuristic&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const fnKey = `${reasonData.file_path}::${reasonData.class_name ?? &quot;&quot;}::${reasonData.function_name}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const actions = reasonData.reason_source !== &quot;user-provided&quot;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ? `&lt;span class=&quot;reason-actions&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>           &lt;button class=&quot;btn-confirm&quot; onclick=&quot;confirmReason(this, '${escapeAttr(fnKey)}')&quot;&gt;Confirm&lt;/button&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>           &lt;button class=&quot;btn-edit&quot; onclick=&quot;editReason(this, '${escapeAttr(fnKey)}')&quot;&gt;Edit&lt;/button&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>         &lt;/span&gt;`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    reasonHtml = `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;fn-reason&quot; data-fn-key=&quot;${escapeAttr(fnKey)}&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;reason-badge ${badgeClass}&quot;&gt;${badgeLabel}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;reason-text&quot;&gt;${escapeHtml(reasonData.reason)}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${actions}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  let testHtml = &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  if (reasonData &amp;&amp; reasonData.test_file) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const statusClass = reasonData.test_status === &quot;passed&quot; ? &quot;test-pass&quot; : &quot;test-fail&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const statusIcon = reasonData.test_status === &quot;passed&quot; ? &quot;&amp;#x2713;&quot; : &quot;&amp;#x2717;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const testDetails = reasonData.test_details.length &gt; 0</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ? `&lt;div class=&quot;test-details&quot;&gt;${reasonData.test_details.map(td =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const icon = td.status === &quot;passed&quot; ? '&lt;span class=&quot;test-icon pass&quot;&gt;&amp;#x2713;&lt;/span&gt;' : '&lt;span class=&quot;test-icon fail&quot;&gt;&amp;#x2717;&lt;/span&gt;';</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const failReason = td.reason ? `&lt;span class=&quot;test-fail-reason&quot;&gt;${escapeHtml(td.reason)}&lt;/span&gt;` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          return `&lt;div class=&quot;test-detail-item&quot;&gt;${icon} &lt;span class=&quot;test-name&quot;&gt;${escapeHtml(td.name)}&lt;/span&gt;${failReason}&lt;/div&gt;`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }).join(&quot;&quot;)}&lt;/div&gt;`</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    testHtml = `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;fn-test ${statusClass}&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;test-status-icon&quot;&gt;${statusIcon}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;test-file-name&quot;&gt;${escapeHtml(reasonData.test_file)}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;test-status-badge ${statusClass}&quot;&gt;${reasonData.test_status.toUpperCase()}&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${testDetails}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  } else if (reasonData) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    testHtml = `&lt;div class=&quot;fn-test test-none&quot;&gt;&lt;span class=&quot;test-status-badge test-none&quot;&gt;NO TEST&lt;/span&gt;&lt;/div&gt;`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;function-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;function-signature&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${decorators}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${asyncBadge}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;fn-name&quot;&gt;${escapeHtml(fn.name)}&lt;/span&gt;(&lt;span class=&quot;fn-params&quot;&gt;${params}&lt;/span&gt;)${returnType}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${reasonHtml}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${fn.docstring ? `&lt;div class=&quot;fn-doc&quot;&gt;${escapeHtml(fn.docstring)}&lt;/div&gt;` : &quot;&quot;}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${testHtml}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;fn-location&quot;&gt;Lines ${fn.start_line}–${fn.end_line}&lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderClassCard(cls: ClassInfo, filePath: string, reasonMap: Map&lt;string, FunctionReasonData&gt;): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const bases = cls.bases.length &gt; 0 ? ` extends ${cls.bases.map(b =&gt; escapeHtml(b)).join(&quot;, &quot;)}` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const methodsHtml = cls.methods.map(m =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const key = `${filePath}::${cls.name}::${m.name}`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    return renderFunctionCard(m, reasonMap.get(key));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }).join(&quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;class-card&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;class-header&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;class-keyword&quot;&gt;class&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;class-name&quot;&gt;${escapeHtml(cls.name)}&lt;/span&gt;${bases}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;span class=&quot;class-stats&quot;&gt;${cls.methods.length} methods&lt;/span&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;class-methods&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        ${methodsHtml}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderFunctionIndex(functionIndex: Record&lt;string, FunctionIndexEntry&gt;): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const entries = Object.values(functionIndex).sort((a, b) =&gt; a.file_path.localeCompare(b.file_path));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const byFile = new Map&lt;string, FunctionIndexEntry[]&gt;();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  for (const entry of entries) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const arr = byFile.get(entry.file_path) ?? [];</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    arr.push(entry);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    byFile.set(entry.file_path, arr);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  const rows = [...byFile.entries()].map(([file, fns]) =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const fnList = fns.map(f =&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const cls = f.class_name ? `${f.class_name}.` : &quot;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      return `&lt;li&gt;&lt;code&gt;${cls}${escapeHtml(f.function_name)}&lt;/code&gt; &lt;span class=&quot;hash&quot;&gt;${f.hash.slice(0, 8)}&lt;/span&gt;&lt;/li&gt;`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }).join(&quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;div class=&quot;index-file&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;a href=&quot;#file-${slugify(file)}&quot;&gt;&lt;code&gt;${escapeHtml(file)}&lt;/code&gt;&lt;/a&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        &lt;ul&gt;${fnList}&lt;/ul&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;index-panel&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;h2&gt;Function Index&lt;/h2&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${rows.join(&quot;\n&quot;)}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  `;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildOnboardPage(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  title: string,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  overview: string,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  modules: string,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  index: string</div><div class="diff-line diff-del"><span class="diff-sign">-</span>): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return `&lt;!DOCTYPE html&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;html lang=&quot;en&quot; data-generated=&quot;${new Date().toISOString()}&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;head&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;meta charset=&quot;UTF-8&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;title&gt;${escapeHtml(title)}&lt;/title&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;style&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    :root {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --bg: #0d1117;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --fg: #c9d1d9;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --border: #30363d;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --accent: #58a6ff;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --green: #3fb950;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --red: #f85149;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --yellow: #d29922;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --purple: #bc8cff;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      --card-bg: #161b22;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    * { box-sizing: border-box; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 20px; line-height: 1.5; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    h1 { color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 10px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    h2 { color: var(--accent); margin-top: 30px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .layout { display: grid; grid-template-columns: 1fr 280px; gap: 24px; max-width: 1600px; margin: 0 auto; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .main-content { min-width: 0; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .sidebar { position: sticky; top: 20px; align-self: start; max-height: calc(100vh - 40px); overflow-y: auto; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .overview-panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stat-card { text-align: center; padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stat-number { display: block; font-size: 2em; font-weight: bold; color: var(--accent); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stat-label { font-size: 0.85em; color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .module-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .module-header { padding: 12px 16px; background: rgba(88, 166, 255, 0.05); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .module-header h3 { margin: 0; font-size: 0.95em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .module-stats { font-size: 0.8em; color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .module-body { padding: 12px 16px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .function-card { padding: 8px 12px; margin: 6px 0; border-left: 3px solid var(--accent); background: rgba(88, 166, 255, 0.03); border-radius: 0 4px 4px 0; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .function-signature { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.88em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-name { color: var(--green); font-weight: bold; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-params { color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-doc { font-size: 0.82em; color: #8b949e; font-style: italic; margin-top: 4px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-location { font-size: 0.75em; color: #484f58; margin-top: 2px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-card { margin: 12px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-header { padding: 8px 12px; background: rgba(188, 140, 255, 0.08); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-keyword { color: var(--purple); font-family: monospace; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-name { color: var(--yellow); font-weight: bold; font-family: monospace; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-stats { font-size: 0.8em; color: #8b949e; margin-left: auto; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .class-methods { padding: 8px 12px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .badge { font-size: 0.72em; padding: 2px 6px; border-radius: 10px; vertical-align: middle; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .badge-async { background: #1a2a3a; color: var(--accent); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .decorator { font-size: 0.8em; color: var(--yellow); margin-right: 4px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-panel { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-panel h2 { margin-top: 0; font-size: 1em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-file { margin-bottom: 12px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-file a { color: var(--accent); text-decoration: none; font-size: 0.85em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-file a:hover { text-decoration: underline; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-file ul { list-style: none; padding-left: 12px; margin: 4px 0; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .index-file li { font-size: 0.8em; padding: 2px 0; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .hash { color: #484f58; font-size: 0.85em; font-family: monospace; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    code { background: #1a1a2e; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    /* Reason styles */</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-reason { margin: 6px 0; display: flex; align-items: center; gap: 8px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-badge { font-size: 0.7em; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-llm { background: #1a3a5c; color: #58a6ff; border: 1px solid #2a5a8c; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-user { background: #1a3c1a; color: #3fb950; border: 1px solid #2a6c2a; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-heuristic { background: #3c2e1a; color: #d29922; border: 1px solid #6c4e2a; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-text { font-size: 0.85em; color: #c9d1d9; font-style: italic; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-legend { margin-top: 16px; padding: 12px; background: rgba(88, 166, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-legend h3 { margin: 0 0 8px; font-size: 0.9em; color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .legend-items { display: flex; flex-wrap: wrap; gap: 16px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .legend-item { font-size: 0.82em; color: #8b949e; display: flex; align-items: center; gap: 6px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    /* Test result styles */</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-test { margin: 6px 0; padding: 6px 10px; border-radius: 4px; font-size: 0.82em; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-test.test-pass { background: rgba(63, 185, 80, 0.08); border: 1px solid rgba(63, 185, 80, 0.2); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-test.test-fail { background: rgba(248, 81, 73, 0.08); border: 1px solid rgba(248, 81, 73, 0.2); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .fn-test.test-none { background: rgba(139, 148, 158, 0.08); border: 1px solid rgba(139, 148, 158, 0.2); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-status-icon { font-size: 1.1em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-file-name { font-family: monospace; font-size: 0.9em; color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-status-badge { font-size: 0.7em; padding: 2px 6px; border-radius: 8px; font-weight: 600; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-status-badge.test-pass { background: #1a3c1a; color: #3fb950; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-status-badge.test-fail { background: #3c1a1a; color: #f85149; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-status-badge.test-none { background: #2a2a2a; color: #8b949e; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-details { width: 100%; margin-top: 4px; padding-left: 20px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-detail-item { padding: 2px 0; display: flex; align-items: flex-start; gap: 6px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-icon { font-weight: bold; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-icon.pass { color: var(--green); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-icon.fail { color: var(--red); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-name { color: #c9d1d9; font-size: 0.9em; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .test-fail-reason { color: var(--red); font-size: 0.85em; display: block; margin-top: 2px; font-family: monospace; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stat-pass .stat-number { color: var(--green); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .stat-fail .stat-number { color: var(--red); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    /* Interactive confirm/edit buttons */</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-actions { display: inline-flex; gap: 4px; margin-left: 8px; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-actions button { font-size: 0.7em; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: #8b949e; cursor: pointer; transition: all 0.2s; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-actions button:hover { border-color: var(--accent); color: var(--accent); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-actions button.btn-confirm:hover { border-color: var(--green); color: var(--green); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-actions button.btn-edit:hover { border-color: var(--yellow); color: var(--yellow); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .reason-confirmed .reason-badge { animation: flash-green 0.5s; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    @keyframes flash-green { 0% { transform: scale(1); } 50% { transform: scale(1.2); background: #2a6c2a; } 100% { transform: scale(1); } }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    @media (max-width: 1024px) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .layout { grid-template-columns: 1fr; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .sidebar { position: static; max-height: none; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      .stats-grid { grid-template-columns: repeat(2, 1fr); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;/style&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;/head&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;body&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;h1&gt;${escapeHtml(title)}&lt;/h1&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;div class=&quot;layout&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;main-content&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${overview}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${modules}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;div class=&quot;sidebar&quot;&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      ${index}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;/div&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;script&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    // Persist confirmed/edited reasons to localStorage</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const STORAGE_KEY = &quot;onboard-report-reasons&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    function loadReasons() {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || &quot;{}&quot;); }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      catch { return {}; }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    function saveReasons(data) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    function confirmReason(btn, fnKey) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const container = btn.closest(&quot;.fn-reason&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const reasonText = container.querySelector(&quot;.reason-text&quot;).textContent;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const badge = container.querySelector(&quot;.reason-badge&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      // Update visual</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      badge.className = &quot;reason-badge reason-user&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      badge.textContent = &quot;User&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      container.querySelector(&quot;.reason-actions&quot;)?.remove();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      container.classList.add(&quot;reason-confirmed&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      // Persist</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const reasons = loadReasons();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      reasons[fnKey] = { reason: reasonText, source: &quot;user-provided&quot;, confirmed_at: new Date().toISOString() };</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      saveReasons(reasons);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    function editReason(btn, fnKey) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const container = btn.closest(&quot;.fn-reason&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const reasonSpan = container.querySelector(&quot;.reason-text&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const currentText = reasonSpan.textContent;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const input = document.createElement(&quot;input&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.type = &quot;text&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.value = currentText;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.style.cssText = &quot;background: var(--bg); border: 1px solid var(--accent); color: var(--fg); padding: 4px 8px; border-radius: 4px; font-size: 0.85em; width: 300px;&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.onkeydown = function(e) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        if (e.key === &quot;Enter&quot;) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const newText = input.value.trim();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          if (newText) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            reasonSpan.textContent = newText;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            const badge = container.querySelector(&quot;.reason-badge&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            badge.className = &quot;reason-badge reason-user&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            badge.textContent = &quot;User&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            container.querySelector(&quot;.reason-actions&quot;)?.remove();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            const reasons = loadReasons();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            reasons[fnKey] = { reason: newText, source: &quot;user-provided&quot;, confirmed_at: new Date().toISOString() };</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            saveReasons(reasons);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          input.replaceWith(reasonSpan);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        } else if (e.key === &quot;Escape&quot;) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          input.replaceWith(reasonSpan);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      };</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.onblur = () =&gt; input.replaceWith(reasonSpan);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      reasonSpan.replaceWith(input);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.focus();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      input.select();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    // On load, apply persisted reasons</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    (function() {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const reasons = loadReasons();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      for (const [fnKey, data] of Object.entries(reasons)) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        const el = document.querySelector(\`[data-fn-key=&quot;\${CSS.escape(fnKey)}&quot;]\`);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        if (el) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const badge = el.querySelector(&quot;.reason-badge&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const text = el.querySelector(&quot;.reason-text&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          if (badge &amp;&amp; text) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            badge.className = &quot;reason-badge reason-user&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            badge.textContent = &quot;User&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            text.textContent = data.reason;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            el.querySelector(&quot;.reason-actions&quot;)?.remove();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    })();</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  &lt;/script&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;/body&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>&lt;/html&gt;`;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function escapeHtml(text: string): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return text</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&amp;/g, &quot;&amp;amp;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&lt;/g, &quot;&amp;lt;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&gt;/g, &quot;&amp;gt;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&quot;/g, &quot;&amp;quot;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function escapeAttr(text: string): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return text</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&amp;/g, &quot;&amp;amp;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/'/g, &quot;&amp;#39;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&quot;/g, &quot;&amp;quot;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&lt;/g, &quot;&amp;lt;&quot;)</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    .replace(/&gt;/g, &quot;&amp;gt;&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function slugify(text: string): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>  return text.replace(/[^a-zA-Z0-9]/g, &quot;-&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>}</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">packages/render/src/renderer.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-ba75e6bd6d064c85-11')">
+        <span class="fn-arrow" id="arrow-fn-ba75e6bd6d064c85-11">&#9654;</span>
+        <span class="fn-name">renderSessionToHtml</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L11–31</span>
+      </div>
+      <div class="fn-diff" id="fn-ba75e6bd6d064c85-11">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderSummaryPanel(session: ReviewSession): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function renderSummaryPanel(session: ReviewSession): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-6b31b415f581b761-34')">
+        <span class="fn-arrow" id="arrow-fn-6b31b415f581b761-34">&#9654;</span>
+        <span class="fn-name">renderSummaryPanel</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L34–52</span>
+      </div>
+      <div class="fn-diff" id="fn-6b31b415f581b761-34">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderSummaryPanel(session: ReviewSession): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;p class=&quot;session-summary&quot;&gt;${session.summary}&lt;/p&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderAnnotationsPanel(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function renderSummaryPanel(session: ReviewSession): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &lt;p class=&quot;session-summary&quot;&gt;${escapeHtml(session.summary)}&lt;/p&gt;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function renderAnnotationsPanel(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-da9e8b88c52e43af-55')">
+        <span class="fn-arrow" id="arrow-fn-da9e8b88c52e43af-55">&#9654;</span>
+        <span class="fn-name">renderAnnotationsPanel</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L55–93</span>
+      </div>
+      <div class="fn-diff" id="fn-da9e8b88c52e43af-55">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>      &lt;p class=&quot;session-summary&quot;&gt;${session.summary}&lt;/p&gt;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function renderAnnotationsPanel(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildFullPage(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &lt;p class=&quot;session-summary&quot;&gt;${escapeHtml(session.summary)}&lt;/p&gt;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function renderAnnotationsPanel(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildFullPage(</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-588001c50e77e41b-96')">
+        <span class="fn-arrow" id="arrow-fn-588001c50e77e41b-96">&#9654;</span>
+        <span class="fn-name">buildFullPage</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L96–158</span>
+      </div>
+      <div class="fn-diff" id="fn-588001c50e77e41b-96">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function buildFullPage(</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function escapeHtml(text: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function buildFullPage(</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function escapeHtml(text: string): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-cb8e66161f41ca5b-160')">
+        <span class="fn-arrow" id="arrow-fn-cb8e66161f41ca5b-160">&#9654;</span>
+        <span class="fn-name">escapeHtml</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L160–166</span>
+      </div>
+      <div class="fn-diff" id="fn-cb8e66161f41ca5b-160">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function escapeHtml(text: string): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function escapeHtml(text: string): string {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">scripts/collect-report-data.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-65a50d5f22343d0e-50')">
+        <span class="fn-arrow" id="arrow-fn-65a50d5f22343d0e-50">&#9654;</span>
+        <span class="fn-name">collectTestResults</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L50–92</span>
+      </div>
+      <div class="fn-diff" id="fn-65a50d5f22343d0e-50">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>async function collectTestResults(): Promise&lt;Map&lt;string, TestResult&gt;&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const { stdout } = await exec(&quot;npx&quot;, [&quot;vitest&quot;, &quot;run&quot;, &quot;.devcompanion/tests/&quot;, &quot;--reporter=json&quot;], {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const data = JSON.parse(stdout);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    for (const suite of data.testResults) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const fileName = suite.name.split(&quot;/&quot;).pop()!;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      }));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      results.set(fileName, {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        test_file: fileName,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        assertions,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (e.stdout) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      try {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        const data = JSON.parse(e.stdout);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        for (const suite of data.testResults) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const fileName = suite.name.split(&quot;/&quot;).pop()!;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          }));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          results.set(fileName, {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            test_file: fileName,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            assertions,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      } catch {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        console.warn(&quot;Failed to parse test output&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise&lt;string&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function collectTestResults(): Promise&lt;Map&lt;string, TestResult&gt;&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  let stdout = &quot;&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    const result = await exec(&quot;npx&quot;, [&quot;vitest&quot;, &quot;run&quot;, &quot;.devcompanion/tests/&quot;, &quot;--reporter=json&quot;], {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      shell: true,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    stdout = result.stdout;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    stdout = e.stdout ?? &quot;&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  }</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  try {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    const jsonStart = stdout.indexOf(&quot;{&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    if (jsonStart &gt;= 0) {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      const data = JSON.parse(stdout.slice(jsonStart));</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      for (const suite of data.testResults ?? []) {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        const fileName = suite.name.split(/[/\\]/).pop()!;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        }));</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        results.set(fileName, {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          test_file: fileName,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          assertions,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        });</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  } catch {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    console.warn(&quot;Failed to parse test output&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise&lt;string&gt; {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-3d60695dfd851787-95')">
+        <span class="fn-arrow" id="arrow-fn-3d60695dfd851787-95">&#9654;</span>
+        <span class="fn-name">generateFunctionReason</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L95–116</span>
+      </div>
+      <div class="fn-diff" id="fn-3d60695dfd851787-95">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>async function collectTestResults(): Promise&lt;Map&lt;string, TestResult&gt;&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const { stdout } = await exec(&quot;npx&quot;, [&quot;vitest&quot;, &quot;run&quot;, &quot;.devcompanion/tests/&quot;, &quot;--reporter=json&quot;], {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    const data = JSON.parse(stdout);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    for (const suite of data.testResults) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const fileName = suite.name.split(&quot;/&quot;).pop()!;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      }));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      results.set(fileName, {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        test_file: fileName,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        assertions,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>    if (e.stdout) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      try {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        const data = JSON.parse(e.stdout);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        for (const suite of data.testResults) {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const fileName = suite.name.split(&quot;/&quot;).pop()!;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          }));</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          results.set(fileName, {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            test_file: fileName,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            assertions,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>            error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-del"><span class="diff-sign">-</span>          });</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        }</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      } catch {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>        console.warn(&quot;Failed to parse test output&quot;);</div><div class="diff-line diff-del"><span class="diff-sign">-</span>async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise&lt;string&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function generateHeuristicReason(fn: FunctionSignature): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function collectTestResults(): Promise&lt;Map&lt;string, TestResult&gt;&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  let stdout = &quot;&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    const result = await exec(&quot;npx&quot;, [&quot;vitest&quot;, &quot;run&quot;, &quot;.devcompanion/tests/&quot;, &quot;--reporter=json&quot;], {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      shell: true,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    stdout = result.stdout;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    stdout = e.stdout ?? &quot;&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  }</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  try {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    const jsonStart = stdout.indexOf(&quot;{&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    if (jsonStart &gt;= 0) {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      const data = JSON.parse(stdout.slice(jsonStart));</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      for (const suite of data.testResults ?? []) {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        const fileName = suite.name.split(/[/\\]/).pop()!;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        const assertions = (suite.assertionResults || []).map((a: any) =&gt; ({</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          name: a.fullName || a.title || &quot;unknown&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          status: a.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          failure_message: a.failureMessages?.[0]?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        }));</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        results.set(fileName, {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          test_file: fileName,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          suite_status: suite.status === &quot;passed&quot; ? &quot;passed&quot; : &quot;failed&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          assertions,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>          error_message: suite.message?.split(&quot;\n&quot;)[0],</div><div class="diff-line diff-add"><span class="diff-sign">+</span>        });</div><div class="diff-line diff-add"><span class="diff-sign">+</span>  } catch {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    console.warn(&quot;Failed to parse test output&quot;);</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function generateFunctionReason(fn: FunctionSignature, filePath: string): Promise&lt;string&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function generateHeuristicReason(fn: FunctionSignature): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-1e6cac2426cd4be3-119')">
+        <span class="fn-arrow" id="arrow-fn-1e6cac2426cd4be3-119">&#9654;</span>
+        <span class="fn-name">generateHeuristicReason</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L119–156</span>
+      </div>
+      <div class="fn-diff" id="fn-1e6cac2426cd4be3-119">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function generateHeuristicReason(fn: FunctionSignature): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>function getTestFileName(filePath: string, fnName: string, className: string | null): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function generateHeuristicReason(fn: FunctionSignature): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function getTestFileName(filePath: string, fnName: string, className: string | null): string {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-b65399f963fede11-159')">
+        <span class="fn-arrow" id="arrow-fn-b65399f963fede11-159">&#9654;</span>
+        <span class="fn-name">getTestFileName</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L159–166</span>
+      </div>
+      <div class="fn-diff" id="fn-b65399f963fede11-159">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>function getTestFileName(filePath: string, fnName: string, className: string | null): string {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>async function main() {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export function getTestFileName(filePath: string, fnName: string, className: string | null): string {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function main() {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-52de0545dbf3a026-169')">
+        <span class="fn-arrow" id="arrow-fn-52de0545dbf3a026-169">&#9654;</span>
+        <span class="fn-name">main</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L169–285</span>
+      </div>
+      <div class="fn-diff" id="fn-52de0545dbf3a026-169">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>async function main() {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function main() {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">scripts/generate-report.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::scripts/generate-report.ts-8')">
+        <span class="fn-arrow" id="arrow-fn-module::scripts/generate-report.ts-8">&#9654;</span>
+        <span class="fn-name">&lt;module-level&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L8–18</span>
+      </div>
+      <div class="fn-diff" id="fn-module::scripts/generate-report.ts-8">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>import { renderOnboardHtml } from &quot;../packages/render/src/onboard-renderer.ts&quot;;</div><div class="diff-line diff-del"><span class="diff-sign">-</span>import type { ReportData } from &quot;../packages/render/src/onboard-renderer.ts&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import { renderOnboardHtml } from &quot;../packages/render/src/onboard/index.ts&quot;;</div><div class="diff-line diff-add"><span class="diff-sign">+</span>import type { ReportData } from &quot;../packages/render/src/onboard/types.ts&quot;;</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-a4df067dc4677a5c-24')">
+        <span class="fn-arrow" id="arrow-fn-a4df067dc4677a5c-24">&#9654;</span>
+        <span class="fn-name">collectFiles</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L24–40</span>
+      </div>
+      <div class="fn-diff" id="fn-a4df067dc4677a5c-24">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>async function collectFiles(dir: string, extensions: Set&lt;string&gt;): Promise&lt;string[]&gt; {</div><div class="diff-line diff-del"><span class="diff-sign">-</span>async function main() {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function collectFiles(dir: string, extensions: Set&lt;string&gt;): Promise&lt;string[]&gt; {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function main() {</div></div>
+      </div>
+    </div>
+  
+
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-316a2104d4fb65d1-43')">
+        <span class="fn-arrow" id="arrow-fn-316a2104d4fb65d1-43">&#9654;</span>
+        <span class="fn-name">main</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L43–119</span>
+      </div>
+      <div class="fn-diff" id="fn-316a2104d4fb65d1-43">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>async function main() {</div><div class="diff-line diff-add"><span class="diff-sign">+</span>/** @internal */</div><div class="diff-line diff-add"><span class="diff-sign">+</span>export async function main() {</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">tsconfig.json</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::tsconfig.json-15')">
+        <span class="fn-arrow" id="arrow-fn-module::tsconfig.json-15">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L15–22</span>
+      </div>
+      <div class="fn-diff" id="fn-module::tsconfig.json-15">
+        <div class="diff-block"><div class="diff-line diff-add"><span class="diff-sign">+</span>    { &quot;path&quot;: &quot;packages/types&quot; },</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+
+    <div class="file-section">
+      <div class="file-path">vitest.config.ts</div>
+      
+    <div class="fn-item">
+      <div class="fn-header" onclick="toggleFn('fn-module::vitest.config.ts-4')">
+        <span class="fn-arrow" id="arrow-fn-module::vitest.config.ts-4">&#9654;</span>
+        <span class="fn-name">&lt;config-change&gt;</span>
+        <span class="fn-badge fn-badge-modify">modify</span>
+        <span class="fn-lines">L4–21</span>
+      </div>
+      <div class="fn-diff" id="fn-module::vitest.config.ts-4">
+        <div class="diff-block"><div class="diff-line diff-del"><span class="diff-sign">-</span>      &quot;@aidev/ast&quot;: &quot;/Users/tongtongtot/Desktop/algorithms/ai-dev-companion/packages/ast/src/index.ts&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &quot;@aidev/core&quot;: &quot;/Users/tongtongtot/Desktop/algorithms/ai-dev-companion/packages/core/src/index.ts&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &quot;@aidev/history&quot;: &quot;/Users/tongtongtot/Desktop/algorithms/ai-dev-companion/packages/history/src/index.ts&quot;,</div><div class="diff-line diff-del"><span class="diff-sign">-</span>      &quot;@aidev/render&quot;: &quot;/Users/tongtongtot/Desktop/algorithms/ai-dev-companion/packages/render/src/index.ts&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &quot;@aidev/ast&quot;: &quot;./packages/ast/src/index.ts&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &quot;@aidev/core&quot;: &quot;./packages/core/src/index.ts&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &quot;@aidev/history&quot;: &quot;./packages/history/src/index.ts&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>      &quot;@aidev/render&quot;: &quot;./packages/render/src/index.ts&quot;,</div><div class="diff-line diff-add"><span class="diff-sign">+</span>    fileParallelism: false,</div></div>
+      </div>
+    </div>
+  
+    </div>
+  
+      </div>
+    </div>
+  
+  </div>
+  <script>
+    function toggleGroup(el) {
+      var arrow = el.querySelector('.reason-arrow');
+      var body = el.nextElementSibling;
+      arrow.classList.toggle('collapsed');
+      body.classList.toggle('collapsed');
+    }
+    function toggleFn(id) {
+      var diff = document.getElementById(id);
+      var arrow = document.getElementById('arrow-' + id);
+      if (diff) { diff.classList.toggle('open'); }
+      if (arrow) { arrow.classList.toggle('open'); }
+    }
+  </script>
+</body>
+</html>
