@@ -1,2 +1,2 @@
-export type { ChangeRecord, ReviewSession, FileHistory, FunctionHistory, ProjectIndex, FunctionIndexEntry, } from "@aidev/types";
+export type { ChangeRecord, ReviewSession, FileHistory, FunctionHistory, ProjectIndex, FunctionIndexEntry, EclContext, } from "@aidev/types";
 //# sourceMappingURL=types.d.ts.map

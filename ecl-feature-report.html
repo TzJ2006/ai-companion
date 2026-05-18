@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ECL Feature Report</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #0f3460;
+      --fg: #eaeaea;
+      --fg-dim: #a0a0b0;
+      --accent: #4fc3f7;
+      --green: #66bb6a;
+      --green-bg: #1b3d1b;
+      --red: #ef5350;
+      --red-bg: #3d1b1b;
+      --yellow: #ffca28;
+      --yellow-bg: #3d3a1b;
+      --border: #2a2a4a;
+      --radius: 8px;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      margin: 0;
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { color: var(--accent); font-size: 1.5rem; margin-bottom: 8px; }
+    .subtitle { color: var(--fg-dim); font-size: 0.85rem; margin-bottom: 24px; }
+    .summary-bar {
+      display: flex; gap: 16px; padding: 12px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 24px; flex-wrap: wrap;
+    }
+    .summary-stat { font-size: 0.85rem; color: var(--fg-dim); }
+    .summary-stat strong { color: var(--accent); font-size: 1.1rem; margin-right: 4px; }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .feature-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px;
+      cursor: pointer; user-select: none;
+    }
+    .feature-header:hover { background: var(--surface2); }
+    .status-badge {
+      font-size: 0.7rem; padding: 2px 8px;
+      border-radius: 10px; font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-pass { background: var(--green-bg); color: var(--green); }
+    .status-fail { background: var(--red-bg); color: var(--red); }
+    .status-partial { background: var(--yellow-bg); color: var(--yellow); }
+    .feature-name {
+      font-size: 0.95rem; font-weight: 600; color: #fff;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .feature-purpose {
+      font-size: 0.8rem; color: var(--fg-dim);
+      margin-left: auto;
+    }
+    .feature-body {
+      padding: 0 18px 14px 18px;
+      display: none;
+    }
+    .feature-body.open { display: block; }
+    .section-label {
+      font-size: 0.7rem; text-transform: uppercase;
+      color: var(--accent); font-weight: 600;
+      margin-top: 12px; margin-bottom: 4px;
+    }
+    .approach {
+      font-size: 0.8rem; color: var(--fg);
+      padding: 8px 12px;
+      background: var(--surface2);
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .constraint-list {
+      list-style: none; padding: 0; margin: 0;
+    }
+    .constraint-list li {
+      font-size: 0.8rem; color: var(--fg-dim);
+      padding: 2px 0;
+    }
+    .constraint-list li::before {
+      content: "\2022"; color: var(--accent);
+      margin-right: 8px;
+    }
+    .verification-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0;
+      font-size: 0.8rem;
+    }
+    .v-icon { font-size: 1rem; }
+    .v-pass { color: var(--green); }
+    .v-fail { color: var(--red); }
+    .v-name { color: var(--fg); }
+    .v-cmd {
+      font-family: 'Cascadia Code', monospace;
+      font-size: 0.7rem; color: var(--fg-dim);
+      margin-left: auto;
+    }
+    .file-count {
+      font-size: 0.75rem; color: var(--fg-dim);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ECL Feature Report</h1>
+    <div class="subtitle">Generated: 2026-05-18T03:37:29.391Z | Features organized by ECL definition</div>
+    <div class="summary-bar">
+      <div class="summary-stat"><strong>6</strong>/<strong>6</strong> features passing</div>
+      <div class="summary-stat"><strong>9</strong> verification checks</div>
+    </div>
+    
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">wasm-resolver</span>
+        <span class="file-count">3 files</span>
+        <span class="feature-purpose">为函数级变更追踪提供 AST 解析能力——没有 AST 就无法知道 diff 改了哪个函数</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">resolveWasmPath 统一负责 WASM 路径查找（向上搜索 node_modules），各语言 parser 调用它获取 .wasm 文件路径</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>resolveWasmPath is the single source of WASM path resolution</li><li>parser.ts and ts-parser.ts delegate to resolveWasmPath, never inline path search</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">WASM 路径解析功能正确</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_ast_findWasmPath....</span>
+    </div>
+  
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">无内联 WASM 路径拼接（只能通过 resolveWasmPath 调用）</span>
+      <span class="v-cmd">grep -rnE &quot;path.*wasm|__dirname.*wasm|node_modules.*wasm&quot;...</span>
+    </div>
+  
+      </div>
+    </div>
+  
+
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">daemon-processor</span>
+        <span class="file-count">2 files</span>
+        <span class="feature-purpose">让 hook 保持 &lt;100ms 轻量，复杂的 diff 解析 + AST 解析 + 存储在后台完成</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">index.ts 负责文件监视和启动；processor.ts 负责完整流水线：read queue → git diff → parseFileAuto → annotateChanges → saveSession</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>startDaemon only handles setup and watchFile — processing logic lives in processor.ts</li><li>processQueue uses parseFileAuto (multi-language), not hardcoded .py filter</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">processor 流水线测试</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_daemon_processor....</span>
+    </div>
+  
+      </div>
+    </div>
+  
+
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">hook-extensions</span>
+        <span class="file-count">1 files</span>
+        <span class="feature-purpose">自动捕获代码变更 + 原因，无需开发者手动操作</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">从 stdin 读取 tool_name + file_path → 过滤扩展名 → 找 project root → 检测 active ECL → append 到 queue</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>handlePostToolUse accepts supportedExtensions parameter (default includes .py + .ts variants)</li><li>Extension check uses extname() + Set.has(), not hardcoded endsWith</li><li>findProjectRoot is exported for testability</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">hook 事件捕获测试</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_hook_handlePostTo...</span>
+    </div>
+  
+      </div>
+    </div>
+  
+
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">onboard-renderer-split</span>
+        <span class="file-count">7 files</span>
+        <span class="feature-purpose">保持 render 包可维护——单文件渲染器容易膨胀失控</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">renderOnboardHtml 是唯一公开入口，内部按面板拆分为 overview/modules/index-panel，page.ts 组装完整 HTML</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>renderOnboardHtml is the sole public entry point, exported from onboard/index.ts</li><li>escapeHtml, escapeAttr, slugify live in utils.ts — no duplication</li><li>Each sub-module is under 250 lines (page.ts as template assembler is allowed more)</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">onboard 渲染正确性</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_onboard_renderOnb...</span>
+    </div>
+  
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">子模块行数检查</span>
+      <span class="v-cmd">wc -l packages/render/src/onboard/*.ts | grep -v total</span>
+    </div>
+  
+      </div>
+    </div>
+  
+
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">shared-types</span>
+        <span class="file-count">4 files</span>
+        <span class="feature-purpose">避免类型定义在多个包之间重复，确保接口一致性</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">所有共享类型定义在 @aidev/types；其他包通过 import type 引用；需要局部类型的包用 re-export</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>@aidev/types is the single source of truth for shared interfaces</li><li>core/analysis/types.ts and core/modularity/types.ts re-export from @aidev/types</li><li>history/analysis-store.ts and history/modularity-store.ts import from @aidev/types</li><li>No type definitions are duplicated across packages</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">类型一致性编译检查</span>
+      <span class="v-cmd">npx tsc --build packages/types packages/history packages/...</span>
+    </div>
+  
+      </div>
+    </div>
+  
+
+    <div class="feature-card">
+      <div class="feature-header" onclick="toggleFeature(this)">
+        <span class="status-badge status-pass">PASS</span>
+        <span class="feature-name">ast-parsers</span>
+        <span class="file-count">4 files</span>
+        <span class="feature-purpose">提供函数级变更归因的基础——知道文件里有哪些函数以及它们在哪些行</span>
+      </div>
+      <div class="feature-body">
+        <div class="section-label">Approach</div>
+        <div class="approach">parseFileAuto 按扩展名分发到对应 parser；computeFunctionIdentity 用 sha256(path+class+name+params)[0:16] 生成稳定哈希</div>
+        <div class="section-label">Constraints</div><ul class="constraint-list"><li>parseFileAuto dispatches by extension — adding a language only requires new parser + extension set</li><li>computeFunctionIdentity is stable: sha256(path + class + name + paramTypes)[0:16]</li></ul>
+        <div class="section-label">Verification</div>
+        
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">函数身份哈希测试</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_ast_computeFuncti...</span>
+    </div>
+  
+    <div class="verification-item">
+      <span class="v-icon v-pass">&#10003;</span>
+      <span class="v-name">WASM 路径查找测试</span>
+      <span class="v-cmd">npx vitest run .devcompanion/tests/test_ast_findWasmPath....</span>
+    </div>
+  
+      </div>
+    </div>
+  
+  </div>
+  <script>
+    function toggleFeature(el) {
+      var body = el.nextElementSibling;
+      body.classList.toggle('open');
+    }
+  </script>
+</body>
+</html>

@@ -1,26 +1,16 @@
-import { Tree, Node as SyntaxNode } from "web-tree-sitter";
+import { Node as SyntaxNode } from "web-tree-sitter";
 import type { FunctionSignature, FunctionParam, ClassInfo, ImportInfo, ParsedModule } from "./types.js";
-export declare function initTsParser(): Promise<void>;
-export declare function parseTsSource(source: string): Tree;
-export declare function parseTsFile(filePath: string): Promise<ParsedModule>;
-/** @internal */
+export declare const initTsParser: () => Promise<void>;
+export declare const parseTsSource: (source: string) => import("web-tree-sitter").Tree;
+export declare const parseTsFile: (filePath: string) => Promise<ParsedModule>;
 export declare function extractTsFunction(node: SyntaxNode, className: string | null): FunctionSignature;
-/** @internal */
 export declare function extractArrowFunctions(node: SyntaxNode, functions: FunctionSignature[]): void;
-/** @internal */
 export declare function handleExportStatement(node: SyntaxNode, functions: FunctionSignature[], classes: ClassInfo[], imports: ImportInfo[]): void;
-/** @internal */
 export declare function extractTsParams(node: SyntaxNode): FunctionParam[];
-/** @internal */
 export declare function extractTsClass(node: SyntaxNode): ClassInfo;
-/** @internal */
 export declare function extractTsMethod(node: SyntaxNode, className: string): FunctionSignature;
-/** @internal */
 export declare function extractTsDecorators(node: SyntaxNode): string[];
-/** @internal */
 export declare function extractJsDoc(node: SyntaxNode): string | null;
-/** @internal */
 export declare function extractTsImport(node: SyntaxNode): ImportInfo;
-/** @internal */
 export declare function cleanTypeAnnotation(text: string): string;
 //# sourceMappingURL=ts-parser.d.ts.map

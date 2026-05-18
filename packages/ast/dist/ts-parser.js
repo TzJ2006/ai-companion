@@ -1,33 +1,13 @@
-import { Parser, Language } from "web-tree-sitter";
-import { readFile } from "node:fs/promises";
-import { resolveWasmPath } from "./wasm-resolver.js";
-let parser = null;
-let tsLanguage = null;
-function findTsWasmPath() {
-    return resolveWasmPath("tree-sitter-typescript", "tree-sitter-typescript.wasm");
-}
-export async function initTsParser() {
-    if (parser)
-        return;
-    await Parser.init();
-    parser = new Parser();
-    const wasmPath = findTsWasmPath();
-    tsLanguage = await Language.load(wasmPath);
-    parser.setLanguage(tsLanguage);
-}
-export function parseTsSource(source) {
-    if (!parser)
-        throw new Error("TS Parser not initialized. Call initTsParser() first.");
-    const tree = parser.parse(source);
-    if (!tree)
-        throw new Error("Failed to parse TypeScript source");
-    return tree;
-}
-export async function parseTsFile(filePath) {
-    await initTsParser();
-    const source = await readFile(filePath, "utf-8");
-    const tree = parseTsSource(source);
-    const rootNode = tree.rootNode;
+import { createLanguageParser } from "./parser-factory.js";
+const tsParser = createLanguageParser({
+    packageName: "tree-sitter-typescript",
+    wasmFileName: "tree-sitter-typescript.wasm",
+    parseModule: parseTsModule,
+});
+export const initTsParser = tsParser.init;
+export const parseTsSource = tsParser.parseSource;
+export const parseTsFile = tsParser.parseFile;
+function parseTsModule(rootNode, filePath) {
     const functions = [];
     const classes = [];
     const imports = [];
@@ -56,7 +36,6 @@ export async function parseTsFile(filePath) {
     }
     return { file_path: filePath, functions, classes, imports };
 }
-/** @internal */
 export function extractTsFunction(node, className) {
     const nameNode = node.childForFieldName("name");
     const paramsNode = node.childForFieldName("parameters");
@@ -79,7 +58,6 @@ export function extractTsFunction(node, className) {
         docstring,
     };
 }
-/** @internal */
 export function extractArrowFunctions(node, functions) {
     for (let i = 0; i < node.namedChildCount; i++) {
         const declarator = node.namedChild(i);
@@ -109,7 +87,6 @@ export function extractArrowFunctions(node, functions) {
         });
     }
 }
-/** @internal */
 export function handleExportStatement(node, functions, classes, imports) {
     for (let i = 0; i < node.namedChildCount; i++) {
         const child = node.namedChild(i);
@@ -129,7 +106,6 @@ export function handleExportStatement(node, functions, classes, imports) {
         }
     }
 }
-/** @internal */
 export function extractTsParams(node) {
     const params = [];
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -165,7 +141,6 @@ export function extractTsParams(node) {
     }
     return params;
 }
-/** @internal */
 export function extractTsClass(node) {
     const nameNode = node.childForFieldName("name");
     const bodyNode = node.childForFieldName("body");
@@ -221,7 +196,6 @@ export function extractTsClass(node) {
         bases,
     };
 }
-/** @internal */
 export function extractTsMethod(node, className) {
     const nameNode = node.childForFieldName("name");
     const paramsNode = node.childForFieldName("parameters");
@@ -244,7 +218,6 @@ export function extractTsMethod(node, className) {
         docstring: extractJsDoc(node),
     };
 }
-/** @internal */
 export function extractTsDecorators(node) {
     const decorators = [];
     let prev = node.previousNamedSibling;
@@ -254,7 +227,6 @@ export function extractTsDecorators(node) {
     }
     return decorators;
 }
-/** @internal */
 export function extractJsDoc(node) {
     const prev = node.previousSibling;
     if (prev && prev.type === "comment" && prev.text.startsWith("/**")) {
@@ -266,7 +238,6 @@ export function extractJsDoc(node) {
     }
     return null;
 }
-/** @internal */
 export function extractTsImport(node) {
     const sourceNode = node.childForFieldName("source");
     const module = sourceNode?.text.replace(/^['"]|['"]$/g, "") ?? "";
@@ -295,7 +266,6 @@ export function extractTsImport(node) {
     }
     return { module, names, is_from: true, line: node.startPosition.row + 1 };
 }
-/** @internal */
 export function cleanTypeAnnotation(text) {
     return text.replace(/^:\s*/, "").trim();
 }

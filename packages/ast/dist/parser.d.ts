@@ -1,9 +1,9 @@
-import { Tree, Node as SyntaxNode } from "web-tree-sitter";
+import { Node as SyntaxNode } from "web-tree-sitter";
 import type { FunctionSignature, FunctionParam, ClassInfo, ImportInfo, ParsedModule } from "./types.js";
 export declare function findWasmPath(): string;
-export declare function initParser(): Promise<void>;
-export declare function parseSource(source: string): Tree;
-export declare function parseFile(filePath: string): Promise<ParsedModule>;
+export declare const initParser: () => Promise<void>;
+export declare const parseSource: (source: string) => import("web-tree-sitter").Tree;
+export declare const parseFile: (filePath: string) => Promise<ParsedModule>;
 export declare function extractFunction(node: SyntaxNode, className: string | null): FunctionSignature;
 export declare function extractParams(node: SyntaxNode): FunctionParam[];
 export declare function extractClass(node: SyntaxNode): ClassInfo;

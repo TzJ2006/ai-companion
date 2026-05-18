@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { buildAnalysisPrompt } from "./prompt.js";
 import { analyzeHeuristic } from "./heuristic.js";
+import { stripMarkdownFences } from "../utils.js";
 const exec = promisify(execFile);
 const DEFAULT_OPTIONS = {
     concurrency: 4,
@@ -10,16 +11,6 @@ const DEFAULT_OPTIONS = {
     model: "haiku",
     fallbackToHeuristic: true,
 };
-function stripMarkdownFences(text) {
-    const lines = text.trim().split("\n");
-    if (lines[0].startsWith("```")) {
-        lines.shift();
-    }
-    if (lines.length > 0 && lines[lines.length - 1].startsWith("```")) {
-        lines.pop();
-    }
-    return lines.join("\n").trim();
-}
 function parseAnalysisResponse(raw, input) {
     const cleaned = stripMarkdownFences(raw);
     const parsed = JSON.parse(cleaned);

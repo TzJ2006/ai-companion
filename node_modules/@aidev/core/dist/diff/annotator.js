@@ -13,12 +13,13 @@ export function annotateChanges(diffs, functionMap, context) {
                     function_name: label,
                     function_hash: `module::${diff.file_path}`,
                     class_name: null,
-                    change_type: inferChangeType(diff, hunk),
+                    change_type: inferChangeType(diff),
                     reason: context.reason,
                     reason_source: context.reason_source,
                     hunks: [hunk],
                     start_line: hunk.new_start,
                     end_line: hunk.new_start + hunk.new_count,
+                    ecl_context: context.ecl_context,
                 });
             }
             else {
@@ -29,12 +30,13 @@ export function annotateChanges(diffs, functionMap, context) {
                         function_name: fn.name,
                         function_hash: identity.hash,
                         class_name: fn.class_name,
-                        change_type: inferChangeType(diff, hunk),
+                        change_type: inferChangeType(diff),
                         reason: context.reason,
                         reason_source: context.reason_source,
                         hunks: [hunk],
                         start_line: fn.start_line,
                         end_line: fn.end_line,
+                        ecl_context: context.ecl_context,
                     });
                 }
             }
@@ -42,7 +44,7 @@ export function annotateChanges(diffs, functionMap, context) {
     }
     return deduplicateByFunction(annotations);
 }
-export function toChangeRecords(annotations, sessionId) {
+export function toChangeRecords(annotations, sessionId, eclContext) {
     return annotations.map((a) => ({
         id: randomUUID(),
         timestamp: new Date().toISOString(),
@@ -61,6 +63,7 @@ export function toChangeRecords(annotations, sessionId) {
         test_file: null,
         error_id: null,
         session_id: sessionId,
+        ecl_context: eclContext,
     }));
 }
 function findAffectedFunctions(hunk, functions) {
@@ -68,7 +71,7 @@ function findAffectedFunctions(hunk, functions) {
     const hunkEnd = hunk.new_start + hunk.new_count;
     return functions.filter((fn) => fn.start_line <= hunkEnd && fn.end_line >= hunkStart);
 }
-function inferChangeType(diff, _hunk) {
+function inferChangeType(diff) {
     if (diff.status === "added")
         return "add";
     if (diff.status === "deleted")
@@ -88,7 +91,7 @@ export function deduplicateByFunction(annotations) {
             existing.end_line = Math.max(existing.end_line, a.end_line);
         }
         else {
-            byKey.set(key, { ...a });
+            byKey.set(key, { ...a, hunks: [...a.hunks] });
         }
     }
     return Array.from(byKey.values());

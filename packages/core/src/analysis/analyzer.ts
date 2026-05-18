@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type { AnalysisInput, FunctionAnalysis, AnalyzerOptions } from "./types.js";
 import { buildAnalysisPrompt } from "./prompt.js";
 import { analyzeHeuristic } from "./heuristic.js";
+import { stripMarkdownFences } from "../utils.js";
 
 const exec = promisify(execFile);
 
@@ -13,17 +14,6 @@ const DEFAULT_OPTIONS: AnalyzerOptions = {
   model: "haiku",
   fallbackToHeuristic: true,
 };
-
-function stripMarkdownFences(text: string): string {
-  const lines = text.trim().split("\n");
-  if (lines[0].startsWith("```")) {
-    lines.shift();
-  }
-  if (lines.length > 0 && lines[lines.length - 1].startsWith("```")) {
-    lines.pop();
-  }
-  return lines.join("\n").trim();
-}
 
 function parseAnalysisResponse(
   raw: string,

@@ -1,5 +1,12 @@
-import { readFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
+
+interface EclContextSlim {
+  feature: string;
+  requirements?: string[];
+  decisions?: string[];
+  ecl_file?: string;
+}
 
 interface HookEvent {
   timestamp: string;
@@ -7,6 +14,7 @@ interface HookEvent {
   file_path: string;
   pre_snapshot_path: string | null;
   reason: string;
+  ecl_context?: EclContextSlim;
 }
 
 const QUEUE_DIR = ".devcompanion/queue";
@@ -47,6 +55,7 @@ export function handlePostToolUse(
     file_path: filePath,
     pre_snapshot_path: null,
     reason: "auto-captured from Claude Code session",
+    ecl_context: detectActiveEcl(projectRoot),
   };
 
   const queueFile = join(queueDir, "events.jsonl");
@@ -65,6 +74,41 @@ export function findProjectRoot(filePath: string): string | null {
 
   return null;
 }
+
+function detectActiveEcl(projectRoot: string): EclContextSlim | undefined {
+  const eclDir = join(projectRoot, "docs", "ecl");
+  if (!existsSync(eclDir)) return undefined;
+
+  const files = readdirSync(eclDir).filter((f) => f.endsWith(".yaml"));
+  for (const file of files) {
+    try {
+      const content = readFileSync(join(eclDir, file), "utf-8");
+      const featureMatch = content.match(/^feature:\s*["']?(.+?)["']?$/m);
+      const statusMatch = content.match(/^status:\s*["']?(.+?)["']?$/m);
+      if (!featureMatch || !statusMatch) continue;
+
+      const status = statusMatch[1];
+      if (status === "completed" || status === "retired") continue;
+
+      const feature = featureMatch[1];
+      const reqIds = [...content.matchAll(/^\s*- id:\s*["']?(REQ-\d+)["']?$/gm)]
+        .map((m) => m[1]);
+      const decIds = [...content.matchAll(/^\s*- id:\s*["']?(DEC-\d+)["']?$/gm)]
+        .map((m) => m[1]);
+
+      return {
+        feature,
+        requirements: reqIds.length > 0 ? reqIds : undefined,
+        decisions: decIds.length > 0 ? decIds : undefined,
+        ecl_file: `docs/ecl/${file}`,
+      };
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
 
 if (process.stdin.isTTY === false) {
   let data = "";

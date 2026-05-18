@@ -4,7 +4,7 @@ import { resolve, extname } from "node:path";
 import { getGitDiff, annotateChanges, toChangeRecords } from "@aidev/core";
 import { parseFileAuto, getSupportedExtensions } from "@aidev/ast";
 import { HistoryStore } from "@aidev/history";
-import type { ReviewSession } from "@aidev/history";
+import type { ReviewSession, EclContext } from "@aidev/history";
 import type { FunctionSignature } from "@aidev/ast";
 import { randomUUID } from "node:crypto";
 
@@ -14,6 +14,7 @@ interface QueueEvent {
   file_path: string;
   pre_snapshot_path: string | null;
   reason: string;
+  ecl_context?: EclContext;
 }
 
 export async function processQueue(
@@ -72,13 +73,15 @@ export async function processQueue(
 
   const sessionId = randomUUID();
   const reason = events[0]?.reason ?? "auto-captured";
+  const eclContext = events.find((e) => e.ecl_context)?.ecl_context;
   const annotations = annotateChanges(relevantDiffs, functionMap, {
     reason,
     reason_source: "context",
     session_id: sessionId,
+    ecl_context: eclContext,
   });
 
-  const records = toChangeRecords(annotations, sessionId);
+  const records = toChangeRecords(annotations, sessionId, eclContext);
 
   const session: ReviewSession = {
     id: sessionId,

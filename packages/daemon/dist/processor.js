@@ -50,12 +50,14 @@ export async function processQueue(queueFile, projectRoot, store) {
     }
     const sessionId = randomUUID();
     const reason = events[0]?.reason ?? "auto-captured";
+    const eclContext = events.find((e) => e.ecl_context)?.ecl_context;
     const annotations = annotateChanges(relevantDiffs, functionMap, {
         reason,
         reason_source: "context",
         session_id: sessionId,
+        ecl_context: eclContext,
     });
-    const records = toChangeRecords(annotations, sessionId);
+    const records = toChangeRecords(annotations, sessionId, eclContext);
     const session = {
         id: sessionId,
         timestamp: new Date().toISOString(),

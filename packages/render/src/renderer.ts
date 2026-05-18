@@ -1,4 +1,4 @@
-import type { ReviewSession, ChangeRecord } from "@aidev/history";
+import type { ReviewSession, ChangeRecord, EclContext } from "@aidev/history";
 
 export interface RenderOptions {
   title?: string;
@@ -23,6 +23,7 @@ export function renderSessionToHtml(
 interface ReasonGroup {
   reason: string;
   reason_source: string;
+  ecl_context?: EclContext;
   files: Map<string, ChangeRecord[]>;
   total: number;
 }
@@ -34,7 +35,7 @@ function groupByReason(changes: ChangeRecord[]): ReasonGroup[] {
     const key = c.reason;
     let group = map.get(key);
     if (!group) {
-      group = { reason: c.reason, reason_source: c.reason_source, files: new Map(), total: 0 };
+      group = { reason: c.reason, reason_source: c.reason_source, ecl_context: c.ecl_context, files: new Map(), total: 0 };
       map.set(key, group);
     }
     const fileList = group.files.get(c.file_path) ?? [];
@@ -56,7 +57,7 @@ function renderReasonGroup(group: ReasonGroup, index: number): string {
       <div class="reason-header" onclick="toggleGroup(this)">
         <span class="reason-arrow">&#9660;</span>
         <span class="reason-text">${escapeHtml(group.reason)}</span>
-        <span class="reason-meta">${group.total} change${group.total > 1 ? "s" : ""} &middot; ${group.reason_source}</span>
+        <span class="reason-meta">${group.total} change${group.total > 1 ? "s" : ""} &middot; ${group.reason_source}${group.ecl_context ? ` &middot; <span class="ecl-tag">${escapeHtml(group.ecl_context.feature)}</span>` : ""}</span>
       </div>
       <div class="reason-body open">
         ${filesHtml}
@@ -87,6 +88,7 @@ function renderFunctionItem(c: ChangeRecord): string {
         <span class="fn-name">${escapeHtml(c.function_name)}</span>
         <span class="fn-badge fn-badge-${c.change_type}">${c.change_type}</span>
         <span class="fn-lines">L${c.start_line}–${c.end_line}</span>
+${c.ecl_context ? `        <span class="ecl-badge" title="${escapeHtml(c.ecl_context.ecl_file ?? '')}">${escapeHtml(c.ecl_context.feature)}${c.ecl_context.decisions?.length ? ' / ' + escapeHtml(c.ecl_context.decisions.join(', ')) : ''}</span>` : ''}
       </div>
       <div class="fn-diff" id="${id}">
         ${diffHtml}
@@ -231,7 +233,14 @@ function buildPage(title: string, session: ReviewSession, groupsHtml: string): s
     .fn-badge-modify { background: var(--yellow-bg); color: var(--yellow); }
     .fn-badge-delete { background: var(--red-bg); color: var(--red); }
     .fn-badge-rename { background: var(--blue-bg); color: var(--accent); }
-    .fn-lines { font-size: 0.7rem; color: var(--fg-dim); margin-left: auto; }
+    .ecl-tag, .ecl-badge {
+      font-size: 0.7rem; padding: 1px 7px;
+      border-radius: 10px; font-weight: 500;
+      background: #1b2d3d; color: #81d4fa;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+    }
+    .ecl-badge { margin-left: auto; }
+    .fn-lines { font-size: 0.7rem; color: var(--fg-dim); }
 
     .fn-diff {
       display: none;
@@ -292,75 +301,4 @@ export function escapeHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-/** @internal — kept for backward compat but no longer used in main flow */
-export function renderSummaryPanel(session: ReviewSession): string {
-  const changesByFile = groupBy(session.changes, (c) => c.file_path);
-  const fileList = Object.entries(changesByFile)
-    .map(([file, changes]) => {
-      const types = [...new Set(changes.map((c) => c.change_type))].join(", ");
-      return `<li><code>${file}</code> — ${changes.length} change(s) [${types}]</li>`;
-    })
-    .join("\n");
-
-  return `
-    <div class="summary-panel">
-      <h2>Summary</h2>
-      <p><strong>${session.total_changes}</strong> changes across <strong>${session.files_changed.length}</strong> files</p>
-      <p class="session-summary">${escapeHtml(session.summary)}</p>
-      <h3>Files Changed</h3>
-      <ul>${fileList}</ul>
-    </div>
-  `;
-}
-
-/** @internal */
-export function renderAnnotationsPanel(
-  changes: ChangeRecord[],
-  options: RenderOptions
-): string {
-  const items = changes.map((c, i) => {
-    const testBadge = options.show_test_status
-      ? `<span class="badge badge-${c.test_status}">${c.test_status}</span>`
-      : "";
-    const errorBadge = options.show_error_ids && c.error_id
-      ? `<span class="badge badge-error">Error #${c.error_id}</span>`
-      : "";
-
-    return `
-      <div class="annotation-item" data-line="${c.start_line}" data-file="${c.file_path}">
-        <div class="annotation-header">
-          <span class="change-id">#${i + 1}</span>
-          <code>${c.function_name}</code>
-          <span class="change-type type-${c.change_type}">${c.change_type}</span>
-          ${testBadge}
-          ${errorBadge}
-        </div>
-        <div class="annotation-reason">
-          <strong>Reason:</strong> ${escapeHtml(c.reason)}
-          <span class="reason-source">(${c.reason_source})</span>
-        </div>
-        <div class="annotation-location">
-          Lines ${c.start_line}–${c.end_line} in <code>${c.file_path}</code>
-        </div>
-      </div>
-    `;
-  });
-
-  return `
-    <div class="annotations-panel">
-      <h2>Change Annotations</h2>
-      ${items.join("\n")}
-    </div>
-  `;
-}
-
-function groupBy<T>(arr: T[], keyFn: (item: T) => string): Record<string, T[]> {
-  const result: Record<string, T[]> = {};
-  for (const item of arr) {
-    const key = keyFn(item);
-    (result[key] ??= []).push(item);
-  }
-  return result;
 }

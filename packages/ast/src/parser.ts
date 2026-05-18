@@ -1,5 +1,4 @@
-import { Parser, Language, Tree, Node as SyntaxNode } from "web-tree-sitter";
-import { readFile } from "node:fs/promises";
+import { Node as SyntaxNode } from "web-tree-sitter";
 import type {
   FunctionSignature,
   FunctionParam,
@@ -7,38 +6,24 @@ import type {
   ImportInfo,
   ParsedModule,
 } from "./types.js";
+import { createLanguageParser } from "./parser-factory.js";
 import { resolveWasmPath } from "./wasm-resolver.js";
 
-let parser: Parser | null = null;
-let pythonLanguage: InstanceType<typeof Language> | null = null;
+const pythonParser = createLanguageParser({
+  packageName: "tree-sitter-python",
+  wasmFileName: "tree-sitter-python.wasm",
+  parseModule: parsePythonModule,
+});
 
 export function findWasmPath(): string {
   return resolveWasmPath("tree-sitter-python", "tree-sitter-python.wasm");
 }
 
-export async function initParser(): Promise<void> {
-  if (parser) return;
-  await Parser.init();
-  parser = new Parser();
+export const initParser = pythonParser.init;
+export const parseSource = pythonParser.parseSource;
+export const parseFile = pythonParser.parseFile;
 
-  const wasmPath = findWasmPath();
-  pythonLanguage = await Language.load(wasmPath);
-  parser.setLanguage(pythonLanguage);
-}
-
-export function parseSource(source: string): Tree {
-  if (!parser) throw new Error("Parser not initialized. Call initParser() first.");
-  const tree = parser.parse(source);
-  if (!tree) throw new Error("Failed to parse source");
-  return tree;
-}
-
-export async function parseFile(filePath: string): Promise<ParsedModule> {
-  await initParser();
-  const source = await readFile(filePath, "utf-8");
-  const tree = parseSource(source);
-  const rootNode = tree.rootNode;
-
+function parsePythonModule(rootNode: SyntaxNode, filePath: string): ParsedModule {
   const functions: FunctionSignature[] = [];
   const classes: ClassInfo[] = [];
   const imports: ImportInfo[] = [];

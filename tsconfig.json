@@ -13,7 +13,7 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "exclude": ["test-*.ts", "node_modules"],
+  "exclude": ["test-*.ts", "node_modules", "archive"],
   "references": [
     { "path": "packages/types" },
     { "path": "packages/ast" },

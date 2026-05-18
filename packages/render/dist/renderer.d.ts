@@ -1,4 +1,4 @@
-import type { ReviewSession, ChangeRecord } from "@aidev/history";
+import type { ReviewSession } from "@aidev/history";
 export interface RenderOptions {
     title?: string;
     show_test_status: boolean;
@@ -7,8 +7,4 @@ export interface RenderOptions {
 }
 export declare function renderSessionToHtml(session: ReviewSession, _rawDiffs: string[], options?: RenderOptions): string;
 export declare function escapeHtml(text: string): string;
-/** @internal — kept for backward compat but no longer used in main flow */
-export declare function renderSummaryPanel(session: ReviewSession): string;
-/** @internal */
-export declare function renderAnnotationsPanel(changes: ChangeRecord[], options: RenderOptions): string;
 //# sourceMappingURL=renderer.d.ts.map

@@ -6,6 +6,7 @@ export type {
   FunctionHistory,
   ProjectIndex,
   FunctionIndexEntry,
+  EclContext,
 } from "./types.js";
 export { AnalysisStore } from "./analysis-store.js";
 export type { FunctionAnalysis, AnalysisStoreData, AnalysisParam, AnalysisOutput } from "./analysis-store.js";

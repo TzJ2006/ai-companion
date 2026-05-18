@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 export class HistoryStore {
@@ -31,9 +31,13 @@ export class HistoryStore {
         const filename = `${session.timestamp.replace(/[:.]/g, "-")}.json`;
         const filepath = join(this.reviewsDir, filename);
         await this.writeJson(filepath, session);
+        const byFile = new Map();
         for (const change of session.changes) {
-            await this.appendToFileHistory(change);
+            const list = byFile.get(change.file_path) ?? [];
+            list.push(change);
+            byFile.set(change.file_path, list);
         }
+        await Promise.all([...byFile.values()].map((changes) => this.appendToFileHistoryBatch(changes)));
         await this.updateIndex(session);
         return filepath;
     }
@@ -60,7 +64,6 @@ export class HistoryStore {
         await this.writeJson(this.indexPath, index);
     }
     async listSessions(limit = 20) {
-        const { readdir } = await import("node:fs/promises");
         const files = await readdir(this.reviewsDir);
         return files
             .filter((f) => f.endsWith(".json"))
@@ -71,8 +74,10 @@ export class HistoryStore {
     async getSession(filename) {
         return this.readJson(join(this.reviewsDir, filename));
     }
-    async appendToFileHistory(change) {
-        const historyPath = this.fileHistoryPath(change.file_path);
+    async appendToFileHistoryBatch(changes) {
+        if (changes.length === 0)
+            return;
+        const historyPath = this.fileHistoryPath(changes[0].file_path);
         let history;
         if (existsSync(historyPath)) {
             history = await this.readJson(historyPath);
@@ -80,24 +85,26 @@ export class HistoryStore {
         else {
             await mkdir(dirname(historyPath), { recursive: true });
             history = {
-                file_path: change.file_path,
-                last_updated: change.timestamp,
+                file_path: changes[0].file_path,
+                last_updated: changes[0].timestamp,
                 total_records: 0,
                 functions: {},
             };
         }
-        if (!history.functions[change.function_hash]) {
-            history.functions[change.function_hash] = {
-                function_hash: change.function_hash,
-                function_name: change.function_name,
-                class_name: change.class_name,
-                records: [],
-                prev_hashes: [],
-            };
+        for (const change of changes) {
+            if (!history.functions[change.function_hash]) {
+                history.functions[change.function_hash] = {
+                    function_hash: change.function_hash,
+                    function_name: change.function_name,
+                    class_name: change.class_name,
+                    records: [],
+                    prev_hashes: [],
+                };
+            }
+            history.functions[change.function_hash].records.push(change);
+            history.total_records++;
+            history.last_updated = change.timestamp;
         }
-        history.functions[change.function_hash].records.push(change);
-        history.total_records++;
-        history.last_updated = change.timestamp;
         await this.writeJson(historyPath, history);
     }
     async updateIndex(session) {

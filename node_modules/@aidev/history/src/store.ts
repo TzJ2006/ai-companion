@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import type {
@@ -45,9 +45,15 @@ export class HistoryStore {
     const filepath = join(this.reviewsDir, filename);
     await this.writeJson(filepath, session);
 
+    const byFile = new Map<string, ChangeRecord[]>();
     for (const change of session.changes) {
-      await this.appendToFileHistory(change);
+      const list = byFile.get(change.file_path) ?? [];
+      list.push(change);
+      byFile.set(change.file_path, list);
     }
+    await Promise.all(
+      [...byFile.values()].map((changes) => this.appendToFileHistoryBatch(changes))
+    );
 
     await this.updateIndex(session);
     return filepath;
@@ -79,7 +85,6 @@ export class HistoryStore {
   }
 
   async listSessions(limit = 20): Promise<string[]> {
-    const { readdir } = await import("node:fs/promises");
     const files = await readdir(this.reviewsDir);
     return files
       .filter((f) => f.endsWith(".json"))
@@ -92,8 +97,9 @@ export class HistoryStore {
     return this.readJson<ReviewSession>(join(this.reviewsDir, filename));
   }
 
-  private async appendToFileHistory(change: ChangeRecord): Promise<void> {
-    const historyPath = this.fileHistoryPath(change.file_path);
+  private async appendToFileHistoryBatch(changes: ChangeRecord[]): Promise<void> {
+    if (changes.length === 0) return;
+    const historyPath = this.fileHistoryPath(changes[0].file_path);
     let history: FileHistory;
 
     if (existsSync(historyPath)) {
@@ -101,26 +107,27 @@ export class HistoryStore {
     } else {
       await mkdir(dirname(historyPath), { recursive: true });
       history = {
-        file_path: change.file_path,
-        last_updated: change.timestamp,
+        file_path: changes[0].file_path,
+        last_updated: changes[0].timestamp,
         total_records: 0,
         functions: {},
       };
     }
 
-    if (!history.functions[change.function_hash]) {
-      history.functions[change.function_hash] = {
-        function_hash: change.function_hash,
-        function_name: change.function_name,
-        class_name: change.class_name,
-        records: [],
-        prev_hashes: [],
-      };
+    for (const change of changes) {
+      if (!history.functions[change.function_hash]) {
+        history.functions[change.function_hash] = {
+          function_hash: change.function_hash,
+          function_name: change.function_name,
+          class_name: change.class_name,
+          records: [],
+          prev_hashes: [],
+        };
+      }
+      history.functions[change.function_hash].records.push(change);
+      history.total_records++;
+      history.last_updated = change.timestamp;
     }
-
-    history.functions[change.function_hash].records.push(change);
-    history.total_records++;
-    history.last_updated = change.timestamp;
 
     await this.writeJson(historyPath, history);
   }

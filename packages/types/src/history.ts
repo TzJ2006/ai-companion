@@ -16,7 +16,16 @@ export interface ChangeRecord {
   test_file: string | null;
   error_id: string | null;
   session_id: string;
+  ecl_context?: EclContext;
 }
+
+export interface EclContext {
+  feature: string;
+  requirements?: string[];
+  decisions?: string[];
+  ecl_file?: string;
+}
+
 
 export interface ReviewSession {
   id: string;

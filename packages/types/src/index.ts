@@ -28,4 +28,5 @@ export type {
   FunctionHistory,
   ProjectIndex,
   FunctionIndexEntry,
+  EclContext,
 } from "./history.js";

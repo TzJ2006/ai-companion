@@ -13,7 +13,7 @@ export declare class HistoryStore {
     writeIndex(index: ProjectIndex): Promise<void>;
     listSessions(limit?: number): Promise<string[]>;
     getSession(filename: string): Promise<ReviewSession>;
-    private appendToFileHistory;
+    private appendToFileHistoryBatch;
     private updateIndex;
     private fileHistoryPath;
     private ensureGitignore;

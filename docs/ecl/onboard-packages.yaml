@@ -1,72 +1,116 @@
-ecl_version: "1.0"
+ecl_version: "2.0"
 scope: "packages/"
-generated_at: "2026-05-15T19:10:00Z"
-generated_by: "/cconboard"
+generated_at: "2026-05-17T22:00:00Z"
+generated_by: "/ccplan"
 
-feature_guards:
-  - name: "wasm-resolver"
-    key_files:
-      - "packages/ast/src/wasm-resolver.ts"
-      - "packages/ast/src/parser.ts"
-      - "packages/ast/src/ts-parser.ts"
-    invariants:
-      - "resolveWasmPath is the single source of WASM path resolution"
-      - "parser.ts and ts-parser.ts delegate to resolveWasmPath, never inline path search"
-    verification: "npx vitest run .devcompanion/tests/test_wasm-resolver_resolveWasmPath.test.ts"
+features:
+  - feature: "wasm-resolver"
+    description: "通过 WASM 加载 tree-sitter grammar，让系统能解析 Python/TS 源码的 AST"
+    purpose: "为函数级变更追踪提供 AST 解析能力——没有 AST 就无法知道 diff 改了哪个函数"
+    implementation:
+      key_files:
+        - "packages/ast/src/wasm-resolver.ts"
+        - "packages/ast/src/parser.ts"
+        - "packages/ast/src/ts-parser.ts"
+      approach: "resolveWasmPath 统一负责 WASM 路径查找（向上搜索 node_modules），各语言 parser 调用它获取 .wasm 文件路径"
+      constraints:
+        - "resolveWasmPath is the single source of WASM path resolution"
+        - "parser.ts and ts-parser.ts delegate to resolveWasmPath, never inline path search"
+    verification:
+      - name: "WASM 路径解析功能正确"
+        command: "npx vitest run .devcompanion/tests/test_ast_findWasmPath.test.ts"
+      - name: "无内联 WASM 路径拼接（只能通过 resolveWasmPath 调用）"
+        command: 'grep -rnE "path.*wasm|__dirname.*wasm|node_modules.*wasm" packages/ast/src/ --include="*.ts" | grep -v wasm-resolver | grep -v resolveWasmPath'
+        expect: "无输出（所有 WASM 路径解析都通过 resolveWasmPath）"
 
-  - name: "daemon-processor"
-    key_files:
-      - "packages/daemon/src/index.ts"
-      - "packages/daemon/src/processor.ts"
-    invariants:
-      - "startDaemon only handles setup and watchFile — processing logic lives in processor.ts"
-      - "processQueue uses parseFileAuto (multi-language), not hardcoded .py filter"
-    verification: "npx vitest run .devcompanion/tests/test_daemon_processor.test.ts"
+  - feature: "daemon-processor"
+    description: "后台异步处理 hook 捕获的变更事件，将 queue 中的原始事件转化为带函数归因的 ReviewSession"
+    purpose: "让 hook 保持 <100ms 轻量，复杂的 diff 解析 + AST 解析 + 存储在后台完成"
+    implementation:
+      key_files:
+        - "packages/daemon/src/index.ts"
+        - "packages/daemon/src/processor.ts"
+      approach: "index.ts 负责文件监视和启动；processor.ts 负责完整流水线：read queue → git diff → parseFileAuto → annotateChanges → saveSession"
+      constraints:
+        - "startDaemon only handles setup and watchFile — processing logic lives in processor.ts"
+        - "processQueue uses parseFileAuto (multi-language), not hardcoded .py filter"
+    verification:
+      - name: "processor 流水线测试"
+        command: "npx vitest run .devcompanion/tests/test_daemon_processor.test.ts"
 
-  - name: "hook-extensions"
-    key_files:
-      - "packages/hook/src/index.ts"
-    invariants:
-      - "handlePostToolUse accepts supportedExtensions parameter (default includes .py + .ts variants)"
-      - "Extension check uses extname() + Set.has(), not hardcoded endsWith"
-      - "findProjectRoot is exported for testability"
-    verification: "npx vitest run .devcompanion/tests/test_hook_handlePostToolUse.test.ts"
+  - feature: "hook-extensions"
+    description: "Claude Code PostToolUse hook，在 Edit/Write 工具执行后捕获变更事件"
+    purpose: "自动捕获代码变更 + 原因，无需开发者手动操作"
+    implementation:
+      key_files:
+        - "packages/hook/src/index.ts"
+      approach: "从 stdin 读取 tool_name + file_path → 过滤扩展名 → 找 project root → 检测 active ECL → append 到 queue"
+      constraints:
+        - "handlePostToolUse accepts supportedExtensions parameter (default includes .py + .ts variants)"
+        - "Extension check uses extname() + Set.has(), not hardcoded endsWith"
+        - "findProjectRoot is exported for testability"
+    verification:
+      - name: "hook 事件捕获测试"
+        command: "npx vitest run .devcompanion/tests/test_hook_handlePostToolUse.test.ts"
 
-  - name: "onboard-renderer-split"
-    key_files:
-      - "packages/render/src/onboard/index.ts"
-      - "packages/render/src/onboard/overview.ts"
-      - "packages/render/src/onboard/modules.ts"
-      - "packages/render/src/onboard/index-panel.ts"
-      - "packages/render/src/onboard/page.ts"
-      - "packages/render/src/onboard/utils.ts"
-      - "packages/render/src/onboard/types.ts"
-    invariants:
-      - "renderOnboardHtml is the sole public entry point, exported from onboard/index.ts"
-      - "escapeHtml, escapeAttr, slugify live in utils.ts — no duplication"
-      - "Each sub-module is under 150 lines"
-    verification: "npx vitest run .devcompanion/tests/test_onboard_renderOnboardHtml_new.test.ts .devcompanion/tests/test_onboard_utils.test.ts"
+  - feature: "onboard-renderer-split"
+    description: "将 onboard HTML 报告渲染拆分为多个子模块，每个模块 <150 行"
+    purpose: "保持 render 包可维护——单文件渲染器容易膨胀失控"
+    implementation:
+      key_files:
+        - "packages/render/src/onboard/index.ts"
+        - "packages/render/src/onboard/overview.ts"
+        - "packages/render/src/onboard/modules.ts"
+        - "packages/render/src/onboard/index-panel.ts"
+        - "packages/render/src/onboard/page.ts"
+        - "packages/render/src/onboard/utils.ts"
+        - "packages/render/src/onboard/types.ts"
+      approach: "renderOnboardHtml 是唯一公开入口，内部按面板拆分为 overview/modules/index-panel，page.ts 组装完整 HTML"
+      constraints:
+        - "renderOnboardHtml is the sole public entry point, exported from onboard/index.ts"
+        - "escapeHtml, escapeAttr, slugify live in utils.ts — no duplication"
+        - "Each sub-module is under 250 lines (page.ts as template assembler is allowed more)"
+    verification:
+      - name: "onboard 渲染正确性"
+        command: "npx vitest run .devcompanion/tests/test_onboard_renderOnboardHtml_new.test.ts .devcompanion/tests/test_onboard_utils.test.ts"
+      - name: "子模块行数检查"
+        command: "wc -l packages/render/src/onboard/*.ts | grep -v total"
+        expect: "每个文件 ≤250 行"
 
-  - name: "shared-types"
-    key_files:
-      - "packages/types/src/index.ts"
-      - "packages/types/src/analysis.ts"
-      - "packages/types/src/modularity.ts"
-      - "packages/types/src/history.ts"
-    invariants:
-      - "@aidev/types is the single source of truth for shared interfaces"
-      - "core/analysis/types.ts and core/modularity/types.ts re-export from @aidev/types"
-      - "history/analysis-store.ts and history/modularity-store.ts import from @aidev/types"
-      - "No type definitions are duplicated across packages"
-    verification: "npx tsc --build packages/types packages/history packages/core"
+  - feature: "shared-types"
+    description: "@aidev/types 作为所有共享接口的单一来源"
+    purpose: "避免类型定义在多个包之间重复，确保接口一致性"
+    implementation:
+      key_files:
+        - "packages/types/src/index.ts"
+        - "packages/types/src/analysis.ts"
+        - "packages/types/src/modularity.ts"
+        - "packages/types/src/history.ts"
+      approach: "所有共享类型定义在 @aidev/types；其他包通过 import type 引用；需要局部类型的包用 re-export"
+      constraints:
+        - "@aidev/types is the single source of truth for shared interfaces"
+        - "core/analysis/types.ts and core/modularity/types.ts re-export from @aidev/types"
+        - "history/analysis-store.ts and history/modularity-store.ts import from @aidev/types"
+        - "No type definitions are duplicated across packages"
+    verification:
+      - name: "类型一致性编译检查"
+        command: "npx tsc --build packages/types packages/history packages/core"
 
-  - name: "ast-parsers"
-    key_files:
-      - "packages/ast/src/parser.ts"
-      - "packages/ast/src/ts-parser.ts"
-      - "packages/ast/src/multi-lang.ts"
-      - "packages/ast/src/identity.ts"
-    invariants:
-      - "parseFileAuto dispatches by extension — adding a language only requires new parser + extension set"
-      - "computeFunctionIdentity is stable: sha256(path + class + name + paramTypes)[0:16]"
-    verification: "npx vitest run .devcompanion/tests/test_ast_computeFunctionIdentity.test.ts .devcompanion/tests/test_ast_findWasmPath.test.ts"
+  - feature: "ast-parsers"
+    description: "多语言 AST 解析器：从源码文件中提取函数签名、类、参数、装饰器"
+    purpose: "提供函数级变更归因的基础——知道文件里有哪些函数以及它们在哪些行"
+    implementation:
+      key_files:
+        - "packages/ast/src/parser.ts"
+        - "packages/ast/src/ts-parser.ts"
+        - "packages/ast/src/multi-lang.ts"
+        - "packages/ast/src/identity.ts"
+      approach: "parseFileAuto 按扩展名分发到对应 parser；computeFunctionIdentity 用 sha256(path+class+name+params)[0:16] 生成稳定哈希"
+      constraints:
+        - "parseFileAuto dispatches by extension — adding a language only requires new parser + extension set"
+        - "computeFunctionIdentity is stable: sha256(path + class + name + paramTypes)[0:16]"
+    verification:
+      - name: "函数身份哈希测试"
+        command: "npx vitest run .devcompanion/tests/test_ast_computeFunctionIdentity.test.ts"
+      - name: "WASM 路径查找测试"
+        command: "npx vitest run .devcompanion/tests/test_ast_findWasmPath.test.ts"

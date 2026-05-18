@@ -5,4 +5,5 @@ export type {
   FunctionHistory,
   ProjectIndex,
   FunctionIndexEntry,
+  EclContext,
 } from "@aidev/types";

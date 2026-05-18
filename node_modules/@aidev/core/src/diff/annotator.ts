@@ -1,6 +1,6 @@
 import type { FileDiff, DiffHunk } from "./parser.js";
 import type { FunctionSignature } from "@aidev/ast";
-import type { ChangeRecord } from "@aidev/history";
+import type { ChangeRecord, EclContext } from "@aidev/history";
 import { computeFunctionIdentity } from "@aidev/ast";
 import { randomUUID } from "node:crypto";
 
@@ -8,6 +8,7 @@ export interface AnnotationContext {
   reason: string;
   reason_source: "context" | "llm-inferred" | "user-provided";
   session_id: string;
+  ecl_context?: EclContext;
 }
 
 export interface AnnotatedChange {
@@ -21,6 +22,7 @@ export interface AnnotatedChange {
   hunks: DiffHunk[];
   start_line: number;
   end_line: number;
+  ecl_context?: EclContext;
 }
 
 export function annotateChanges(
@@ -43,12 +45,13 @@ export function annotateChanges(
           function_name: label,
           function_hash: `module::${diff.file_path}`,
           class_name: null,
-          change_type: inferChangeType(diff, hunk),
+          change_type: inferChangeType(diff),
           reason: context.reason,
           reason_source: context.reason_source,
           hunks: [hunk],
           start_line: hunk.new_start,
           end_line: hunk.new_start + hunk.new_count,
+          ecl_context: context.ecl_context,
         });
       } else {
         for (const fn of affectedFunctions) {
@@ -58,12 +61,13 @@ export function annotateChanges(
             function_name: fn.name,
             function_hash: identity.hash,
             class_name: fn.class_name,
-            change_type: inferChangeType(diff, hunk),
+            change_type: inferChangeType(diff),
             reason: context.reason,
             reason_source: context.reason_source,
             hunks: [hunk],
             start_line: fn.start_line,
             end_line: fn.end_line,
+            ecl_context: context.ecl_context,
           });
         }
       }
@@ -75,7 +79,8 @@ export function annotateChanges(
 
 export function toChangeRecords(
   annotations: AnnotatedChange[],
-  sessionId: string
+  sessionId: string,
+  eclContext?: EclContext
 ): ChangeRecord[] {
   return annotations.map((a) => ({
     id: randomUUID(),
@@ -95,6 +100,7 @@ export function toChangeRecords(
     test_file: null,
     error_id: null,
     session_id: sessionId,
+    ecl_context: eclContext,
   }));
 }
 
@@ -111,8 +117,7 @@ function findAffectedFunctions(
 }
 
 function inferChangeType(
-  diff: FileDiff,
-  _hunk: DiffHunk
+  diff: FileDiff
 ): ChangeRecord["change_type"] {
   if (diff.status === "added") return "add";
   if (diff.status === "deleted") return "delete";
@@ -133,7 +138,7 @@ export function deduplicateByFunction(
       existing.start_line = Math.min(existing.start_line, a.start_line);
       existing.end_line = Math.max(existing.end_line, a.end_line);
     } else {
-      byKey.set(key, { ...a });
+      byKey.set(key, { ...a, hunks: [...a.hunks] });
     }
   }
 

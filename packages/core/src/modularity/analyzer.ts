@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import type { ModularityInput, FunctionModularity, ModularityAnalyzerOptions } from "./types.js";
 import { buildModularityPrompt } from "./prompt.js";
 import { analyzeModularityHeuristic } from "./heuristic.js";
+import { stripMarkdownFences } from "../utils.js";
 
 const exec = promisify(execFile);
 
@@ -13,10 +14,6 @@ const DEFAULT_OPTIONS: ModularityAnalyzerOptions = {
   model: "haiku",
   fallbackToHeuristic: true,
 };
-
-function stripMarkdownFences(text: string): string {
-  return text.replace(/^```(?:json|typescript)?\s*\n?/gm, "").replace(/^```\s*$/gm, "").trim();
-}
 
 export async function analyzeModularityWithLlm(
   input: ModularityInput,
@@ -69,18 +66,23 @@ export async function analyzeModularityBatch(
 
   for (let i = 0; i < inputs.length; i += opts.concurrency) {
     const chunk = inputs.slice(i, i + opts.concurrency);
-    const chunkResults = await Promise.all(
-      chunk.map(async (input) => {
-        if (llmCallsUsed >= opts.maxLlmCalls) {
-          return analyzeModularityHeuristic(input);
-        }
-        llmCallsUsed++;
-        return analyzeModularityWithLlm(input, opts);
-      })
-    );
-    results.push(...chunkResults);
+    const remainingLlmBudget = opts.maxLlmCalls - llmCallsUsed;
+    const llmChunk = remainingLlmBudget > 0 ? chunk.slice(0, remainingLlmBudget) : [];
+    const heuristicChunk = remainingLlmBudget > 0 ? chunk.slice(remainingLlmBudget) : chunk;
+
+    const llmResults = llmChunk.length > 0
+      ? await Promise.all(llmChunk.map((input) => analyzeModularityWithLlm(input, opts)))
+      : [];
+
+    const heuristicResults = heuristicChunk.length > 0
+      ? heuristicChunk.map((input) => analyzeModularityHeuristic(input))
+      : [];
+
+    results.push(...llmResults, ...heuristicResults);
+    llmCallsUsed += llmChunk.length;
+
     for (let j = 0; j < chunk.length; j++) {
-      onProgress?.(results.length - chunk.length + j + 1, inputs.length, chunk[j].function_name);
+      onProgress?.(i + j + 1, inputs.length, chunk[j].function_name);
     }
   }
 
