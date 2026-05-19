@@ -23,8 +23,20 @@ import type { VerificationResult } from "./lib/verification-runner.ts";
 import type { FeatureEntry } from "./lib/ecl-parser.ts";
 import type { ConfirmationState } from "./lib/confirmation-manager.ts";
 import type { CallGraph } from "../packages/ast/src/call-graph.ts";
+import { translateOverviewData, getUiLabels, getStatusLabel, formatLineRange } from "./lib/overview-translator.ts";
+import type { Locale } from "./lib/overview-translator.ts";
 
-const PROJECT_ROOT = resolve(import.meta.dirname, "..");
+const SCRIPT_ROOT = resolve(import.meta.dirname, "..");
+
+function resolveTargetProject(): string {
+  const targetIndex = process.argv.indexOf("--target");
+  if (targetIndex !== -1 && process.argv[targetIndex + 1]) {
+    return resolve(process.argv[targetIndex + 1]);
+  }
+  return SCRIPT_ROOT;
+}
+
+const PROJECT_ROOT = resolveTargetProject();
 const ECL_DIRECTORY = join(PROJECT_ROOT, "docs", "ecl");
 const REPORTS_DIRECTORY = join(PROJECT_ROOT, ".devcompanion", "reports");
 const ARCHIVE_DIRECTORY = join(REPORTS_DIRECTORY, "archive");
@@ -79,6 +91,37 @@ interface OverviewData {
   confirmation_state: ConfirmationState;
 }
 
+function resolveProjectDescription(): string {
+  const packageJsonPath = join(PROJECT_ROOT, "package.json");
+  if (existsSync(packageJsonPath)) {
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+      if (packageJson.description) return packageJson.description;
+    } catch { /* ignore */ }
+  }
+
+  const pyprojectPath = join(PROJECT_ROOT, "pyproject.toml");
+  if (existsSync(pyprojectPath)) {
+    try {
+      const content = readFileSync(pyprojectPath, "utf-8");
+      const descMatch = content.match(/description\s*=\s*"([^"]+)"/);
+      if (descMatch) return descMatch[1];
+    } catch { /* ignore */ }
+  }
+
+  const readmePath = join(PROJECT_ROOT, "README.md");
+  if (existsSync(readmePath)) {
+    try {
+      const readme = readFileSync(readmePath, "utf-8");
+      const lines = readme.split("\n").filter((line) => line.trim() && !line.startsWith("#"));
+      if (lines.length > 0) return lines[0].trim().slice(0, 300);
+    } catch { /* ignore */ }
+  }
+
+  const projectName = PROJECT_ROOT.split(/[\\/]/).filter(Boolean).pop() ?? "project";
+  return `${projectName} 项目概览`;
+}
+
 async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
   const verifyOnly = process.argv.includes("--verify-only");
@@ -104,7 +147,7 @@ async function main(): Promise<void> {
 
   const confirmationState = await loadConfirmationState(CONFIRMATION_PATH);
 
-  const eclFiles = readdirSync(ECL_DIRECTORY).filter((file) => file.endsWith(".yaml"));
+  const eclFiles = existsSync(ECL_DIRECTORY) ? readdirSync(ECL_DIRECTORY).filter((file) => file.endsWith(".yaml")) : [];
   const allFeatures: FeatureEntry[] = [];
 
   for (const file of eclFiles) {
@@ -307,7 +350,7 @@ async function main(): Promise<void> {
 
   const overviewData: OverviewData = {
     generated_at: new Date().toISOString(),
-    project_description: "AI Dev Companion — 追踪代码函数级变更的 TypeScript 单体仓库工具。解析 git diff，识别被修改的函数，记录修改原因，生成测试骨架，渲染标注的 HyperText Markup Language 报告。",
+    project_description: resolveProjectDescription(),
     total_features: featureReports.length,
     total_functions: functions.length,
     features_passing: featureReports.filter((feature) => feature.status === "通过").length,
@@ -318,26 +361,52 @@ async function main(): Promise<void> {
     confirmation_state: confirmationState,
   };
 
-  const html = renderOverviewHtml(overviewData);
-  writeFileSync(OUTPUT_PATH, html);
-  console.log(`\n  Report written to: ${OUTPUT_PATH}`);
+  const outputPathEn = join(REPORTS_DIRECTORY, "overview-en.html");
+  const outputPathZh = join(REPORTS_DIRECTORY, "overview-zh.html");
+
+  const skipTranslation = process.argv.includes("--skip-translation");
+
+  if (skipTranslation) {
+    const html = renderOverviewHtml(overviewData, "zh");
+    writeFileSync(OUTPUT_PATH, html);
+    console.log(`\n  Report written to: ${OUTPUT_PATH}`);
+  } else {
+    console.log("\n  Starting translation for bilingual output...");
+
+    const [enData, zhData] = await Promise.all([
+      translateOverviewData(overviewData, "en"),
+      translateOverviewData(overviewData, "zh"),
+    ]);
+
+    const htmlEn = renderOverviewHtml(enData, "en");
+    const htmlZh = renderOverviewHtml(zhData, "zh");
+
+    writeFileSync(outputPathEn, htmlEn);
+    writeFileSync(outputPathZh, htmlZh);
+
+    console.log(`\n  English report written to: ${outputPathEn}`);
+    console.log(`  Chinese report written to: ${outputPathZh}`);
+  }
+
   console.log(`  Features: ${overviewData.features_passing}/${overviewData.total_features} passing`);
   console.log(`  Verifications: ${overviewData.verifications_passing}/${overviewData.total_verifications} passing`);
 }
 
-function renderOverviewHtml(data: OverviewData): string {
-  const featuresHtml = data.features.map((feature) => renderFeatureCard(feature, data.confirmation_state)).join("\n");
+function renderOverviewHtml(data: OverviewData, locale: Locale): string {
+  const t = getUiLabels(locale);
+  const htmlLang = locale === "en" ? "en" : "zh-CN";
+  const featuresHtml = data.features.map((feature) => renderFeatureCard(feature, data.confirmation_state, locale)).join("\n");
 
   const functionsHtml = data.functions.length > 0
-    ? renderFunctionIndex(data.functions, data.confirmation_state)
-    : `<div class="empty-section">函数索引将在完整模式下生成（需要 WebAssembly 解析器支持）</div>`;
+    ? renderFunctionIndex(data.functions, data.confirmation_state, locale)
+    : `<div class="empty-section">${t.empty_function_index}</div>`;
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${htmlLang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Overview Report — AI Dev Companion</title>
+  <title>${t.page_title}</title>
   <style>
 ${getStyles()}
   </style>
@@ -345,7 +414,7 @@ ${getStyles()}
 <body>
   <div class="container">
     <header>
-      <h1>Overview Report</h1>
+      <h1>${t.report_heading}</h1>
       <p class="subtitle">Generated: ${data.generated_at}</p>
       <p class="project-description">${escapeHtml(data.project_description)}</p>
     </header>
@@ -353,50 +422,52 @@ ${getStyles()}
     <section class="summary-bar">
       <div class="summary-stat">
         <strong>${data.features_passing}</strong>/<strong>${data.total_features}</strong>
-        <span>features 通过</span>
+        <span>${t.features_passing_label}</span>
       </div>
       <div class="summary-stat">
         <strong>${data.verifications_passing}</strong>/<strong>${data.total_verifications}</strong>
-        <span>验证通过</span>
+        <span>${t.verifications_passing_label}</span>
       </div>
       <div class="summary-stat">
         <strong>${data.total_functions}</strong>
-        <span>函数索引</span>
+        <span>${t.function_index_label}</span>
       </div>
       <div class="summary-stat checkbox-progress">
         <strong id="checkbox-confirmed">0</strong>/<strong id="checkbox-total">0</strong>
-        <span>已人工确认</span>
+        <span>${t.human_confirmed_label}</span>
       </div>
     </section>
 
     <div class="toolbar">
-      <button onclick="exportConfirmation()">导出确认状态</button>
-      <button onclick="importConfirmation()">导入确认状态</button>
+      <button onclick="exportConfirmation()">${t.export_button}</button>
+      <button onclick="importConfirmation()">${t.import_button}</button>
       <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="handleImportFile(event)">
     </div>
 
     <section class="features-section">
-      <h2>Evolving Constraint Language Feature 列表</h2>
+      <h2>${t.feature_list_heading}</h2>
       ${featuresHtml}
     </section>
 
     <section class="functions-section">
-      <h2>函数索引</h2>
+      <h2>${t.function_index_heading}</h2>
       ${functionsHtml}
     </section>
   </div>
 
   <script>
-${getScript(data.confirmation_state)}
+${getScript(data.confirmation_state, locale)}
   </script>
 </body>
 </html>`;
 }
 
-function renderFeatureCard(feature: FeatureReportData, confirmationState: ConfirmationState): string {
-  const statusClass = feature.status === "通过" ? "status-pass" :
-    feature.status === "失败" ? "status-fail" : "status-partial";
-  const statusLabel = feature.status;
+function renderFeatureCard(feature: FeatureReportData, confirmationState: ConfirmationState, locale: Locale): string {
+  const t = getUiLabels(locale);
+  const status = feature.status as string;
+  const statusClass = (status === "通过" || status === "Pass") ? "status-pass" :
+    (status === "失败" || status === "Fail") ? "status-fail" : "status-partial";
+  const statusLabel = getStatusLabel(feature.status, locale);
 
   const verificationsHtml = feature.verifications.map((verification) => {
     const checkboxId = generateCheckboxId("verification", feature.feature, verification.name);
@@ -414,15 +485,15 @@ function renderFeatureCard(feature: FeatureReportData, confirmationState: Confir
           <span class="verification-name">${escapeHtml(verification.name)}</span>
           <label class="checkbox-label">
             <input type="checkbox" class="confirmation-checkbox" data-id="${escapeHtml(checkboxId)}" data-command="${escapeHtml(verification.command)}" data-result="${verification.passed ? "passed" : "failed"}" ${preserveState ? "checked" : ""} onchange="updateCheckboxState(this)">
-            确认此验证有效
+            ${t.confirm_verification_label}
           </label>
         </div>
         <div class="verification-details">
-          <div class="detail-row"><span class="detail-label">命令</span><code>${escapeHtml(verification.command)}</code></div>
-          <div class="detail-row"><span class="detail-label">判断方式</span><span>${escapeHtml(verification.judgment_method)}</span></div>
-          <div class="detail-row"><span class="detail-label">预期结果</span><span>${escapeHtml(verification.expected_outcome)}</span></div>
-          <div class="detail-row"><span class="detail-label">实际输出</span><pre class="output-block">${escapeHtml(verification.actual_output || "(无输出)")}</pre></div>
-          <div class="detail-row"><span class="detail-label">结论</span><span class="${verification.passed ? "text-pass" : "text-fail"}">${verification.passed ? "通过" : "失败"}</span></div>
+          <div class="detail-row"><span class="detail-label">${t.command_label}</span><code>${escapeHtml(verification.command)}</code></div>
+          <div class="detail-row"><span class="detail-label">${t.judgment_method_label}</span><span>${escapeHtml(verification.judgment_method)}</span></div>
+          <div class="detail-row"><span class="detail-label">${t.expected_outcome_label}</span><span>${escapeHtml(verification.expected_outcome)}</span></div>
+          <div class="detail-row"><span class="detail-label">${t.actual_output_label}</span><pre class="output-block">${escapeHtml(verification.actual_output || t.no_output)}</pre></div>
+          <div class="detail-row"><span class="detail-label">${t.conclusion_label}</span><span class="${verification.passed ? "text-pass" : "text-fail"}">${verification.passed ? t.status_pass : t.status_fail}</span></div>
         </div>
       </div>`;
   }).join("\n");
@@ -445,28 +516,29 @@ function renderFeatureCard(feature: FeatureReportData, confirmationState: Confir
       </div>
       <div class="feature-body collapsed">
         <div class="section-group">
-          <div class="section-label">What — 是什么</div>
+          <div class="section-label">${t.what_section}</div>
           <p class="description">${escapeHtml(feature.description)}</p>
-          <p class="purpose"><strong>目的：</strong>${escapeHtml(feature.purpose)}</p>
+          <p class="purpose"><strong>${t.purpose_prefix}</strong>${escapeHtml(feature.purpose)}</p>
         </div>
 
         <div class="section-group">
-          <div class="section-label">How — 如何实现</div>
+          <div class="section-label">${t.how_section}</div>
           <div class="approach">${escapeHtml(feature.approach)}</div>
-          <div class="section-sublabel">关键文件</div>
+          <div class="section-sublabel">${t.key_files_label}</div>
           <ul class="key-files-list">${keyFilesHtml}</ul>
-          ${feature.constraints.length > 0 ? `<div class="section-sublabel">约束条件</div>${constraintsHtml}` : ""}
+          ${feature.constraints.length > 0 ? `<div class="section-sublabel">${t.constraints_label}</div>${constraintsHtml}` : ""}
         </div>
 
         <div class="section-group">
-          <div class="section-label">Verify — 验证</div>
+          <div class="section-label">${t.verify_section}</div>
           ${verificationsHtml}
         </div>
       </div>
     </div>`;
 }
 
-function renderFunctionIndex(functions: FunctionReportData[], confirmationState: ConfirmationState): string {
+function renderFunctionIndex(functions: FunctionReportData[], confirmationState: ConfirmationState, locale: Locale): string {
+  const t = getUiLabels(locale);
   const belongsToEcl = functions.filter((functionData) => functionData.orphan_status === "belongs_to_ecl");
   const notInEcl = functions.filter((functionData) => functionData.orphan_status === "not_in_any_ecl");
   const suggestDelete = functions.filter((functionData) => functionData.orphan_status === "suggest_delete");
@@ -474,35 +546,36 @@ function renderFunctionIndex(functions: FunctionReportData[], confirmationState:
   let html = "";
 
   if (belongsToEcl.length > 0) {
-    html += `<h3>归属 Evolving Constraint Language Feature 的函数 (${belongsToEcl.length})</h3>`;
-    html += belongsToEcl.map((functionData) => renderFunctionCard(functionData, confirmationState)).join("\n");
+    html += `<h3>${t.belongs_to_ecl_heading} (${belongsToEcl.length})</h3>`;
+    html += belongsToEcl.map((functionData) => renderFunctionCard(functionData, confirmationState, locale)).join("\n");
   }
 
   if (notInEcl.length > 0) {
-    html += `<h3>未归属任何 Evolving Constraint Language Feature 的函数 (${notInEcl.length})</h3>`;
-    html += notInEcl.map((functionData) => renderFunctionCard(functionData, confirmationState)).join("\n");
+    html += `<h3>${t.not_in_ecl_heading} (${notInEcl.length})</h3>`;
+    html += notInEcl.map((functionData) => renderFunctionCard(functionData, confirmationState, locale)).join("\n");
   }
 
   if (suggestDelete.length > 0) {
-    html += `<h3>建议删除的孤立函数 (${suggestDelete.length})</h3>`;
-    html += suggestDelete.map((functionData) => renderFunctionCard(functionData, confirmationState)).join("\n");
+    html += `<h3>${t.suggest_delete_heading} (${suggestDelete.length})</h3>`;
+    html += suggestDelete.map((functionData) => renderFunctionCard(functionData, confirmationState, locale)).join("\n");
   }
 
   return html;
 }
 
-function renderFunctionCard(functionData: FunctionReportData, confirmationState: ConfirmationState): string {
+function renderFunctionCard(functionData: FunctionReportData, confirmationState: ConfirmationState, locale: Locale): string {
+  const t = getUiLabels(locale);
   const orphanBadge = functionData.orphan_status === "not_in_any_ecl"
-    ? `<span class="badge badge-warning">not in any Evolving Constraint Language</span>`
+    ? `<span class="badge badge-warning">not in any ECL</span>`
     : functionData.orphan_status === "suggest_delete"
-    ? `<span class="badge badge-danger">建议删除</span>`
+    ? `<span class="badge badge-danger">${t.suggest_delete_badge}</span>`
     : "";
 
   const deleteCheckbox = functionData.orphan_status === "suggest_delete"
     ? (() => {
         const checkboxId = generateCheckboxId("delete_suggestion", functionData.file_path, functionData.function_name);
         const isConfirmed = confirmationState.entries[checkboxId]?.confirmed ?? false;
-        return `<label class="checkbox-label"><input type="checkbox" class="confirmation-checkbox" data-id="${escapeHtml(checkboxId)}" data-command="delete_review" data-result="pending" ${isConfirmed ? "checked" : ""} onchange="updateCheckboxState(this)">确认是否应删除</label>`;
+        return `<label class="checkbox-label"><input type="checkbox" class="confirmation-checkbox" data-id="${escapeHtml(checkboxId)}" data-command="delete_review" data-result="pending" ${isConfirmed ? "checked" : ""} onchange="updateCheckboxState(this)">${t.confirm_delete_label}</label>`;
       })()
     : "";
 
@@ -510,15 +583,15 @@ function renderFunctionCard(functionData: FunctionReportData, confirmationState:
     ? functionData.ecl_features.map((featureName) =>
         `<a href="#feature-${escapeHtml(featureName)}" class="ecl-link">${escapeHtml(featureName)}</a>`
       ).join(", ")
-    : `<span class="text-dim">无</span>`;
+    : `<span class="text-dim">${t.none_label}</span>`;
 
   const dependenciesHtml = functionData.calls.length > 0
     ? functionData.calls.map((calledFunction) => `<span class="dep-link">${escapeHtml(calledFunction)}</span>`).join(", ")
-    : "<span class=\"text-dim\">无直接调用</span>";
+    : `<span class="text-dim">${t.no_direct_calls}</span>`;
 
   const calledByHtml = functionData.called_by.length > 0
     ? functionData.called_by.map((caller) => `<span class="dep-link">${escapeHtml(caller)}</span>`).join(", ")
-    : "<span class=\"text-dim\">未被任何函数调用</span>";
+    : `<span class="text-dim">${t.not_called_by_any}</span>`;
 
   return `
     <div class="function-card" id="function-${escapeHtml(functionData.id)}">
@@ -531,39 +604,39 @@ function renderFunctionCard(functionData: FunctionReportData, confirmationState:
       </div>
       <div class="function-body collapsed">
         <div class="section-group">
-          <div class="section-label">What — 是什么</div>
+          <div class="section-label">${t.what_section}</div>
           <p class="description">${escapeHtml(functionData.reason)}</p>
           <div class="meta-row">
-            <span>${functionData.is_async ? "异步函数" : "同步函数"}</span>
-            <span>${functionData.is_exported ? "已导出" : "未导出"}</span>
-            <span>归属 Evolving Constraint Language Feature: ${eclLinks}</span>
+            <span>${functionData.is_async ? t.async_function : t.sync_function}</span>
+            <span>${functionData.is_exported ? t.exported : t.not_exported}</span>
+            <span>${t.ecl_belongs_prefix}${eclLinks}</span>
           </div>
         </div>
 
         <div class="section-group">
-          <div class="section-label">How — 如何工作</div>
+          <div class="section-label">${t.how_section}</div>
           <code class="signature">${escapeHtml(functionData.signature)}</code>
-          <div class="detail-row"><span class="detail-label">参数</span><span>${functionData.parameters.length > 0 ? functionData.parameters.map((parameter) => `<code>${escapeHtml(parameter)}</code>`).join(", ") : "无参数"}</span></div>
-          <div class="detail-row"><span class="detail-label">返回值类型</span><span>${functionData.return_type ? `<code>${escapeHtml(functionData.return_type)}</code>` : "无返回值类型"}</span></div>
-          <div class="detail-row"><span class="detail-label">行范围</span><span>第 ${functionData.start_line} 行到第 ${functionData.end_line} 行</span></div>
+          <div class="detail-row"><span class="detail-label">${t.parameters_label}</span><span>${functionData.parameters.length > 0 ? functionData.parameters.map((parameter) => `<code>${escapeHtml(parameter)}</code>`).join(", ") : t.no_parameters}</span></div>
+          <div class="detail-row"><span class="detail-label">${t.return_type_label}</span><span>${functionData.return_type ? `<code>${escapeHtml(functionData.return_type)}</code>` : t.no_return_type}</span></div>
+          <div class="detail-row"><span class="detail-label">${t.line_range_label}</span><span>${formatLineRange(functionData.start_line, functionData.end_line, locale)}</span></div>
         </div>
 
         <div class="section-group">
-          <div class="section-label">Dependencies — 直接调用</div>
+          <div class="section-label">${t.dependencies_section}</div>
           <div class="dep-list">${dependenciesHtml}</div>
         </div>
 
         <div class="section-group">
-          <div class="section-label">Called by — 被谁调用</div>
+          <div class="section-label">${t.called_by_section}</div>
           <div class="dep-list">${calledByHtml}</div>
         </div>
 
         <div class="section-group">
-          <div class="section-label">Verify — 测试</div>
+          <div class="section-label">${t.verify_section}</div>
           ${functionData.test_file
             ? `<div class="test-info">
-                <div class="detail-row"><span class="detail-label">测试文件</span><code>${escapeHtml(functionData.test_file)}</code></div>
-                <div class="detail-row"><span class="detail-label">测试状态</span><span class="${functionData.test_status === "passed" ? "text-pass" : "text-fail"}">${functionData.test_status === "passed" ? "通过" : "失败"}</span></div>
+                <div class="detail-row"><span class="detail-label">${t.test_file_label}</span><code>${escapeHtml(functionData.test_file)}</code></div>
+                <div class="detail-row"><span class="detail-label">${t.test_status_label}</span><span class="${functionData.test_status === "passed" ? "text-pass" : "text-fail"}">${functionData.test_status === "passed" ? t.status_pass : t.status_fail}</span></div>
                 ${functionData.test_assertions.map((assertion) => `
                   <div class="assertion-row">
                     <span class="${assertion.status === "passed" ? "icon-pass" : "icon-fail"}">${assertion.status === "passed" ? "&#10003;" : "&#10007;"}</span>
@@ -572,7 +645,7 @@ function renderFunctionCard(functionData: FunctionReportData, confirmationState:
                   </div>
                 `).join("")}
               </div>`
-            : `<span class="text-dim">无对应测试</span>`}
+            : `<span class="text-dim">${t.no_test}</span>`}
         </div>
       </div>
     </div>`;
@@ -710,7 +783,8 @@ function getStyles(): string {
   `;
 }
 
-function getScript(initialState: ConfirmationState): string {
+function getScript(initialState: ConfirmationState, locale: Locale): string {
+  const t = getUiLabels(locale);
   return `
     var confirmationState = ${JSON.stringify(initialState)};
 
@@ -791,9 +865,9 @@ function getScript(initialState: ConfirmationState): string {
           });
 
           updateCheckboxProgress();
-          alert('确认状态已导入');
+          alert('${t.import_success_alert}');
         } catch (error) {
-          alert('导入失败: 无效的 JavaScript Object Notation 文件');
+          alert('${t.import_fail_alert}');
         }
       };
       reader.readAsText(file);

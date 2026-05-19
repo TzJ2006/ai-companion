@@ -1,0 +1,32 @@
+{
+  "function_hash": "0000000035847527",
+  "file_path": "tests\test_cron_concurrency.py",
+  "function_name": "test_load_state_valid",
+  "class_name": "TestStatePersistence",
+  "why": "Validates that the CronScheduler can properly save and reload its internal state for job persistence.",
+  "what": "Registers a test job, persists the scheduler state, loads it back, and asserts the state contains expected job data.",
+  "how": "Uses async/await to test asynchronous operations; mocks a job, saves state, retrieves it, and validates structure with assertions.",
+  "inputs": [
+    {
+      "name": "self",
+      "type": "TestStatePersistence",
+      "role": "test instance providing scheduler fixture",
+      "constraints": "Must have scheduler with register, _save_state, and _load_state methods"
+    }
+  ],
+  "outputs": {
+    "type": "None",
+    "meaning": "Test method returns None; success indicated by assertions passing without raising exceptions",
+    "nullable": false
+  },
+  "throws": [
+    "AssertionError if state is None",
+    "AssertionError if 'jobs' key missing from loaded state",
+    "AssertionError if 'job_a' not in loaded state['jobs']"
+  ],
+  "depends_on": [
+    "self.scheduler.register()",
+    "self.scheduler._save_state()",
+    "self.scheduler._load_state()"
+  ]
+}

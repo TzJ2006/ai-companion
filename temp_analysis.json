@@ -1,0 +1,36 @@
+{
+  "function_hash": "0000000011a4c8f2",
+  "file_path": "screenpipe\packages\ai-gateway\src\services\cost-tracker.ts",
+  "function_name": "getModelCost",
+  "class_name": null,
+  "why": "Calculate the cost of API calls to specific LLM models to enable cost tracking and billing functionality in the gateway.",
+  "what": "Looks up model pricing information, applies default token counts when missing, and computes total cost by dividing token counts by 1 million and multiplying by per-token rates. Returns 0.01 as conservative estimate for unknown models.",
+  "how": "Calls findPricing() to retrieve model rates, uses nullish coalescing to provide DEFAULT_INPUT_TOKENS and DEFAULT_OUTPUT_TOKENS when tokens are null, then calculates input and output costs separately and sums them.",
+  "inputs": [
+    {
+      "name": "model",
+      "type": "string",
+      "role": "Model identifier for pricing lookup",
+      "constraints": "Must be a recognized model key; unknown models trigger conservative 0.01 estimate"
+    },
+    {
+      "name": "inputTokens",
+      "type": "number | null",
+      "role": "Count of prompt tokens consumed",
+      "constraints": "If null, defaults to DEFAULT_INPUT_TOKENS when outputTokens is also null, otherwise 0"
+    },
+    {
+      "name": "outputTokens",
+      "type": "number | null",
+      "role": "Count of completion tokens generated",
+      "constraints": "If null, defaults to DEFAULT_OUTPUT_TOKENS when inputTokens is also null, otherwise 0"
+    }
+  ],
+  "outputs": {
+    "type": "number",
+    "meaning": "Total cost in currency units (dollars) for the API call with given token usage",
+    "nullable": false
+  },
+  "throws": [],
+  "depends_on": ["findPricing"]
+}

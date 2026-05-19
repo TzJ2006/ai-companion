@@ -18,7 +18,7 @@ export interface FeatureEntry {
 
 export function parseEclYaml(content: string): FeatureEntry[] {
   const features: FeatureEntry[] = [];
-  const featureBlocks = content.split(/^  - feature:/m).slice(1);
+  const featureBlocks = content.split(/^\s*- feature:/m).slice(1);
 
   for (const block of featureBlocks) {
     const fullBlock = "  - feature:" + block;
