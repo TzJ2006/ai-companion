@@ -1,3 +1,0 @@
-export declare function handlePostToolUse(stdin: string, supportedExtensions?: Set<string>): void;
-export declare function findProjectRoot(filePath: string): string | null;
-//# sourceMappingURL=index.d.ts.map

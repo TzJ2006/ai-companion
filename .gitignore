@@ -1,1 +1,13 @@
-.devcompanion/
+# dependencies
+node_modules/
+
+# build output (regenerate with `npm run build`)
+dist/
+*.tsbuildinfo
+
+# local runtime state — but keep the test suite tracked
+.devcompanion/*
+!.devcompanion/tests/
+
+# local-only Claude Code settings
+.claude/settings.local.json
