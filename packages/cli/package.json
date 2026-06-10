@@ -14,6 +14,7 @@
     "@aidev/core": "*",
     "@aidev/history": "*",
     "@aidev/render": "*",
+    "@aidev/idea": "*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

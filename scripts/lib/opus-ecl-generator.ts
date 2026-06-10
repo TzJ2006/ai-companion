@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { FunctionAnalysis } from "@aidev/types";
-import { callClaude } from "./claude-caller.ts";
+import { callClaude } from "../../packages/llm/src/index.ts";
 import { stripMarkdownFences } from "../../packages/core/src/utils.ts";
 import type { ProjectMetadata } from "./project-context-generator.ts";
 
@@ -34,7 +34,7 @@ export async function generateOpusProjectUnderstanding(
 
   const prompt = buildProjectUnderstandingPrompt(metadata, directoryTree, documents);
 
-  const result = await callClaude(prompt, { model: "opus", timeout });
+  const { output: result } = await callClaude(prompt, { model: "opus", timeout, maxOutputBytes: 0 });
   return result;
 }
 
@@ -51,7 +51,7 @@ export async function generateOpusEcl(
     metadata, projectUnderstanding, functionAnalyses
   );
 
-  const result = await callClaude(prompt, { model: "opus", timeout });
+  const { output: result } = await callClaude(prompt, { model: "opus", timeout, maxOutputBytes: 0 });
   return parseOpusEclResponse(result);
 }
 

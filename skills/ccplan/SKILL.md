@@ -56,6 +56,23 @@ stage, and an evolving constraint language for cross-session persistence.
 **Do NOT use** for single-file bug fixes, known-reproduction issues, or when
 the user explicitly says "just do it." For those, proceed directly.
 
+## Read-Only Mode (Planning Guard)
+
+**CRITICAL — ccplan operates in READ-ONLY mode.** Like plan mode, ccplan MUST NOT
+modify any code, configuration, or project files. The ONLY files ccplan may write
+are ECL documents (`docs/ecl/*.yaml`) and its own marker file.
+
+**Enforcement mechanism:**
+1. On activation: create marker file `.devcompanion/.ccplan-active`
+2. PreToolUse hook (`packages/hook/src/pre-tool-use-guard.ts`) detects this marker
+   and blocks all Edit/Write/destructive-Bash operations on non-ECL files
+3. On exit (Phase 9 approve/reject, or user exits): delete the marker file
+
+**What ccplan CAN do:** Read, Glob, Grep, WebSearch, WebFetch, write ECL YAML.
+**What ccplan CANNOT do:** Edit source code, Write non-ECL files, run destructive commands.
+
+Implementation is the job of `/ccedit`, not `/ccplan`.
+
 ## Conversation Loop Protocol
 
 **CRITICAL — CONTINUOUS EXECUTION MANDATE:**
@@ -994,170 +1011,59 @@ Present the complete ECL document to the user for approval. The presentation inc
 - If "Approve": proceed to Phase 10.
 - If "Reject": route back to Phase 2 with rejection context.
 
-**→ NEXT (on Approve): Proceed to Phase 10 (Implementation).**
+**→ NEXT (on Approve): Proceed to Phase 10 (Handoff to /ccedit).**
 
-### Phase 10: Implementation
+### Phase 10: Handoff to Execution
 
-With an approved ECL document, implementation follows constraint-solving.
+**ccplan does NOT implement code.** After Phase 9 approval, ccplan's job is done.
+Implementation is handled by `/ccedit` — the DAG-driven execution engine.
 
-**CRITICAL — Modular Architecture Principle (模块化原则):**
+#### Handoff Steps
 
-Every module is an **independent, pluggable unit**. Modules communicate ONLY
-through explicit interfaces, never through internal implementation details.
-Any module can be tested, replaced, or reused in isolation without affecting others.
-
-Before writing any code, read `devcompanion.config.ts` at the project root.
-NEVER hardcode paths or cross-module dependencies — derive everything from
-config and interfaces.
-
-#### The Five Modularity Laws
-
-1. **Explicit Interface** — Each module exposes a public API through its `index.ts`
-   (entry point). Everything else is internal. Other modules may ONLY import from
-   the entry point, never from internal files directly.
-
-2. **No Shared Mutable State** — Modules do not share global variables, singletons,
-   or mutable caches. If two modules need the same data, one produces it and passes
-   it to the other through function arguments or config.
-
-3. **Dependency Inversion** — A module depends on interfaces (types), not on
-   concrete implementations of other modules. If module A needs functionality
-   from module B, A declares what it needs as a type/interface, and B satisfies it.
-   This allows B to be swapped without changing A.
-
-4. **Config over Convention** — All wiring (paths, feature flags, connection
-   parameters) lives in `devcompanion.config.ts`. Modules read config at their
-   boundary (entry point), not deep inside implementation. Zero hardcoded paths,
-   URLs, or magic strings inside module code.
-
-5. **Self-Contained Testability** — Each module can be tested with ONLY its own
-   code + mocked interfaces for its dependencies. If testing a module requires
-   importing internals of another module, the boundary is wrong — refactor.
-
-#### Module Boundary Checklist
-
-Before creating or extending a module, verify:
-
-- [ ] Does it have a single, clear responsibility?
-- [ ] Is its public API defined in `index.ts` (or the configured `entryPoint`)?
-- [ ] Can it be tested by mocking its dependencies at the interface level?
-- [ ] Does it read config/options at the boundary, not deep inside?
-- [ ] If removed entirely, would other modules still compile (just fail at runtime)?
-- [ ] Does it import from other modules' entry points ONLY, never from `../other-module/src/internal`?
-
-If any answer is "no", restructure before proceeding.
-
-#### Module Placement
-
-Determine the correct slot from `devcompanion.config.ts`:
-
-| Responsibility | Module Slot | Path (from config) |
-|---------------|-------------|---------------------|
-| Parsing, AST, identity hashing | `modules.utils` | `packages/ast/src/` |
-| Business logic, diff, annotation, test-gen | `modules.feature` | `packages/core/src/` |
-| HTML/report rendering | `modules.render` | `packages/render/src/` |
-| Persistent storage, change tracking | `modules.history` | `packages/history/src/` |
-| User-facing CLI commands | `modules.cli` | `packages/cli/src/` |
-| Hook integration (PostToolUse) | `modules.hook` | `packages/hook/src/` |
-| Background processes | `modules.daemon` | `packages/daemon/src/` |
-
-- If a function doesn't fit any existing slot → create a new package under `packages/`
-  AND add a corresponding entry to `devcompanion.config.ts`
-- Utility/helper functions go into the module they serve (not a global utils dump)
-- Cross-module shared types: define in the CONSUMING module's `types.ts`, import
-  the type (not the implementation) from the producing module's entry point
-
-#### Change Tracking
-
-Every code change during implementation MUST be tracked:
-- **ECL document** (`tracking.eclDir`) — records WHAT was decided and WHY
-- **Function index** (`tracking.indexFile`) — auto-updated by report pipeline,
-  tracks every function's hash, location, and test status
-- **History** (`tracking.historyDir`) — per-file change records with timestamps
-- **Report data** (`reports.dataFile`) — machine-readable snapshot of all functions,
-  their reasons, and test results
-
-This means: after you write code, the pipeline captures it. Nothing is invisible.
-
-#### Implementation Steps
-
-1. **Generate test cases first** (TDD) — Each requirement's acceptance criteria
-   becomes one or more test cases. The ECL document makes this mechanical.
-   - Read `config.tests.dir` for test location
-   - Follow `config.tests.naming` convention: `test_<module>_<functionName>.test.ts`
-   - Import from `config.tests.importPrefix` (e.g., `../../packages/<pkg>/src/...`)
-   - Use vitest (`import { describe, it, expect } from "vitest"`)
-2. **Implement by dependency order** — Follow the DAG from Phase 6.
-   Leaf nodes (no dependencies) start first.
-   - Look up the correct module slot from `config.modules`
-   - Place source code in that module's `path`
-   - Export new functions from the module's `entryPoint`
-3. **Each function is a constraint solution** — The ECL constraints for a function
-   define its input/output contract. Implementation = finding one path through
-   the constraint space that satisfies all conditions.
-4. **Verify continuously** — After each module, run the verification loop
-   (build → type-check → lint → test → security scan).
-5. **Run devcompanion report pipeline** — After all modules pass verification,
-   regenerate the project onboard report using paths from `config.reports`:
+1. **Delete the planning guard marker:**
    ```bash
-   npx tsx <config.reports.collectScript> --llm
-   npx tsx <config.reports.renderScript>
+   rm .devcompanion/.ccplan-active
    ```
-   This step:
-   - Runs all tests in `config.tests.dir` via vitest JSON reporter
-   - AST-scans all source files for new/modified functions
-   - Generates human-readable "reason" for each function (LLM for first 20, heuristic for rest)
-   - Produces `config.reports.dataFile` (machine-readable) and `config.reports.htmlFile` (interactive)
-   - The HTML report shows per-function reasons with source badges (llm-inferred / heuristic / user-provided),
-     per-test pass/fail results, and interactive Confirm/Edit buttons for reason curation
-   - If the scripts do not exist, skip this step silently
-6. **Generate feature guards** — After report pipeline completes,
-   auto-generate a `feature_guard` section in the ECL document (stored at `config.tracking.eclDir`).
-   For each FEAT item with `status: done`: collect `file_path` from its modules,
-   extract acceptance criteria as invariants, identify verification commands.
-   This is **MANDATORY** — it creates the persistent defense against feature
-   regression in future sessions. See "Feature Guard Protocol" below.
+   This re-enables write operations for /ccedit.
 
-For multi-session projects, any new agent reads the ECL document and continues
-from where the previous agent stopped. No context loss.
+2. **Generate feature guards** — Auto-generate a `feature_guard` section in the
+   ECL document for each FEAT item. For each FEAT: collect `file_path` from its
+   modules, extract acceptance criteria as invariants, identify verification commands.
+   This is **MANDATORY** — it creates persistent defense against regression.
 
-**Multi-turn protocol for Phase 10:**
-- Read `devcompanion.config.ts` FIRST — derive all paths from it.
-- Implement modules in DAG order. After each module, run verification.
-- If verification passes → continue to next module.
-- If verification fails → classify the issue and enter Phase 11.
-- After all modules pass verification → run report pipeline (Step 5).
-- After report pipeline → generate guards (Step 6).
-- Open the report HTML for user to review new functions and their reasons.
+3. **Update ECL status** to `phase-10-ready-for-execution`.
 
-**→ NEXT: If issues arose during implementation, enter Phase 11 (Feedback Loop). If all clean, update ECL status to `completed` and announce completion.**
+4. **Announce completion and instruct the user:**
+   > Planning complete. ECL document is ready at `docs/ecl/<feature>.yaml`.
+   > To begin implementation, run `/ccedit` — it will read the FN DAG and
+   > execute each atomic task in dependency order.
+
+**ccplan MUST NOT:**
+- Write any source code files
+- Create test files
+- Modify package.json or tsconfig.json
+- Run build or test commands that modify state
+- Implement any FN items
+
+All of the above are the responsibility of `/ccedit`.
 
 ### Phase 11: Feedback Loop (闭环)
 
-When implementation reveals issues:
+If the user returns to ccplan after ccedit encounters issues:
 
-1. **Consult report data** — If `.devcompanion/report-data.json` exists, read it
-   to identify failing tests and their `failure_message` fields. This provides
-   precise error context (assertion failures, import errors, type mismatches)
-   without re-running the full test suite manually.
-
-2. **Classify the issue:**
-   - Implementation bug (local fix, no plan change needed)
-   - Test skeleton mismatch (test imports unexported function → fix export or test)
+1. **Classify the issue:**
    - Requirement gap (missing edge case → new REQ item → re-enter Phase 5)
    - Requirement error (wrong assumption → re-enter Phase 2)
    - Architecture problem (structural issue → re-enter Phase 3)
+   - Implementation bug → **do NOT handle here, use /ccdebug**
 
-3. **Route to the correct phase** — not always Phase 2. Small gaps re-enter at
-   Phase 5 (filtering). Architectural problems re-enter at Phase 3 (divergence).
-   Test skeleton mismatches are local fixes — adjust the test or add the export.
+2. **Update the ECL document** — Record the issue, its classification, and which
+   phase it was routed to. This creates an audit trail in the `iterations` log.
 
-4. **Update the ECL document** — Record the issue, its classification, and which
-   phase it was routed to. This creates an audit trail.
+3. **Re-enter the appropriate phase** — Adjust the plan, re-run affected phases,
+   return to Phase 9 Review Gate for re-approval.
 
-5. **Iterate and re-run pipeline** — After fixing, re-run the report pipeline
-   (`npx tsx scripts/collect-report-data.ts --llm && npx tsx scripts/generate-report.ts`)
-   to verify the fix and update the HTML report. The spiral tightens with each pass.
+4. **After re-approval** → delete marker, hand off to /ccedit again.
 
 **→ NEXT: Route to the classified phase and continue the spiral.**
 

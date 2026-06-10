@@ -115,13 +115,13 @@ export async function runOnboardingAnalysis(
     progress("ecl-opus-1", 0, 1, "Opus: Analyzing project structure and documentation");
     const metadata = collectProjectMetadata(projectPath);
     const projectUnderstanding = await generateOpusProjectUnderstanding(
-      metadata, projectPath, { timeout: 120000 }
+      metadata, projectPath, {}
     );
     progress("ecl-opus-1", 1, 1, "Opus: Project understanding complete");
 
     progress("ecl-opus-2", 0, 1, "Opus: Generating ECL from function analyses");
     const eclResult = await generateOpusEcl(
-      metadata, projectPath, projectUnderstanding, analyses, { timeout: 180000 }
+      metadata, projectPath, projectUnderstanding, analyses, {}
     );
     progress("ecl-opus-2", 1, 1, `Opus: ${eclResult.features.length} features identified`);
 

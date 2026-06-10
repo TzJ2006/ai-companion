@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Companion - Reports</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span>AI Companion</span>
+      </div>
+      <nav id="project-nav">
+        <div class="nav-loading">Loading...</div>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="add-btn" class="sidebar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add Project
+        </button>
+        <button id="export-btn" class="sidebar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export All
+        </button>
+        <button id="ssh-btn" class="sidebar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+          SSH Repos
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div class="search-wrapper">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="search" id="search" placeholder="Search reports..." autocomplete="off">
+        </div>
+        <div class="stats" id="stats"></div>
+      </header>
+
+      <div id="projects-container">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Scanning projects...</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="add-dialog">
+    <form id="add-form" method="dialog">
+      <h2>Add Project</h2>
+      <div class="form-group">
+        <label for="project-name">Name</label>
+        <input type="text" id="project-name" required placeholder="my-project">
+      </div>
+      <div class="form-group">
+        <label for="project-path">Directory Path</label>
+        <input type="text" id="project-path" required placeholder="D:/Github/my-project">
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="cancel-btn" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Add Project</button>
+      </div>
+      <p id="add-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="export-dialog">
+    <form id="export-form" method="dialog">
+      <h2>Export Reports</h2>
+      <div class="form-group">
+        <label for="export-path">Output Directory</label>
+        <input type="text" id="export-path" required placeholder="D:/Reports">
+      </div>
+      <p class="form-hint">All HTML reports will be copied here, organized by project.</p>
+      <div class="dialog-actions">
+        <button type="button" id="export-cancel-btn" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Export</button>
+      </div>
+      <p id="export-result" class="result" hidden></p>
+    </form>
+  </dialog>
+
+  <dialog id="ssh-dialog">
+    <form id="ssh-form" method="dialog">
+      <h2>Set SSH Repos Directory</h2>
+      <div class="form-group">
+        <label for="ssh-path">Directory containing repo subfolders</label>
+        <input type="text" id="ssh-path" required placeholder="D:/GoogleDrive/ssh-reports">
+      </div>
+      <p class="form-hint">Each subfolder is treated as a repo. HTML files inside are shown as reports.</p>
+      <div class="dialog-actions">
+        <button type="button" id="ssh-cancel-btn" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Set</button>
+      </div>
+      <p id="ssh-error" class="error" hidden></p>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

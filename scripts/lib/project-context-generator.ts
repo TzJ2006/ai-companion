@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, basename } from "node:path";
-import { callClaude } from "./claude-caller.ts";
+import { callClaude } from "../../packages/llm/src/index.ts";
 import { stripMarkdownFences } from "../../packages/core/src/utils.ts";
 
 
@@ -119,7 +119,7 @@ export async function generateProjectContext(
   const prompt = buildContextPrompt(metadata);
 
   try {
-    const stdout = await callClaude(prompt, { model, timeout });
+    const { output: stdout } = await callClaude(prompt, { model, timeout, maxOutputBytes: 0 });
 
     return parseContextResponse(stdout, metadata);
   } catch {

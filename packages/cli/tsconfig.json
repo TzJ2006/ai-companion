@@ -17,7 +17,8 @@
     { "path": "../ast" },
     { "path": "../core" },
     { "path": "../history" },
-    { "path": "../render" }
+    { "path": "../render" },
+    { "path": "../idea" }
   ],
   "include": ["src/**/*.ts"]
 }

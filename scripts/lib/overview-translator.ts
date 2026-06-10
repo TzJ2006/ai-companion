@@ -1,4 +1,4 @@
-import { callClaude } from "./claude-caller.ts";
+import { callClaude } from "../../packages/llm/src/index.ts";
 import { stripMarkdownFences } from "../../packages/core/src/utils.ts";
 
 export type Locale = "en" | "zh";
@@ -268,6 +268,34 @@ JSON to translate:
 ${JSON.stringify(texts, null, 2)}`;
 }
 
+// Translation is split into small batches and run sequentially so a single
+// Claude call never has to read and re-emit the entire overview at once. The
+// full payload (project description + all feature text + every function reason)
+// previously overran the CLI timeout. Each batch is small and fast; a failed
+// batch falls back to the original text instead of crashing the whole run.
+const TRANSLATION_TIMEOUT_MS = 180_000;
+const FUNCTION_BATCH_SIZE = 80;
+
+async function translateJsonPayload(
+  payload: TranslatableTexts,
+  targetLocale: Locale,
+  label: string
+): Promise<TranslatableTexts | null> {
+  const prompt = buildTranslationPrompt(payload, targetLocale);
+  try {
+    const { output } = await callClaude(prompt, {
+      model: "haiku",
+      timeout: TRANSLATION_TIMEOUT_MS,
+      maxOutputBytes: 0,
+    });
+    return JSON.parse(stripMarkdownFences(output.trim())) as TranslatableTexts;
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "error";
+    console.warn(`  Translation (${label}) failed [${name}]; keeping original text.`);
+    return null;
+  }
+}
+
 export async function translateOverviewData<T extends {
   project_description: string;
   features: Array<{
@@ -288,49 +316,53 @@ export async function translateOverviewData<T extends {
     reason: string;
   }>;
 }>(overviewData: T, targetLocale: Locale): Promise<T> {
-  const texts = extractTranslatableTexts(overviewData);
-  const prompt = buildTranslationPrompt(texts, targetLocale);
-
   console.log(`  Translating to ${targetLocale === "en" ? "English" : "Chinese"}...`);
 
-  const rawResult = await callClaude(prompt, { model: "haiku", timeout: 120000 });
-  const cleanResult = stripMarkdownFences(rawResult.trim());
-
-  let translated: TranslatableTexts;
-  try {
-    translated = JSON.parse(cleanResult);
-  } catch {
-    console.warn(`  Translation parse failed, using original text for ${targetLocale}`);
-    return overviewData;
-  }
-
+  const source = extractTranslatableTexts(overviewData);
   const result = JSON.parse(JSON.stringify(overviewData)) as T;
 
-  result.project_description = translated.project_description ?? overviewData.project_description;
-
-  for (let i = 0; i < result.features.length; i++) {
-    const source = translated.features?.[i];
-    if (source) {
-      result.features[i].description = source.description ?? result.features[i].description;
-      result.features[i].purpose = source.purpose ?? result.features[i].purpose;
-      result.features[i].approach = source.approach ?? result.features[i].approach;
-      result.features[i].constraints = source.constraints ?? result.features[i].constraints;
-      result.features[i].status = source.status ?? result.features[i].status;
+  // Pass 1 — core texts (project description + features). Small: one call.
+  const core = await translateJsonPayload(
+    { project_description: source.project_description, features: source.features, functions: [] },
+    targetLocale,
+    "core"
+  );
+  if (core) {
+    result.project_description = core.project_description ?? result.project_description;
+    for (let i = 0; i < result.features.length; i++) {
+      const s = core.features?.[i];
+      if (!s) continue;
+      result.features[i].description = s.description ?? result.features[i].description;
+      result.features[i].purpose = s.purpose ?? result.features[i].purpose;
+      result.features[i].approach = s.approach ?? result.features[i].approach;
+      result.features[i].constraints = s.constraints ?? result.features[i].constraints;
+      result.features[i].status = s.status ?? result.features[i].status;
       for (let j = 0; j < result.features[i].verifications.length; j++) {
-        const sourceVerification = source.verifications?.[j];
-        if (sourceVerification) {
-          result.features[i].verifications[j].name = sourceVerification.name ?? result.features[i].verifications[j].name;
-          result.features[i].verifications[j].judgment_method = sourceVerification.judgment_method ?? result.features[i].verifications[j].judgment_method;
-          result.features[i].verifications[j].expected_outcome = sourceVerification.expected_outcome ?? result.features[i].verifications[j].expected_outcome;
-        }
+        const sv = s.verifications?.[j];
+        if (!sv) continue;
+        result.features[i].verifications[j].name = sv.name ?? result.features[i].verifications[j].name;
+        result.features[i].verifications[j].judgment_method = sv.judgment_method ?? result.features[i].verifications[j].judgment_method;
+        result.features[i].verifications[j].expected_outcome = sv.expected_outcome ?? result.features[i].verifications[j].expected_outcome;
       }
     }
   }
 
-  for (let i = 0; i < result.functions.length; i++) {
-    const source = translated.functions?.[i];
-    if (source) {
-      result.functions[i].reason = source.reason ?? result.functions[i].reason;
+  // Pass 2 — function reasons, in sequential batches. Each batch is independent;
+  // a failed batch leaves its reasons untranslated rather than aborting the run.
+  for (let start = 0; start < source.functions.length; start += FUNCTION_BATCH_SIZE) {
+    const batch = source.functions.slice(start, start + FUNCTION_BATCH_SIZE);
+    const label = `functions ${start + 1}-${start + batch.length} of ${source.functions.length}`;
+    const translated = await translateJsonPayload(
+      { project_description: "", features: [], functions: batch },
+      targetLocale,
+      label
+    );
+    if (!translated || !Array.isArray(translated.functions)) continue;
+    for (let j = 0; j < batch.length; j++) {
+      const s = translated.functions[j];
+      if (s && typeof s.reason === "string") {
+        result.functions[start + j].reason = s.reason;
+      }
     }
   }
 

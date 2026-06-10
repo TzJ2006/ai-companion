@@ -1,0 +1,432 @@
+# ─── Header ────────────────────────────────────────────────────
+ecl_version: "1.0"
+feature: "ccoverview"
+status: "phase-10-ready-for-execution" # Phase 9 APPROVED; handed off to /ccedit
+created: "2026-06-02"
+updated: "2026-06-02"
+produced_by: "/ccdiscuss → /ccplan"
+related_features:
+  - "unified-overview-report" # the overview HTML this skill invokes (phase-9-review)
+  - "five-question-alignment-protocol" # the alignment record below follows this protocol
+owner: "user"
+
+# ─── Conversation State ──────────────────────────────────────
+pending_input: null # Phase 9 APPROVED; planning guard removed; ready for /ccedit
+
+# ─── Prompt Calibration (Phase 0) — fast-tracked ──────────────
+prompt_calibration:
+  raw_input: |
+    idea: 我需要一个 skill，能帮我生成一下双语的 overview.html 文档
+    follow-up: 我刚才说的这个应该如何做到
+    /ccplan: 开始规划
+  status: skipped
+  reason: >-
+    Fast-tracked per the read-if-present handoff: /ccdiscuss already aligned
+    intent (alignment_record below — 5 questions all `aligned`, 3 divergences
+    resolved). Phase 0 calibration and Phase 2 hypothesis interrogation are
+    short-circuited.
+  intent_decomposition:
+    total_intents: 1
+    total_tracks: 1
+    tracks:
+      - track_id: T1
+        name: "ccoverview skill wrapper"
+        priority: 1
+        intents:
+          - raw: "一个 skill，生成双语 overview.html，调用已有生成逻辑，更方便地调用"
+            type: feature
+
+# ─── Original Context (verbatim) ──────────────────────────────
+user_scenario: |
+  我需要一个 skill，能帮我生成一下双语的 overview.html 文档。
+  期望结果：/ccoverview 就可以使用这个 skill，然后生成两份独立文件。如果生成逻辑
+  已经存在，这个 skill 可以用来调用这个逻辑，能够更方便的调用。
+
+# ─── Alignment Record (from /ccdiscuss) ───────────────────────
+alignment_record:
+  produced_by: "/ccdiscuss"
+  node:
+    id: NODE-001
+    five_questions:
+      what: "A new skill /ccoverview (.claude/commands/ccoverview.md +
+        skills/ccoverview/SKILL.md) wrapping scripts/generate-overview.ts; not a
+        reimplementation."
+      why: "Bilingual generation already exists but is only reachable by hand-typing
+        the tsx command; a slash command makes it discoverable + one-word,
+        consistent with /ccplan, /ccedit, /idea."
+      how: "Create the two registration files only; SKILL.md body runs `npx tsx
+        scripts/generate-overview.ts` (default → en+zh) scoped to current
+        project; expose a fast single-language mode mapping to
+        --skip-translation."
+      why_this_way: "Thin wrapper over a working script; repo convention is skill =
+        command md + SKILL.md spec; logic stays in the script (invocation
+        contract only) — same pattern as /idea wrapping the aidev idea CLI."
+      expected_result: "Invoking /ccoverview runs the existing generator →
+        overview-en.html + overview-zh.html under .devcompanion/reports/, paths
+        reported; fast mode produces a single overview.html with no LLM."
+    expected_result_human: |
+      /ccoverview 就可以使用这个 skill，然后生成两份独立文件。如果生成逻辑已经存在，
+      这个 skill 可以用来调用这个逻辑，能够更方便的调用。
+    alignment:
+      {
+        what: aligned,
+        why: aligned,
+        how: aligned,
+        why_this_way: aligned,
+        expected_result: aligned
+      }
+    resolved_divergences:
+      - {
+          question: how,
+          topic: "Target scope",
+          resolution: "Current project only — no --target. (DEC-001)"
+        }
+      - {
+          question: how,
+          topic: "Translation cost",
+          resolution: "Default bilingual via Claude; also expose fast --skip-translation.
+            (DEC-002)"
+        }
+      - {
+          question: expected_result,
+          topic: "Output location",
+          resolution: "Keep script default paths. (DEC-003)"
+        }
+
+# ─── Reuse Discovery (Phase 1) ────────────────────────────────
+reuse_discovery:
+  scanned_ecls:
+    [
+      "unified-overview-report.yaml",
+      "onboarding-llm-analysis.yaml",
+      "ccdiscuss-mvp.yaml",
+      "ccedit-skill.yaml",
+      "idea-backlog-research.yaml"
+    ]
+  matches:
+    - intent: "Bilingual overview generation (en + zh, two files)"
+      existing: { file: "scripts/generate-overview.ts", lines: "364-389" }
+      classification: reuse-direct
+      action: "Invoke the script as-is; do not reimplement."
+    - intent: "Content translation zh <-> en"
+      existing:
+        {
+          file: "scripts/lib/overview-translator.ts",
+          item: "translateOverviewData (haiku)"
+        }
+      classification: reuse-direct
+      action: "Used transitively by the script."
+    - intent: "Single-language fast switch"
+      existing: { file: "scripts/generate-overview.ts", item: "--skip-translation flag" }
+      classification: reuse-direct
+      action: "Surface this flag through the skill as fast mode."
+    - intent: "Invocable /ccoverview slash command"
+      existing: null
+      classification: new
+      action: "Create .claude/commands/ccoverview.md + skills/ccoverview/SKILL.md."
+
+# ─── Requirements ─────────────────────────────────────────────
+requirements:
+  - id: REQ-001
+    text: "Provide an invocable /ccoverview slash command that generates the
+      bilingual overview by wrapping the existing generate-overview.ts."
+    status: verified
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - text: "Both skills/ccoverview/SKILL.md and .claude/commands/ccoverview.md exist
+          (skill is invocable)."
+        kind: hard
+      - text: "SKILL.md body invokes scripts/generate-overview.ts in default (bilingual)
+          mode — no reimplementation."
+        kind: hard
+      - text: "A fast single-language mode mapping to --skip-translation is documented
+          (no LLM call)."
+        kind: hard
+      - text: "Running /ccoverview in default mode produces overview-en.html (actually
+          English) AND overview-zh.html (actually Chinese)."
+        kind: soft # LLM-dependent (translation can fall back) → human sign-off
+        signed_off_by: null
+        signed_off_date: null
+    decomposition:
+      features: [ FEAT-001 ]
+    challenges:
+      - "Default mode depends on the Claude CLI being available (translation
+        step)."
+
+# ─── Features ─────────────────────────────────────────────────
+features:
+  - id: FEAT-001
+    name: "ccoverview skill registration + invocation contract"
+    parent: REQ-001
+    modules: [ MOD-001 ]
+    dependencies: []
+    complexity: small
+    status: pending
+
+# ─── Modules ──────────────────────────────────────────────────
+modules:
+  - id: MOD-001
+    name: "ccoverview skill (prompt/doc artifact, not a code package)"
+    parent: FEAT-001
+    config_slot: "n/a — skill registration, not a devcompanion.config module"
+    functions: [ FN-001, FN-002 ]
+    file_path: "skills/ccoverview/ + .claude/commands/ccoverview.md"
+    entry_point: "skills/ccoverview/SKILL.md"
+    source: new
+    public_interface:
+      - name: "/ccoverview"
+        signature: "(no args) → writes overview-en.html + overview-zh.html"
+        description: "Invocable command that runs the existing generator in the current
+          project."
+    dependencies:
+      - module: "scripts/generate-overview.ts"
+        imports: [ "the script entry (run via npx tsx)" ]
+        why: "All generation + translation logic lives here (reuse-direct)."
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+# ─── Functions (executable FN-DAG for /ccedit — @aidev/exec schema) ──
+functions:
+  - id: FN-001
+    name: "skills/ccoverview/SKILL.md — /ccoverview skill spec wrapping
+      generate-overview.ts"
+    description: >-
+      Author skills/ccoverview/SKILL.md: a skill spec whose body instructs the
+      agent to run `npx tsx scripts/generate-overview.ts` (default = bilingual,
+      writing overview-en.html + overview-zh.html under .devcompanion/reports/),
+      scoped to the CURRENT PROJECT only (no --target; note this resolves to the
+      ai-companion repo where the script lives), and to expose a FAST
+      single-language mode mapping to the existing --skip-translation flag
+      (single overview.html, no LLM). Must explicitly state: do NOT reimplement
+      generation. Note that default mode requires the Claude CLI. The subagent
+      also writes the asserting test named in verify.
+    depends_on: []
+    output: { file: "skills/ccoverview/SKILL.md", symbol: "ccoverview" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ccoverview_skillSpec.test.ts"
+      pass_condition: >-
+        Test asserts skills/ccoverview/SKILL.md exists AND its body references
+        scripts/generate-overview.ts AND documents the --skip-translation fast
+        single-language mode AND mentions the bilingual (overview-en.html +
+        overview-zh.html) default output.
+    status: done
+  - id: FN-002
+    name: ".claude/commands/ccoverview.md — invocable /ccoverview command
+      registration"
+    description: >-
+      Author .claude/commands/ccoverview.md with YAML frontmatter (a one-line
+      `description`) and a body that points at skills/ccoverview/SKILL.md and
+      tells the agent to read and execute it. This registration is what makes
+      /ccoverview invocable (a SKILL.md with no command entry is NOT invocable).
+      The subagent also writes the asserting test named in verify.
+    depends_on: [ FN-001 ]
+    output: { file: ".claude/commands/ccoverview.md", symbol: "ccoverview-command" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ccoverview_command.test.ts"
+      pass_condition: >-
+        Test asserts .claude/commands/ccoverview.md exists AND has frontmatter
+        with a non-empty description AND its body references
+        skills/ccoverview/SKILL.md.
+    status: done
+
+# ─── Probes (Phase 7) ─────────────────────────────────────────
+probes:
+  - id: PROBE-001
+    target: REQ-001
+    question: "Does generate-overview.ts support default-bilingual (en+zh), a
+      --skip-translation single-file mode, and a default target = repo root?"
+    method: code-inspection
+    result: "Confirmed: lines 364-389 write overview-en.html + overview-zh.html;
+      367-372 --skip-translation → single overview.html; 31-37 default target =
+      SCRIPT_ROOT (ai-companion)."
+    verdict: feasible
+    date: "2026-06-02"
+  - id: PROBE-002
+    target: FEAT-001
+    question: "Does the bilingual path degrade gracefully if the Claude CLI
+      translation fails?"
+    method: code-inspection
+    result: "Confirmed: overview-translator.ts:300-305 catches parse failure and
+      returns the original text with a warning — no crash."
+    verdict: feasible
+    date: "2026-06-02"
+
+# ─── Confrontation (Phase 8) ──────────────────────────────────
+confrontation:
+  red_team:
+    - {
+        id: ATK-001,
+        scenario: "Claude CLI unavailable/timeout in default mode → both files fall back
+          to source text; overview-en.html may not be English.",
+        severity: high,
+        targets: [ REQ-001 ]
+      }
+    - {
+        id: ATK-002,
+        scenario: "User runs /ccoverview from another repo expecting that repo's
+          overview, but no --target → documents ai-companion.",
+        severity: medium,
+        targets: [ REQ-001 ]
+      }
+    - {
+        id: ATK-003,
+        scenario: "tree-sitter WASM unavailable → function index empty.",
+        severity: low,
+        targets: [ FEAT-001 ]
+      }
+    - {
+        id: ATK-004,
+        scenario: "Repeated runs grow the archive unbounded.",
+        severity: low,
+        targets: [ FEAT-001 ]
+      }
+  blue_team:
+    - {
+        attack: ATK-001,
+        verdict: mitigated,
+        mitigation: "SKILL.md documents that default mode needs the Claude CLI and
+          offers --skip-translation; en/zh content correctness kept as a soft,
+          human-signed acceptance criterion."
+      }
+    - {
+        attack: ATK-002,
+        verdict: defended,
+        mitigation: "By design (scope = current project = ai-companion); SKILL.md states
+          this explicitly. (DEC-001)"
+      }
+    - {
+        attack: ATK-003,
+        verdict: defended,
+        mitigation: "Existing graceful fallback: empty_function_index section
+          (generate-overview.ts:400-402)."
+      }
+    - {
+        attack: ATK-004,
+        verdict: defended,
+        mitigation: "Existing archive logic keeps ~10 and warns on excess (archive.ts
+          via archiveFile)."
+      }
+
+# ─── Risk Register ────────────────────────────────────────────
+risks:
+  - id: RISK-001
+    description: "Default (bilingual) mode depends on the external Claude CLI; if
+      down, output is not truly bilingual."
+    probability: medium
+    impact: medium
+    mitigation: "Fast --skip-translation fallback + documentation; bilingual
+      correctness is a soft sign-off, not an automated gate."
+    status: mitigated
+    related: [ ATK-001 ]
+
+# ─── Decisions Log ────────────────────────────────────────────
+decisions:
+  - {
+      id: DEC-001,
+      date: "2026-06-02",
+      phase: 4,
+      decision: "Scope = current project only; skill runs the script with no --target.",
+      rationale: "User chose simplicity over multi-project; current project is
+        ai-companion itself.",
+      reversible: true
+    }
+  - {
+      id: DEC-002,
+      date: "2026-06-02",
+      phase: 4,
+      decision: "Default bilingual; additionally expose a fast single-language mode
+        (--skip-translation).",
+      rationale: "Keeps the asked-for two-file bilingual default while offering a
+        no-LLM quick path.",
+      reversible: true
+    }
+  - {
+      id: DEC-003,
+      date: "2026-06-02",
+      phase: 4,
+      decision: "Keep script default output paths
+        (.devcompanion/reports/overview-{en,zh}.html).",
+      rationale: "Zero change to the script.",
+      reversible: true
+    }
+  - {
+      id: DEC-004,
+      date: "2026-06-02",
+      phase: 3,
+      decision: "Thin wrapper over generate-overview.ts; no reimplementation.",
+      rationale: "Generation+translation already work; repo convention is skill =
+        command md + SKILL.md.",
+      alternatives_considered:
+        [
+          "reimplement in skill — rejected (duplication)",
+          "aidev overview CLI subcommand — heavier, not asked",
+          "plain npm script — exists but not discoverable"
+        ],
+      reversible: true
+    }
+  - {
+      id: DEC-005,
+      date: "2026-06-02",
+      phase: 5,
+      decision: "Split the single ccdiscuss-named test into two per-FN test files
+        (test_ccoverview_skillSpec + test_ccoverview_command).",
+      rationale: "Each FN's subagent writes its own artifact+test; avoids two FNs
+        writing one shared test file.",
+      reversible: true
+    }
+
+# ─── Dependency Graph ─────────────────────────────────────────
+dependency_graph:
+  FEAT-001: []
+  # FN-level (drives /ccedit ordering):
+  FN-001: []
+  FN-002: [ FN-001 ]
+
+# ─── Soft Acceptance (manual sign-off) ────────────────────────
+soft_acceptance:
+  kind: soft
+  rationale: "End-to-end bilingual output depends on the Claude CLI translation
+    step (non-deterministic, CLI-dependent) — not an automated value gate."
+  check: >-
+    Run /ccoverview once in default mode. Confirm overview-en.html exists and
+    its UI chrome is English (contains "Overview Report") AND overview-zh.html
+    exists and its UI chrome is Chinese (contains "概览报告").
+  sign_off: { required: true, approver: human, status: pending }
+
+# ─── Feature Guard (activated at Phase 10 handoff) ────────────
+feature_guard:
+  generated: "2026-06-02"
+  guards:
+    - id: GUARD-001
+      feature: FEAT-001
+      description: "/ccoverview skill wrapper over generate-overview.ts"
+      key_files:
+        - "skills/ccoverview/SKILL.md"
+        - ".claude/commands/ccoverview.md"
+        - "scripts/generate-overview.ts"
+        - "scripts/lib/overview-translator.ts"
+      invariants:
+        - "/ccoverview is invocable: both .claude/commands/ccoverview.md and
+          skills/ccoverview/SKILL.md exist"
+        - "Default mode produces two files: overview-en.html (English) +
+          overview-zh.html (Chinese)"
+        - "A fast single-language mode (--skip-translation) remains available
+          and calls no LLM"
+        - "The skill wraps generate-overview.ts — it does not reimplement
+          generation"
+      verification:
+        command: "npx vitest run .devcompanion/tests/test_ccoverview_skillSpec.test.ts
+          .devcompanion/tests/test_ccoverview_command.test.ts"
+        expected: "all pass"
+        kind: hard
+      status: active
+      history:
+        - {
+            date: "2026-06-02",
+            action: "Generated + activated at Phase 10 handoff (Phase 9 approved)."
+          }

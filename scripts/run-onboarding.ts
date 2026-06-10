@@ -23,7 +23,6 @@ async function main(): Promise<void> {
 
   const result = await runOnboardingAnalysis(resolved, {
     concurrency: 4,
-    timeout: 60000,
     onProgress: (stage, done, total, detail) => {
       console.log(`[${elapsed()}] ${stage} ${done}/${total} — ${detail}`);
     },

@@ -1,0 +1,85 @@
+ecl_version: "1.0"
+feature: "install-command"
+status: phase-10-implementation
+created: 2026-05-21
+updated: 2026-05-21
+
+prompt_calibration:
+  raw_input: "AI companion安装到其他repo时需要修改当地的code agent使用方式使得所有requirements与ai-companion一致"
+  intent_decomposition:
+    total_intents: 1
+    total_tracks: 1
+    tracks:
+      - track_id: T1
+        name: "Agent config installer"
+        priority: 1
+        intents:
+          - raw: "install到目标repo时注入Claude Code约束配置"
+            type: feature
+
+requirements:
+  - id: REQ-001
+    text: "aidev install命令将PostToolUse hook注入目标repo的.claude/settings.json"
+    status: verified
+    confidence: 0.95
+    acceptance_criteria:
+      - "目标repo的.claude/settings.json包含PostToolUse hook配置"
+      - "hook指向ai-companion的packages/hook/dist/index.js绝对路径"
+      - "已有settings.json时merge而非覆盖"
+
+  - id: REQ-002
+    text: "注入CLAUDE.md约束段落到目标repo"
+    status: verified
+    confidence: 0.95
+    acceptance_criteria:
+      - "目标repo的CLAUDE.md包含AI Dev Companion约束section"
+      - "已有CLAUDE.md时追加而非覆盖"
+      - "使用marker标记注入区域以支持更新"
+
+  - id: REQ-003
+    text: "复制.claude/commands/到目标repo"
+    status: verified
+    confidence: 0.9
+    acceptance_criteria:
+      - "ccplan, cconboard, ccdebug命令文件存在于目标repo的.claude/commands/"
+      - "命令文件中的skill路径指向ai-companion的绝对路径"
+
+  - id: REQ-004
+    text: "可选的PreToolUse验证hook(--enforce标志)"
+    status: verified
+    confidence: 0.85
+    acceptance_criteria:
+      - "使用--enforce时注入PreToolUse hook"
+      - "PreToolUse检查是否有活跃ECL特性"
+      - "无活跃ECL时输出警告"
+
+  - id: REQ-005
+    text: "初始化.devcompanion目录结构"
+    status: verified
+    confidence: 0.95
+    acceptance_criteria:
+      - "复用现有initDevcompanion()逻辑"
+      - "创建queue/, reviews/, history/, docs/ecl/"
+
+decisions:
+  - id: DEC-001
+    text: "使用绝对路径指向ai-companion安装位置"
+    rationale: "跨机器时用户需重新运行install --update-paths"
+    date: 2026-05-21
+
+  - id: DEC-002
+    text: "CLAUDE.md使用HTML注释marker标记注入区域"
+    rationale: "支持重复运行install时更新而非重复追加"
+    date: 2026-05-21
+
+  - id: DEC-003
+    text: "settings.json深度合并,去重hook matcher"
+    rationale: "保留用户已有的permissions和其他hooks"
+    date: 2026-05-21
+
+dependency_graph:
+  FEAT-001: []
+  FEAT-002: []
+  FEAT-003: []
+  FEAT-004: []
+  FEAT-005: [FEAT-001, FEAT-002, FEAT-003, FEAT-004]

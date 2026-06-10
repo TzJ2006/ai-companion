@@ -1,0 +1,494 @@
+# ─── Header ────────────────────────────────────────────────────
+ecl_version: "1.0"
+feature: "five-question-alignment-protocol"
+type: cross-cutting-standard   # NOT a siloed feature — a protocol onboarding & all change-making obey
+status: "mvp-ready-for-execution"
+created: "2026-05-31"
+updated: "2026-05-31"
+related_features:
+  - "onboarding-parallel-workflow"   # must OBEY this (esp. WF1 node-gen + WF2 gate/record)
+  - "ecl-schema-upgrade"             # extends its 3-layer What/How/Verify node schema with 2 more questions
+owner: "user"
+
+# This document DOGFOODS the protocol: it describes the protocol itself via the protocol's own 5 questions.
+five_question_record:
+  subject: "The 5-Question Alignment + Test-First Guarantee Protocol"
+  q1_what: |
+    是什么 — A lightweight, ALWAYS-ON protocol. Whenever a new idea/proposal appears in
+    conversation (not a pure task-question), draft an ECL that captures it through 5 fixed
+    questions, and confirm them with the human before work proceeds.
+  q2_why: |
+    为什么要做 — Because the human's and the AI's understanding of the same idea routinely
+    diverge. The 5 questions are an ALIGNMENT CONTRACT that proves shared understanding
+    before acting, and leaves a traceable record of how ideas evolved. (Core goal: 对齐理解.)
+  q3_how: |
+    如何做 — TRIGGER (OQ-1, simplified): ANY thing to be modified IS a new idea — no fuzzy
+    idea-vs-question detection needed. For each new idea:
+      (1) conflict/dup-check against existing ECLs   (reuse ccplan Phase 1 ECL Reuse Discovery)
+      (2) split the idea into one or more ECL nodes   (reuse ccplan Phase 4 crystallization)
+      (3) create/modify each ECL node, GUARANTEEING all 5 questions are present
+      (4) confirm EACH idea INDEPENDENTLY (OQ-3) before work proceeds
+    ALWAYS-ON + UNIVERSAL: enforced at every ECL touchpoint and every modification point (OQ-2).
+  q4_why_this_way: |
+    为什么要这样做 — Passive drafting spares the human from writing (low authoring burden);
+    but EVERY idea is confirmed because we'd rather over-confirm than miss an alignment. The
+    5-question structure is the explicit contract; the on-disk ECL makes it version-controlled
+    and auditable; the human confirm closes the understanding gap.
+  q5_expected: |
+    期望结果 — Every idea reaches PROVABLE shared understanding before work proceeds; the
+    actual outcome is GUARANTEED to match the expected outcome via a test-first next step
+    (see protocol_sequence step 2); a version-controlled trail of (5 answers + test + diff +
+    actual-vs-expected) exists; fewer "that's not what I meant" moments.
+    >> This expected result is itself operationalized as verification_conditions below
+       (dogfooding the "write tests first" step).
+
+protocol_sequence:
+  - step: 1-align
+    name: "Capture & Align"
+    detail: "New idea → draft 5 questions → human confirms → shared understanding locked."
+  - step: 2-test-first
+    name: "Write tests from the expected result — THE GUARANTEE STEP"
+    detail: |
+      From the confirmed 期望结果, write the test/check FIRST. Writing the test IS the probe:
+      · can write it  → guarantee secured (expected == actual  ⟺  test passes)
+      · cannot write it → expectation is too fuzzy → sharpen it (re-align) OR explicitly tag
+        it soft/human-judged. NEVER silently drop.
+  - step: 3-implement
+    name: "Implement; done iff tests pass"
+    detail: "A change is 'done' only when its expected-result test passes → actual == expected, pinned by the test."
+  - cross_cutting: "Passively record all diffs + the 5 answers + the test + actual-vs-expected for version-controlled review."
+
+# ── The expected result, made TESTABLE (the 'write tests first' step applied to THIS protocol) ──
+verification_conditions:
+  # Checkable acceptance conditions that would prove the protocol is actually in effect.
+  - id: VC-01
+    proves: "q1_what / q3_how — idea becomes a 5-question draft"
+    check: "Given a conversation turn with a new idea (not a pure question), the system produces an ECL draft with all 5 question fields non-empty."
+    kind: hard
+  - id: VC-02
+    proves: "q2_why — alignment happens BEFORE work"
+    check: "No recorded implementation change exists without a linked, human-CONFIRMED 5-question record."
+    kind: hard
+  - id: VC-03
+    proves: "q5_expected — every expectation has teeth"
+    check: "Every 期望结果 field carries EITHER an executable test/command OR an explicit kind:soft tag. No untagged prose expectations."
+    kind: hard
+  - id: VC-04
+    proves: "step 3 — done iff guaranteed"
+    check: "An item is marked done only when its expected-result test passes (done ⟺ verification green)."
+    kind: hard
+  - id: VC-05
+    proves: "step 2 probe — fuzzy expectations are surfaced, not dropped"
+    check: "An expected result that cannot be turned into a test is flagged soft/needs-human-judgment, never silently skipped."
+    kind: hard
+  - id: VC-06
+    proves: "cross_cutting — auditable trail"
+    check: "For each change, git/OL history contains the diff + the 5 answers + the test + actual-vs-expected."
+    kind: hard
+  - id: VC-07
+    proves: "q2_why — alignment was ACTUALLY achieved (semantic)"
+    check: "On a sample of recorded ideas, the human agrees the recorded 5 answers match their intent."
+    kind: soft   # human-judged — the residue no mechanical test covers (demonstrates the soft case)
+
+# ── Decisions captured from this conversation ──
+decisions:
+  - id: DEC-001
+    date: "2026-05-31"
+    decision: "CROSS-CUTTING protocol, not a distinct/siloed feature. Onboarding (and all change-making) must obey it."
+    rationale: "User: '这不算是distinct feature... 但我想onboarding的时候也遵守'."
+    reversible: true
+  - id: DEC-002
+    date: "2026-05-31"
+    decision: "PURPOSE = shared understanding (对齐), NOT a pre-modification control gate. Trigger = a new idea in conversation, not a code edit."
+    rationale: "User correction: '我需要通过这5个问题来确保我们都有相似的理解'."
+    reversible: true
+  - id: DEC-003
+    date: "2026-05-31"
+    decision: "ALWAYS-ON: every detected new idea auto-drafts the 5 questions and requests confirmation."
+    rationale: "Rather over-confirm than miss an alignment. (User picked '每次新想法都自动确认'.)"
+    reversible: true
+  - id: DEC-004
+    date: "2026-05-31"
+    decision: "'How to guarantee expected == actual' is a NEXT STEP, not a field-strictness setting: write tests from the confirmed expected result first; done iff tests pass."
+    rationale: "User: '这应该接到下一步...先写测试,看看如何才能保证真实产出和期望产出一致'."
+    reversible: true
+  - id: DEC-005
+    date: "2026-05-31"
+    decision: "Writing the test IS the probe for alignment + soft-residue: can't write a test ⇒ expectation is fuzzy ⇒ re-align or tag soft. Never silently drop."
+    rationale: "Operationalizes 'guarantee' and exposes both misalignment and non-mechanizable goals."
+    reversible: true
+  - id: DEC-006
+    date: "2026-05-31"
+    decision: "Reuse, don't reinvent: steps 2-3 already exist as cconboard Phase 3 (char tests before modify) + onboarding's change→test→revert loop + TDD. This protocol adds step 1 (align + why-this-way + recorded expectation) around them."
+    rationale: "Self-consistent with existing project DNA; onboarding already runs the guarantee loop."
+    reversible: true
+  - id: DEC-007
+    date: "2026-06-01"
+    decision: "User CONFIRMED the recorded protocol matches their understanding (the protocol's own confirm step passed). Proceeding to resolve OQ-1..4."
+    rationale: "Dogfood confirm step succeeded; alignment on the protocol itself achieved."
+    reversible: true
+  - id: DEC-008
+    date: "2026-06-01"
+    decision: "OQ-1 RESOLVED — Trigger = ANY modification IS a new idea (no fuzzy idea/question classification). Per-idea 'how': (1) conflict/dup-check vs existing ECLs, (2) split into ECL node(s), (3) each node guarantees the 5 questions."
+    rationale: "User: '任何要修改的东西都是新想法...1.看冲突/重复 2.拆成多个ECL 3.每个ECL保证5问'. Maps onto ccplan Phase 1 (reuse discovery) + Phase 4 (crystallization)."
+    reversible: true
+    resolves: OQ-1
+  - id: DEC-009
+    date: "2026-06-01"
+    decision: "OQ-2 RESOLVED — UNIVERSAL enforcement: applies anywhere related to ECL and anywhere anything is modified (schema + hook + ccplan + cconboard + ccedit + manual edits)."
+    rationale: "User: '任何和ECL有关的,任何会修改任何东西的地方都要'."
+    reversible: true
+    resolves: OQ-2
+  - id: DEC-010
+    date: "2026-06-01"
+    decision: "OQ-3 RESOLVED — Each idea is confirmed INDEPENDENTLY (no batching). Max control, accept the verbosity."
+    rationale: "User: '每个想法独立确认'."
+    reversible: true
+    resolves: OQ-3
+  - id: DEC-011
+    date: "2026-06-01"
+    decision: "OQ-4 RESOLVED — kind:soft expectations require HUMAN SIGN-OFF before an item is marked done."
+    rationale: "User: '完成前人工签字'."
+    reversible: true
+    resolves: OQ-4
+  - id: DEC-012
+    date: "2026-06-01"
+    decision: "GRANULARITY = TASK-LEVEL. 'A modification/idea' = ONE cohesive change (may span multiple file edits), going through ONE 5-question + confirmation cycle. NOT per-atomic-edit."
+    rationale: "User picked 'task-level'. Resolves the friction tension: passive drafting + task-level granularity keeps the max-rigor protocol workable. Each idea is still confirmed independently (DEC-010)."
+    reversible: true
+    resolves: "friction-tension"
+  - id: DEC-013
+    date: "2026-06-01"
+    decision: "PIVOT — realize this NOT as a fold-into-ccplan lite mode, but as a SEPARATE always-on skill /ccdiscuss that is a PREREQUISITE of /ccplan. Pipeline: /ccdiscuss (align: what/why) -> /ccplan (plan: how) -> /ccedit (build). Core of /ccdiscuss = the alignment-flip loop (human writes expected-result FIRST -> AI emits 5 questions + flags divergence -> resolve on the spot -> record)."
+    rationale: "User: separate skill /ccdiscuss, prereq to ccplan, always-on. This cleanly RESOLVES F-04 (no longer redundant/conflicting with ccplan — it becomes ccplan's upstream) and centers F-01's fix (the flip)."
+    reversible: true
+    resolves: [F-04, F-01]
+    note: "Loop core 'mostly right, needs adjustment' (user). Actual adjustment turned out to be the EXPECTED-RESULT model -> DEC-014. (Conflict-check + split: still a separate open item, not raised this round.)"
+  - id: DEC-014
+    date: "2026-06-01"
+    decision: "EXPECTATION vs ITS-VERIFICATION are SEPARATE. The '期望结果' is stated in NATURAL LANGUAGE (human-readable). HOW to guarantee actual == expected is operationalized as ONE OR MORE values (number/boolean) + comparison code that computes the actual value(s) and compares to the expected value(s). done iff all comparisons pass. If NO value can be derived to check it -> proxy metric, else kind:soft + human sign-off (OQ-4)."
+    rationale: "User refined: '不一定是一个值，可能是一些值；期望结果用自然语言表述，但如何保证 实际==期望 用 值(数字/布尔)+比较代码'. Keeps the expectation human-meaningful (NL, so ANY idea can state one) while making the GUARANTEE concrete (values+code). Rebuts F-05: expectation stays NL; verification is hard where values exist, soft only where none can be derived."
+    reversible: true
+    refines: [REQ-005, F-05]
+  - id: DEC-015
+    date: "2026-06-01"
+    decision: "/ccdiscuss loop INCLUDES OQ-1's conflict-check + split. Assembled always-on loop per task-level idea: (1) conflict/dup-check vs existing ECLs (reuse ccplan Phase 1); (2) HUMAN writes the expected result FIRST in natural language (alignment flip, F-01 fix); (3) AI emits the 5 questions + FLAGS where its understanding diverges from the human's; (4) resolve the divergence on the spot; (5) define verification = value(s)+comparison code (DEC-014), else soft+sign-off; (6) split into one or more ECL nodes, each guaranteeing the 5 questions. Then (always-on) optionally chain to /ccplan."
+    rationale: "User: '要，包进去'. Restores OQ-1 steps (DEC-008) into the concrete /ccdiscuss loop, combined with the alignment flip (F-01) and the NL-expectation + values-verification model (DEC-014)."
+    reversible: true
+    resolves: "ccdiscuss-loop-shape"
+  - id: DEC-016
+    date: "2026-06-01"
+    decision: "ADOPT THE MVP (build_validation_findings.recommended_mvp). Build ONLY: MVP-1 (ecl-schema.md why_this_way + hard/soft tag, doc-only), MVP-2 (hook file-level recording for .yaml/.md + 5Q-placeholder + reader stub), MVP-3 (/ccdiscuss SKILL.md as best-effort conversational discipline). DEFER all enforcement: FEAT-002 parser, FEAT-003 value-verification, FEAT-004 gate+pre-commit, plus REQ-005/007/009 and the confirmation-state/trust design (BF-02/03/05/08) -> re-enter ccplan to design these AFTER the MVP is in use."
+    rationale: "Build-plan critic: 3 critical blockers, all unsolved mechanism risk in FEAT-004. MVP ships what's real today (touches only ecl-schema.md, index.ts, skills/), needs no gate, and sidesteps the bootstrap (BF-12). Build the real 10% first."
+    reversible: true
+    resolves: [BF-01, BF-02, BF-05, BF-06, BF-09]
+    note: "Deferred items are NOT abandoned — they re-enter ccplan once the confirmation-state + declarative-comparator + trust designs exist."
+  - id: DEC-017
+    date: "2026-06-01"
+    decision: "User approved MVP handoff to /ccedit. ccplan is complete for this (MVP) scope; ccplan writes no implementation code."
+    rationale: "MVP plan (MVP-1 -> MVP-3 -> MVP-2) accepted after two adversarial passes; build is /ccedit's job."
+    reversible: false
+
+# Maps the 5 questions onto the existing node schema (extends ecl-schema-upgrade's 3-layer)
+schema_mapping:
+  "是什么 (What)":            "node.description — exists (What layer)"
+  "为什么要做 (Why)":         "node.purpose / parent REQ — exists"
+  "如何做 (How)":             "implementation.approach — exists (How layer)"
+  "为什么要这样做 (Why-this-way)": "NEW — per-node rationale for the CHOSEN approach"
+  "期望结果 (Expected)":      "verification + acceptance_criteria — exists, reframed as a PREDICTED outcome backed by a test (test-first)"
+
+# Honest list of what is NOT yet decided (resolve before crystallizing requirements)
+open_questions:   # ALL RESOLVED 2026-06-01 (see DEC-008..011)
+  - { id: OQ-1, status: resolved, by: DEC-008, answer: "Any modification = a new idea; how = conflict-check + split + ensure-5Q (reuses ccplan Phase 1 + 4)" }
+  - { id: OQ-2, status: resolved, by: DEC-009, answer: "Universal — every ECL touchpoint + every modification path" }
+  - { id: OQ-3, status: resolved, by: DEC-010, answer: "Per-idea independent confirmation" }
+  - { id: OQ-4, status: resolved, by: DEC-011, answer: "Human sign-off before done" }
+
+# ─── Requirements (crystallized after OQ resolution) ──────────
+requirements:
+  - id: REQ-001
+    text: "Universal trigger — ANY cohesive TASK-LEVEL modification (code OR ECL OR config) is treated as a 'new idea' and must enter the protocol. Granularity = one cohesive change, NOT per-atomic-edit (DEC-012)."
+    status: validated
+    confidence: 0.9
+    source: user-stated
+    priority: must
+    acceptance_criteria: ["No modification bypasses the protocol (enforced at every modification point — DEC-009)."]
+  - id: REQ-002
+    text: "Per-idea pipeline: (1) conflict/dup-check vs existing ECLs, (2) split into ECL node(s), (3) every node carries the 5 questions."
+    status: validated
+    confidence: 0.85
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "Conflict/dup-check reuses ccplan Phase 1 ECL Reuse Discovery."
+      - "Split reuses ccplan Phase 4 crystallization."
+      - "Every ECL node has all 5 question fields non-empty (or explicitly deferred)."
+  - id: REQ-003
+    text: "Each idea (task-level cohesive change, DEC-012) is confirmed INDEPENDENTLY by the human before work proceeds (no batching across ideas)."
+    status: validated
+    confidence: 0.9
+    source: user-stated
+    priority: must
+    acceptance_criteria: ["One confirmation per idea; work does not start until that idea's 5 answers are confirmed."]
+  - id: REQ-004
+    text: "Extend the ECL node schema with the 2 new questions: why-this-way (rationale) + expected-with-test (predicted outcome + its test)."
+    status: validated
+    confidence: 0.9
+    source: user-stated
+    priority: must
+    acceptance_criteria: ["Node schema gains why_this_way + expected (with test/command or kind:soft). Supersedes/extends ecl-schema-upgrade 3-layer."]
+  - id: REQ-005
+    text: "Expectation (natural language) + value-based verification (DEC-014): the '期望结果' is STATED IN NATURAL LANGUAGE; HOW to guarantee actual == expected is operationalized as ONE OR MORE values (number/boolean) + comparison code that computes the actual value(s) and compares to the expected value(s). done iff all comparisons pass. If NO value can be derived to check it -> proxy metric, else kind:soft + human sign-off (OQ-4)."
+    status: validated
+    confidence: 0.85
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "Expected result = a natural-language statement (human-readable)."
+      - "Verification = >=1 (value, type: number|boolean, comparison) + code; done iff ALL comparisons pass (VC-04)."
+      - "No derivable value -> proxy metric OR kind:soft + sign-off (VC-05, OQ-4)."
+  - id: REQ-006
+    text: "Soft expectations (kind:soft) require human sign-off before the item is marked done."
+    status: validated
+    confidence: 0.9
+    source: user-stated
+    priority: must
+    acceptance_criteria: ["A kind:soft item cannot reach done without a recorded human sign-off (OQ-4)."]
+  - id: REQ-007
+    text: "Enforcement = GATE + DETECT (F-02 fix): GATE all Claude-mediated modification paths (require a confirmed 5Q node before Edit/Write); DETECT genuine MANUAL edits post-hoc via a git pre-commit check that flags un-recorded changes for retroactive 5Q. Manual edits cannot be PREVENTED, only surfaced."
+    status: validated
+    confidence: 0.8
+    source: probe-result
+    priority: must
+    acceptance_criteria:
+      - "A Claude-mediated Edit/Write lacking a confirmed 5Q node is blocked (reuse pre-tool-use-guard.ts)."
+      - "A manual (non-Claude) edit is DETECTED at commit time and quarantined for retroactive 5Q (negative test: inject a manual edit -> it MUST be surfaced)."
+    challenges: ["'Universal prevention' was impossible (F-02); reframed as gate-Claude + detect-manual."]
+  - id: REQ-008
+    text: "Passive recording + version control — per change record diff + 5 answers + verification(values+code) + actual-vs-expected, AND the CONFIRMATION DELTA (did the human edit the AI's inferred answers?) which is the high-signal anti-theater part (F-08). Specify a reader + retention; the trail must be queryable, not write-only."
+    status: validated
+    confidence: 0.85
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "Each change records diff + 5 answers + verification + actual-vs-expected + confirmation-delta to a concrete store (e.g., .devcompanion/history/<id>.json)."
+      - "Recorded answers are flagged AI-inferred vs human-edited (so the trail isn't a false consensus record)."
+  - id: REQ-009
+    text: "Self-exemption base case (F-03 fix): the /ccdiscuss protocol's own definition file and the meta-act of editing protocol/ECL records are OUT of scope, terminating the 'ECL governing ECLs' recursion. /ccdiscuss's own bootstrap is built under /ccplan, not under itself."
+    status: validated
+    confidence: 0.85
+    source: probe-result
+    priority: must
+    acceptance_criteria:
+      - "Editing an ECL/protocol record does NOT recursively re-trigger the protocol on itself."
+      - "A declared exemption list (protocol/ECL files) is respected."
+
+# ─── Features ──────────────────────────────────────────────────
+features:
+  - { id: FEAT-001, name: "5-question node schema extension (why-this-way + expected-with-test)", parent: REQ-004, complexity: small, note: "Extends ecl-schema-upgrade 3-layer" }
+  - { id: FEAT-002, name: "Per-idea protocol pipeline (conflict-check -> split -> 5Q -> confirm)", parent: REQ-002, complexity: medium, note: "Reuses ccplan Phase 1 + Phase 4" }
+  - { id: FEAT-003, name: "Test-first guarantee + soft sign-off", parent: REQ-005, complexity: medium, note: "Reuses cconboard Phase 3 char-tests + onboarding change->test->revert" }
+  - { id: FEAT-004, name: "Universal enforcement gate (every modification path, incl. manual)", parent: REQ-007, complexity: large, note: "Hardest — PreToolUse-style hard gate; risk concentrated here" }
+  - { id: FEAT-005, name: "Passive recording (diff + 5 answers + verification + actual-vs-expected + confirmation-delta)", parent: REQ-008, complexity: medium, note: "Extends existing hook reason-capture (1 reason -> 5 questions + delta)" }
+  - { id: FEAT-006, name: "ccplan prereq integration (ccdiscuss -> ccplan handoff)", parent: REQ-002, complexity: small, note: "ccplan consumes /ccdiscuss output as its Phase 0 input" }
+
+# ─── Modules (build /ccdiscuss — Phase 4) ──────────────────────
+modules:
+  - { id: MOD-001, name: "ccdiscuss skill spec", parent: FEAT-002, file_path: "skills/ccdiscuss/SKILL.md", source: new, note: "The 6-step always-on loop (DEC-015); prereq to /ccplan; task-level idea detection." }
+  - { id: MOD-002, name: "ECL node schema extension", parent: FEAT-001, file_path: "scripts/lib/ecl-parser.ts + skills/ccplan/ecl-schema.md", source: extend, note: "Per-node: why_this_way (NL) + expected (NL) + verification (>=1 value/type/comparison/code, or kind:soft) + self_exempt flag. Extends ecl-schema-upgrade 3-layer." }
+  - { id: MOD-003, name: "verification runner (value+code)", parent: FEAT-003, file_path: "scripts/lib/verification-runner.ts", source: extend, note: "Compute actual value(s); compare to expected; done iff all pass; soft -> human sign-off. File already exists." }
+  - { id: MOD-004, name: "enforcement: gate + detect", parent: FEAT-004, file_path: "packages/hook/src/pre-tool-use-guard.ts (gate) + scripts/ccdiscuss-precommit.ts (detect, new)", source: extend-and-new, note: "F-02: gate Claude Edit/Write without a confirmed 5Q node; detect manual edits at git commit." }
+  - { id: MOD-005, name: "passive recording (+confirmation delta)", parent: FEAT-005, file_path: "packages/hook/src/index.ts", source: extend, note: "1 reason -> 5Q + confirmation delta + diff + actual-vs-expected (F-08); define reader + retention." }
+  - { id: MOD-006, name: "conflict/dup-check (shared)", parent: FEAT-002, file_path: "scripts/lib/ecl-reuse.ts (extract from ccplan Phase 1)", source: extend, note: "Loop step 1; reuse ccplan ECL Reuse Discovery." }
+  - { id: MOD-007, name: "ccplan prereq integration", parent: FEAT-006, file_path: "skills/ccplan/SKILL.md", source: extend, note: "ccplan consumes /ccdiscuss output as Phase 0 input; ccdiscuss documented as prereq." }
+
+# ─── Functions (key atomic build items) ────────────────────────
+functions:
+  - { id: FN-001, name: "detectTaskIdea", parent: MOD-001, desc: "Always-on: recognize a task-level modification/idea (the trigger)." }
+  - { id: FN-002, name: "conflictCheck", parent: MOD-006, desc: "Loop step1: compare idea vs existing ECLs (reuse ccplan Phase 1)." }
+  - { id: FN-003, name: "elicitExpectedFirst", parent: MOD-001, desc: "Loop step2: human writes expected result (NL) BEFORE the AI shows its inference (the flip, F-01)." }
+  - { id: FN-004, name: "emit5QandDiff", parent: MOD-001, desc: "Loop step3: AI writes the 5 questions + flags divergence from the human's expected." }
+  - { id: FN-005, name: "resolveDivergence", parent: MOD-001, desc: "Loop step4: settle the flagged divergence on the spot." }
+  - { id: FN-006, name: "defineVerification", parent: MOD-003, desc: "Loop step5: express guarantee actual==expected as value(s)+comparison code, else soft+sign-off (DEC-014)." }
+  - { id: FN-007, name: "runVerification", parent: MOD-003, desc: "Compute actual value(s), compare to expected; done iff all pass." }
+  - { id: FN-008, name: "splitIntoEclNodes", parent: MOD-001, desc: "Loop step6: split into one or more ECL nodes, each guaranteeing the 5 questions." }
+  - { id: FN-009, name: "gateClaudeEdit", parent: MOD-004, desc: "Block a Claude Edit/Write that lacks a confirmed 5Q node." }
+  - { id: FN-010, name: "detectManualEdit", parent: MOD-004, desc: "git pre-commit: flag un-recorded (manual) changes for retroactive 5Q." }
+  - { id: FN-011, name: "recordWithDelta", parent: MOD-005, desc: "Record 5Q + confirmation delta + diff + actual-vs-expected (F-08)." }
+  - { id: FN-012, name: "selfExemptGuard", parent: MOD-002, desc: "Exempt protocol/ECL record edits from triggering the protocol (F-03)." }
+
+# ─── Dependency Graph (build order) ────────────────────────────
+dependency_graph:
+  FEAT-001: []                    # schema first
+  FEAT-002: [FEAT-001]            # skill loop needs schema
+  FEAT-003: [FEAT-001]            # verification needs schema
+  FEAT-005: [FEAT-001]            # recording needs schema
+  FEAT-004: [FEAT-002, FEAT-005]  # enforcement needs loop + recording
+  FEAT-006: [FEAT-002]            # ccplan integration needs the loop
+
+# ─── Phase 5: Adversarial Validation Findings ──────────────────
+phase5_findings:
+  critic: "context-isolated adversarial critic (Opus)"
+  verdict: "DO NOT build as specified. ~80-90% duplicates ccplan; fold the genuinely-new ~10% (why_this_way field, always-on micro-trigger, hard/soft tag, the alignment FLIP) into a ccplan 'always-on lite' mode + apply the critical fixes."
+  by_severity: { critical: 3, high: 4, medium: 4, low: 1 }
+  findings:
+    - { id: F-01, target: [DEC-002, VC-07], severity: critical, issue: "ALIGNMENT THEATER — AI infers all 5 answers, human just confirms => anchoring + acquiescence => manufactures FALSE consensus. VC-07 samples the same anchored data, cannot detect its own failure.", fix: "Independent elicitation: human commits >=1 answer (esp. expected-result) BEFORE seeing the AI's; diff them; divergence rate = the real alignment metric." }
+    - { id: F-02, target: [REQ-007, FEAT-004, VC-02], severity: critical, issue: "UNIVERSAL enforcement at MANUAL edits is impossible — PreToolUse/PostToolUse hooks only see Claude's own tool calls; a human editing outside Claude emits no event. 'No modification bypasses' is false for the one path REQ-007 names.", fix: "Gate Claude-mediated paths; DETECT manual edits post-hoc via a git pre-commit check. Drop 'Universal'." }
+    - { id: F-03, target: [DEC-007, DEC-009], severity: critical, issue: "BOOTSTRAP paradox + infinite regress — building the protocol is itself a task-level mod (must follow the unbuilt protocol); this ECL governs ECLs => editing it triggers the protocol on itself, no base case.", fix: "Declare a self-exemption base case: the protocol's own file + the meta-act of editing protocol records are out of scope; bootstrap under ccplan." }
+    - { id: F-04, target: [DEC-001, REQ-002, FEAT-002], severity: high, issue: "REDUNDANT with + CONFLICTS ccplan — ~80% is ccplan Phase 0/1/2/4 always-on; and ccplan is READ-ONLY (writes ECL only under .ccplan-active), so its guard would BLOCK this protocol's edit-time ECL writes.", fix: "Fold into ccplan as an always-on micro-mode; reconcile the read-only vs edit-time write-permission model." }
+    - { id: F-05, target: [REQ-005, FEAT-003, VC-03], severity: high, issue: "TEST-FIRST degenerates to 'everything soft' — this repo is mostly YAML/markdown/decision artifacts you cannot vitest; step 2 always lands on kind:soft => the 'guarantee' evaporates into manual sign-off. VC-03 trivially satisfied by tagging all soft.", fix: "Test-first applies only to code-producing ideas; for doc/decision ideas use a concrete acceptance check (e.g., a second agent re-derives the same answer)." }
+    - { id: F-06, target: [REQ-001, REQ-003, DEC-010], severity: high, issue: "FRICTION does not survive a 20-task day even at task-level: ~40-60 min/day of pure confirmation overhead => rubber-stamping => CAUSES F-01.", fix: "Batch related/low-risk ideas; reserve independent confirm for high-risk/conflict-detected; gate always-on behind a novelty/impact threshold." }
+    - { id: F-07, target: [VC-01, VC-02, VC-06], severity: high, issue: "VCs not checkable as written: VC-01's '(not a pure question)' contradicts DEC-008; VC-06 references an undefined 'OL' store; VC-02 false for manual edits.", fix: "Align VC-01 with DEC-008; bind VC-06 to a concrete path (.devcompanion/history/<id>.json); add a NEGATIVE test for VC-02 (inject manual edit, MUST be surfaced)." }
+    - { id: F-08, target: [REQ-008, FEAT-005], severity: medium, issue: "Write-only audit — every task records a multi-KB 5-tuple, no reader/query/retention specified; AI-inferred answers recorded as fact create a FALSE trail.", fix: "Specify the reader + the question it answers; add retention; record the CONFIRMATION DELTA (did the human edit the AI's answer?) — the high-signal anti-theater part." }
+    - { id: F-09, target: [DEC-012, REQ-001], severity: medium, issue: "'Task-level' is undefined + uncapturable by a per-tool-call hook — no notion of 'cohesive task'; the hook either over-fires per edit (friction) or cannot enforce.", fix: "Task boundary is a conversational/ECL-state concept the human/AI declares; the hook can only do per-edit DETECTION." }
+    - { id: F-10, target: [DEC-006, REQ-005], severity: medium, issue: "Reuse of cconboard char-test/revert asserted, not contracted => silent breakage if cconboard changes; done-iff-green + an un-passable soft item => workflow deadlock with no escape hatch.", fix: "Add an interface contract for the reused loop + an explicit override/abandon path with recorded rationale." }
+    - { id: F-11, target: [REQ-004, FEAT-001], severity: medium, issue: "Only why_this_way is genuinely new; 'expected-with-test' duplicates ecl-schema-upgrade's existing verification/acceptance_criteria => risks a SECOND divergent verification schema.", fix: "FEAT-001 = add why_this_way (new) + a kind:hard|soft tag on EXISTING verification entries; no parallel 'expected' field." }
+    - { id: F-12, target: [DEC-003], severity: low, issue: "Premise 'human & AI routinely diverge' never measured; the chosen mechanism (passive infer + confirm) is the WEAKEST divergence detector — optimizes against its own thesis.", fix: "Capture a baseline divergence rate + post-protocol divergence-at-elicitation; else the value is unfalsifiable." }
+
+# ─── Phase 9: BUILD-plan Adversarial Validation ────────────────
+build_validation_findings:
+  critic: "context-isolated implementation critic (Opus), grounded in working-tree source"
+  verdict: "BUILD PLAN NOT READY as written. 3 of 4 load-bearing claims (always-on trigger, confirmed-node gate, values+code verification 'extend') are grounded in code that does something fundamentally different. 'extend' appears 5x and each hides a from-scratch subsystem or a wrong target. ALL unsolved mechanism risk concentrates in FEAT-004 (enforcement)."
+  by_severity: { critical: 3, high: 7, medium: 2 }
+  findings:
+    - { id: BF-01, target: [FN-001, REQ-001], severity: critical, issue: "ALWAYS-ON is vaporware — a skill is prompt text; the only programmatic always-on surfaces are per-tool-call hooks that fire AFTER the model decides to edit. detectTaskIdea = 'model remembers', not enforcement.", fix: "Drop always-on as a mechanical claim; MVP = per-edit reminder hook; the loop is explicitly best-effort." }
+    - { id: BF-02, target: [FN-009, MOD-004, REQ-007], severity: critical, issue: "Gate has NO state to read — pre-tool-use-guard.ts only checks the .ccplan-active marker + ECL path; zero 'confirmed 5Q node' state exists anywhere. 'Extend the gate' hides building a whole confirmation-state subsystem.", fix: "Design a concrete confirmed-state artifact (.devcompanion/.5q-confirmed.json) + a file-to-idea matching rule BEFORE any gate code." }
+    - { id: BF-03, target: [FN-009, REQ-003], severity: high, issue: "Confirm-vs-hook race: the AI can write the confirmed-state file + the Edit back-to-back in one turn, self-authorizing — the hook cannot tell human-confirmed from AI-fabricated. Re-introduces F-01 theater at the enforcement layer.", fix: "Confirmation state must be written by a channel the AI cannot forge in-turn (the human's AskUserQuestion answer)." }
+    - { id: BF-04, target: [FN-003, F-01], severity: high, issue: "'Human-first' (the flip) is unenforceable — in one autoregressive turn the AI has already inferred; it is only a prompt convention. The real anti-theater signal (confirmation delta) needs two independently-stored strings, unspecified.", fix: "Persist the human's raw expected-result verbatim (AI-untouched) BEFORE revealing the AI's inference; diff mechanically." }
+    - { id: BF-05, target: [MOD-003, FN-006, FN-007, DEC-014], severity: critical, issue: "verification-runner.ts 'extend' is a REWRITE — it does substring-matching on shell stdout (greps '无输出'/'≤N'); no value model, no comparison code. DEC-014's values+code is a from-scratch typed evaluator.", fix: "Re-label MOD-003 source:new; use DECLARATIVE comparators (eq/lte/gte/contains), NOT arbitrary code, for the MVP." }
+    - { id: BF-06, target: [MOD-002, REQ-004], severity: critical, issue: "Schema 'extend' targets the WRONG parser — ecl-parser.ts only parses '- feature:' guard blocks (1 of 11 ECL files); the REQ/FEAT/MOD/FN NODE schema is parsed by NOTHING. And 'expected' duplicates existing verification (F-11 unaddressed).", fix: "why_this_way = doc-only in ecl-schema.md; reuse acceptance_criteria + a kind:hard|soft tag; NO parallel 'expected' field; node-verification = a NEW parser only if ever needed." }
+    - { id: BF-07, target: [REQ-009, FN-012], severity: high, issue: "self_exempt flag is read by NOTHING; and findActiveFeatures (pre-tool-use) currently flags THIS protocol file (status phase-9) as an 'active feature' -> the F-03 recursion is already live.", fix: "Specify the exact reader (gate + detectTaskIdea skip docs/ecl/ + the protocol file + self_exempt nodes); add a negative test." }
+    - { id: BF-08, target: [FN-006, FN-007, FN-010], severity: high, issue: "Arbitrary-code + git-hook trust surface undefined — runVerification already execSyncs shell with no sandbox; 'comparison code' = arbitrary code execution; the pre-commit is defeated by --no-verify (REQ-007 concedes); no install/bypass/failure spec.", fix: "MVP = declarative comparators (no eval); pre-commit is ADVISORY (warn, exit 0); specify the install path." }
+    - { id: BF-09, target: [MOD-005, FN-011, REQ-008], severity: high, issue: "Recording (index.ts PostToolUse) only fires for .py/.ts files -> silently DROPS .yaml/.md, which is what this protocol mostly produces. VIOLATES the user's own memory rule '不支持AST的文件也应记录事件,退化到文件级'. No reader specified.", fix: "Extend SUPPORTED_EXTENSIONS / add a file-level degradation path for .yaml/.md; the 5Q+delta payload is written by the loop and correlated with the hook diff event; specify the reader." }
+    - { id: BF-10, target: [DEC-013, MOD-007, FEAT-006], severity: high, issue: "'/ccdiscuss is a PREREQUISITE of /ccplan' has NO enforcement — skills are invoked independently; 'prerequisite' is pure documentation unless ccplan reads a concrete artifact and degrades when absent.", fix: "Implement the prereq as a CONSUMED ARTIFACT: /ccdiscuss writes the aligned 5Q ECL; ccplan Phase 0 checks for it and falls back if missing. Drop 'prerequisite' framing." }
+    - { id: BF-11, target: [DEC-006, REQ-005, F-05], severity: medium, issue: "Test-first still degenerates to all-soft for doc artifacts (value extraction unimplemented BF-05 + recording can't see docs BF-09) -> rubber-stamped soft sign-offs -> re-creates F-01 theater.", fix: "Design the SOFT path to carry signal: require the confirmation-delta even for soft items; gate always-on behind a novelty/impact threshold (F-06)." }
+    - { id: BF-12, target: [dependency_graph, DEC-007, F-03], severity: medium, issue: "Bootstrap regime undefined — FEAT-001..006 are themselves modifications that must obey a protocol that does not exist yet; the build order ships enforcement (FEAT-004) on unbuilt state.", fix: "State the regime: build FEAT-001/002/005 under /ccedit with no 5Q-gate; enable FEAT-004 only after FEAT-005 + the self-exempt reader exist." }
+  recommended_mvp:
+    ship_now:
+      - "FEAT-001 DOC-ONLY: add why_this_way to skills/ccplan/ecl-schema.md + a kind:hard|soft tag on EXISTING acceptance_criteria (NOT a new 'expected' field/parser)."
+      - "FEAT-005 FILE-LEVEL recording: extend packages/hook/src/index.ts SUPPORTED_EXTENSIONS to include .yaml/.md (honors the '退化到文件级' memory rule) + a 5Q-placeholder event + a reader stub."
+      - "/ccdiscuss SKILL.md loop as EXPLICITLY best-effort conversational discipline (no 'always-on/enforced' claims)."
+    defer_until_designed:
+      - "FEAT-002 parser work; FEAT-003 value-verification (needs a declarative-comparator design); ALL of FEAT-004 (gate + pre-commit) — until BF-02/03/05/08 have a concrete, forge-resistant state-and-trust design."
+    note: "MVP touches only ecl-schema.md, index.ts, skills/ — no gate needed, which also cleanly solves the bootstrap (BF-12)."
+
+# ─── MVP Build Scope (ADOPTED — DEC-016; /ccedit builds ONLY this) ──
+mvp_build:
+  adopted: "2026-06-01 (DEC-016). Build ONLY these; everything else deferred."
+  tasks:
+    - id: MVP-1
+      title: "ecl-schema.md: document why_this_way + hard|soft tag (doc-only)"
+      file: "skills/ccplan/ecl-schema.md"
+      kind: doc
+      acceptance:
+        - "Documents a per-node why_this_way field (natural-language rationale for the CHOSEN approach)."
+        - "Documents a kind: hard|soft tag on existing acceptance_criteria / verification entries."
+        - "NO new 'expected' field; NO parser change (ecl-parser.ts untouched) — avoids BF-06."
+    - id: MVP-2
+      title: "hook file-level recording for .yaml/.md (honors the memory rule)"
+      file: "packages/hook/src/index.ts"
+      kind: code
+      acceptance:
+        - "A .yaml/.md edit is recorded (file-level degradation), not just .py/.ts — fixes BF-09 + honors '退化到文件级'."
+        - "Emits the existing JSONL event + a 5Q placeholder field (best-effort; may be empty)."
+        - "A minimal reader (CLI or exported fn) lists recorded events for a path (reader stub — answers F-08 'who reads it')."
+        - "Existing .py/.ts behavior unchanged (characterization test before/after)."
+    - id: MVP-3
+      title: "/ccdiscuss SKILL.md — best-effort alignment loop (NO enforcement)"
+      file: "skills/ccdiscuss/SKILL.md"
+      kind: skill
+      acceptance:
+        - "Documents the 6-step loop: conflict-check -> human-writes-expected-FIRST -> AI 5Q + flag divergence -> resolve -> verification(value+code | soft) -> split into ECL node(s)."
+        - "EXPLICITLY framed as best-effort conversational discipline; NO 'always-on / enforced / gate' claims (BF-01)."
+        - "Documents the ccdiscuss -> ccplan handoff as: /ccdiscuss writes an aligned ECL that ccplan READS IF PRESENT (no hard prerequisite — BF-10)."
+  build_order: [MVP-1, MVP-3, MVP-2]   # doc + skill first (no deps), then the hook code
+  deferred:
+    - "FEAT-002 parser work; FEAT-003 value-verification engine (declarative comparators eq/lte/gte/contains, NOT arbitrary code); FEAT-004 gate + pre-commit; the confirmation-state + trust design (BF-02/03/05/08); REQ-005/007/009."
+    - "These RE-ENTER ccplan as a follow-up design once the MVP is in use."
+
+# ─── MVP FN DAG (for /ccedit; each FN dogfoods the protocol) ────
+mvp_fn_dag:
+  note: "FN-level decomposition for /ccedit. Each FN carries why_this_way + expected (NL) + verify (kind:hard|soft), demonstrating MVP-1's schema fields on the build tasks themselves. /ccedit topo-sorts build_order_layers and executes."
+  nodes:
+    # MVP-1 — ecl-schema.md (doc-only)
+    - id: M1-FN1
+      parent: MVP-1
+      file: "skills/ccplan/ecl-schema.md"
+      action: "Document a per-node 'why_this_way' field (NL rationale for the CHOSEN approach; optional, one per node)."
+      why_this_way: "ecl-schema-upgrade's 3-layer has What/How/Verify but no 'why THIS approach' — the one genuinely-new field (F-11)."
+      expected: "ecl-schema.md describes why_this_way as a node field, with an example."
+      verify: { kind: hard, check: "ecl-schema.md mentions why_this_way at least twice (definition + example) -> count >= 2" }
+      deps: []
+    - id: M1-FN2
+      parent: MVP-1
+      file: "skills/ccplan/ecl-schema.md"
+      action: "Document a 'kind: hard|soft' tag on verification/acceptance entries (hard = value+comparison; soft = human-judged + sign-off). Do NOT add a new 'expected' field; reuse acceptance_criteria."
+      why_this_way: "Avoids BF-06's second divergent verification schema; tags existing entries instead of a parser-backed field."
+      expected: "ecl-schema.md documents the kind hard/soft tag on verification + the soft -> sign-off rule."
+      verify: { kind: hard, check: "ecl-schema.md documents a kind hard/soft tag on verification -> found (boolean true)" }
+      deps: [M1-FN1]
+    - id: M1-FN3
+      parent: MVP-1
+      file: "scripts/lib/ecl-parser.ts"
+      action: "NO-OP guard: confirm ecl-parser.ts is NOT modified (doc-only task)."
+      why_this_way: "BF-06: touching the parser is out of MVP scope."
+      expected: "ecl-parser.ts has no diff from this task."
+      verify: { kind: hard, check: "ecl-parser.ts changed by this task -> false (boolean)" }
+      deps: []
+    # MVP-3 — /ccdiscuss SKILL.md
+    - id: M3-FN1
+      parent: MVP-3
+      file: "skills/ccdiscuss/SKILL.md"
+      action: "Create SKILL.md with frontmatter (name: ccdiscuss; description; trigger) + the 6-step loop: conflict-check -> human-writes-expected-FIRST -> AI 5Q + flag divergence -> resolve -> verification(value+code|soft) -> split into ECL node(s)."
+      why_this_way: "The loop is the F-01 fix (human-first) made into documented discipline."
+      expected: "skills/ccdiscuss/SKILL.md exists and documents all 6 steps in order."
+      verify: { kind: hard, check: "file exists AND all 6 step markers present -> step_count == 6" }
+      deps: []
+    - id: M3-FN2
+      parent: MVP-3
+      file: "skills/ccdiscuss/SKILL.md"
+      action: "Add explicit framing: best-effort conversational discipline, NO 'always-on/enforced/gate' claims (BF-01). Document handoff: /ccdiscuss writes an aligned ECL that /ccplan READS IF PRESENT (no hard prerequisite, BF-10)."
+      why_this_way: "Prevents over-claiming enforcement the architecture cannot deliver (BF-01/BF-10)."
+      expected: "SKILL.md states 'best-effort' + the read-if-present handoff; makes no always-on/enforced/gate claim."
+      verify: { kind: soft, check: "human confirms framing is best-effort + read-if-present, with no enforcement promise (absence-of-overclaim has no clean mechanical test)" }
+      deps: [M3-FN1]
+    # MVP-2 — hook file-level recording (code)
+    - id: M2-FN1
+      parent: MVP-2
+      file: ".devcompanion/tests/ (characterization test)"
+      action: "TEST-FIRST: characterization test of current handlePostToolUse — a .ts edit records 1 event; a .yaml edit currently records 0. Lock the baseline before change."
+      why_this_way: "Protocol's own test-first + the no-regression requirement; yaml=0 today is the baseline the change will flip."
+      expected: "Char test passes on UNMODIFIED index.ts: ts-edit -> 1 event, yaml-edit -> 0 events."
+      verify: { kind: hard, check: "char test exit_code == 0 on unmodified index.ts" }
+      deps: []
+    - id: M2-FN2
+      parent: MVP-2
+      file: "packages/hook/src/index.ts"
+      action: "Extend handlePostToolUse so .yaml/.md edits are recorded (file-level degradation, not AST) + emit the existing JSONL event with a 5Q-placeholder field (best-effort, may be empty). Preserve .py/.ts behavior exactly."
+      why_this_way: "Fixes BF-09 + honors the 'unsupported files degrade to file-level' memory rule; placeholder leaves room for a later 5Q payload."
+      expected: "A .yaml/.md edit now produces exactly 1 recorded event; .py/.ts behavior unchanged."
+      verify: { kind: hard, check: "after change: yaml-edit event count == 1 (was 0) AND M2-FN1 char test exit_code == 0" }
+      deps: [M2-FN1]
+    - id: M2-FN3
+      parent: MVP-2
+      file: "packages/hook/src/ (reader) or scripts/"
+      action: "Add a minimal reader (exported fn or small CLI) that lists recorded events for a given path."
+      why_this_way: "Answers F-08 'who reads the audit trail' — without a reader the recording is write-only."
+      expected: "Reader returns the recorded events for a known path."
+      verify: { kind: hard, check: "reader(path with 1 recorded event) length == 1" }
+      deps: [M2-FN2]
+    - id: M2-FN4
+      parent: MVP-2
+      file: "(verification)"
+      action: "Run the full hook test suite: the char test (M2-FN1) + the new .yaml/.md recording test all green."
+      why_this_way: "done iff tests pass (REQ-005); final regression guard."
+      expected: "All hook tests pass."
+      verify: { kind: hard, check: "full hook test suite exit_code == 0" }
+      deps: [M2-FN2, M2-FN3]
+  build_order_layers:
+    - [M1-FN1, M1-FN3, M3-FN1, M2-FN1]   # layer 0: no deps (parallelizable)
+    - [M1-FN2, M3-FN2, M2-FN2]           # layer 1
+    - [M2-FN3]                            # layer 2
+    - [M2-FN4]                            # layer 3: final verify
+
+pending_input: null   # MVP approved + handed off to /ccedit (DEC-017)

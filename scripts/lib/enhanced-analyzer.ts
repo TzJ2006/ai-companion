@@ -1,4 +1,4 @@
-import { callClaude } from "./claude-caller.ts";
+import { callClaude } from "../../packages/llm/src/index.ts";
 import type { AnalysisInput, FunctionAnalysis } from "@aidev/types";
 import { analyzeHeuristic } from "../../packages/core/src/analysis/heuristic.ts";
 import { stripMarkdownFences } from "../../packages/core/src/utils.ts";
@@ -78,7 +78,7 @@ async function analyzeSingleFunction(
 
   for (let attempt = 0; attempt <= options.retries; attempt++) {
     try {
-      const stdout = await callClaude(prompt, { model: options.model, timeout: options.timeout });
+      const { output: stdout } = await callClaude(prompt, { model: options.model, timeout: options.timeout, maxOutputBytes: 0 });
 
       return parseAnalysisResponse(stdout, input);
     } catch (error: unknown) {

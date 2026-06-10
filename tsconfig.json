@@ -13,7 +13,8 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "exclude": ["test-*.ts", "node_modules", "archive"],
+  "include": [],
+  "exclude": ["test-*.ts", "node_modules", "archive", "dist"],
   "references": [
     { "path": "packages/types" },
     { "path": "packages/ast" },
@@ -22,6 +23,10 @@
     { "path": "packages/render" },
     { "path": "packages/cli" },
     { "path": "packages/hook" },
-    { "path": "packages/daemon" }
+    { "path": "packages/daemon" },
+    { "path": "packages/llm" },
+    { "path": "packages/idea" },
+    { "path": "packages/dashboard" },
+    { "path": "packages/exec" }
   ]
 }

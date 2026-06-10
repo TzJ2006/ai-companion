@@ -1,0 +1,297 @@
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { initDevcompanion } from "./init-devcompanion.ts";
+
+const MARKER_START = "<!-- AI-DEV-COMPANION:START -->";
+const MARKER_END = "<!-- AI-DEV-COMPANION:END -->";
+
+export interface InstallOptions {
+  targetPath: string;
+  aidevRoot: string;
+  enforce: boolean;
+  includeCommands: boolean;
+}
+
+export interface InstallResult {
+  settings_json_updated: boolean;
+  claude_md_updated: boolean;
+  commands_installed: string[];
+  devcompanion_initialized: boolean;
+  pre_tool_hook_installed: boolean;
+}
+
+export function installAgentConfig(options: InstallOptions): InstallResult {
+  const { targetPath, aidevRoot, enforce, includeCommands } = options;
+  const result: InstallResult = {
+    settings_json_updated: false,
+    claude_md_updated: false,
+    commands_installed: [],
+    devcompanion_initialized: false,
+    pre_tool_hook_installed: false,
+  };
+
+  initDevcompanion(targetPath);
+  result.devcompanion_initialized = true;
+
+  result.settings_json_updated = installSettingsJson(targetPath, aidevRoot, enforce);
+  result.pre_tool_hook_installed = enforce;
+
+  result.claude_md_updated = installClaudeMd(targetPath, aidevRoot);
+
+  if (includeCommands) {
+    result.commands_installed = installCommands(targetPath, aidevRoot);
+  }
+
+  return result;
+}
+
+function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boolean): boolean {
+  const claudeDir = join(targetPath, ".claude");
+  if (!existsSync(claudeDir)) {
+    mkdirSync(claudeDir, { recursive: true });
+  }
+
+  const settingsPath = join(claudeDir, "settings.json");
+  let existing: Record<string, unknown> = {};
+
+  if (existsSync(settingsPath)) {
+    try {
+      existing = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    } catch {
+      existing = {};
+    }
+  }
+
+  const parentDir = resolve(targetPath, "..");
+
+  const permissions = {
+    allow: [
+      "Read",
+      "Glob",
+      "Grep",
+      `Read(${parentDir}/**)`,
+      `Glob(${parentDir}/**)`,
+      `Grep(${parentDir}/**)`,
+      "Edit",
+      "Write",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git stash *)",
+      "Bash(git show *)",
+      "Bash(git blame *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(git push)",
+      "Bash(git push -u *)",
+      "Bash(git push origin *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(python *)",
+      "Bash(pip *)",
+      "Bash(conda *)",
+      "Bash(tsc *)",
+      "Bash(tsx *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(xargs *)",
+      "Bash(echo *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(touch *)",
+      "Bash(pwd)",
+      "Bash(which *)",
+      "Bash(where *)",
+      "Bash(cd *)",
+      "Bash([ *)",
+    ],
+    deny: [
+      "Bash(rm -rf *)",
+      "Bash(rm -r *)",
+      "Bash(rmdir *)",
+      "Bash(del *)",
+      "Bash(rd *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -f *)",
+      "Bash(format *)",
+    ],
+  };
+
+  const hooks = (existing.hooks ?? {}) as Record<string, unknown[]>;
+  let postToolUse = (hooks.PostToolUse ?? []) as Array<Record<string, unknown>>;
+  let preToolUse = (hooks.PreToolUse ?? []) as Array<Record<string, unknown>>;
+
+  const hookCommand = `node "${join(aidevRoot, "packages/hook/dist/index.js")}"`;
+  const preHookCommand = `node "${join(aidevRoot, "packages/hook/dist/pre-tool-use.js")}"`;
+
+  postToolUse = postToolUse.filter(
+    (entry) => !(entry.matcher === "Edit|Write" && typeof entry.command === "string" && (entry.command as string).includes("ai-companion"))
+  );
+  preToolUse = preToolUse.filter(
+    (entry) => !(entry.matcher === "Edit|Write" && typeof entry.command === "string" && (entry.command as string).includes("ai-companion"))
+  );
+
+  const postHookExists = postToolUse.some(
+    (entry) => entry.matcher === "Edit|Write" && Array.isArray(entry.hooks) &&
+      (entry.hooks as Array<Record<string, string>>).some((h) => h.command === hookCommand)
+  );
+
+  if (!postHookExists) {
+    postToolUse.push({
+      matcher: "Edit|Write",
+      hooks: [{ type: "command", command: hookCommand }],
+    });
+  }
+
+  if (enforce) {
+    const preHookExists = preToolUse.some(
+      (entry) => entry.matcher === "Edit|Write" && Array.isArray(entry.hooks) &&
+        (entry.hooks as Array<Record<string, string>>).some((h) => h.command === preHookCommand)
+    );
+
+    if (!preHookExists) {
+      preToolUse.push({
+        matcher: "Edit|Write",
+        hooks: [{ type: "command", command: preHookCommand }],
+      });
+    }
+  }
+
+  hooks.PostToolUse = postToolUse;
+  if (preToolUse.length > 0) {
+    hooks.PreToolUse = preToolUse;
+  }
+
+  const merged = { ...existing, permissions, hooks };
+  writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + "\n");
+  return true;
+}
+
+function installClaudeMd(targetPath: string, aidevRoot: string): boolean {
+  const claudeMdPath = join(targetPath, "CLAUDE.md");
+  let existing = "";
+
+  if (existsSync(claudeMdPath)) {
+    existing = readFileSync(claudeMdPath, "utf-8");
+  }
+
+  const constraintBlock = generateConstraintBlock(aidevRoot);
+
+  if (existing.includes(MARKER_START)) {
+    const before = existing.substring(0, existing.indexOf(MARKER_START));
+    const after = existing.substring(existing.indexOf(MARKER_END) + MARKER_END.length);
+    const updated = before + constraintBlock + after;
+    writeFileSync(claudeMdPath, updated);
+  } else {
+    const separator = existing.length > 0 ? "\n\n" : "";
+    writeFileSync(claudeMdPath, existing + separator + constraintBlock);
+  }
+
+  return true;
+}
+
+function generateConstraintBlock(aidevRoot: string): string {
+  return `${MARKER_START}
+## AI Dev Companion — Constraints
+
+This project is tracked by AI Dev Companion. The following rules are enforced:
+
+### Mandatory Workflows
+
+1. **All code changes are automatically recorded** via PostToolUse hook — every Edit/Write to tracked files is captured
+2. **Before starting a feature**, use \`/ccplan\` to create an ECL plan in \`docs/ecl/\`
+3. **Before editing guarded files**, check \`docs/ecl/*.yaml\` for active feature guards and preserve invariants
+4. **After editing**, the hook records: timestamp, file, tool, ECL context automatically
+5. **When tests fail**, use \`/ccdebug\` — fix code, not tests (max 3 retries)
+6. **For codebase analysis**, use \`/cconboard\` to generate structured documentation
+
+### Tracked File Extensions
+
+Changes to \`.py\`, \`.pyi\`, \`.ts\`, \`.tsx\`, \`.mts\`, \`.cts\` files are tracked at function level.
+
+### Storage Layout
+
+- \`.devcompanion/queue/\` — event queue (hook writes here, daemon processes)
+- \`.devcompanion/reviews/\` — processed review sessions (JSON)
+- \`.devcompanion/history/\` — per-file change history (JSON)
+- \`docs/ecl/\` — active feature constraints (YAML, committed to git)
+
+### Feature Guard Protocol
+
+When \`docs/ecl/*.yaml\` files contain \`feature_guard\` sections:
+- Before editing a guarded file, announce which invariants must be preserved
+- After editing, run the guard's verification command
+- If verification fails, revert and investigate — do not proceed with broken guards
+
+### AI Dev Companion Location
+
+- Install root: \`${aidevRoot}\`
+- Hook: \`${aidevRoot}/packages/hook/dist/index.js\`
+- Skills: \`${aidevRoot}/skills/\`
+${MARKER_END}`;
+}
+
+function installCommands(targetPath: string, aidevRoot: string): string[] {
+  const commandsDir = join(targetPath, ".claude", "commands");
+  if (!existsSync(commandsDir)) {
+    mkdirSync(commandsDir, { recursive: true });
+  }
+
+  const commands = ["ccplan", "cconboard", "ccdebug"];
+  const installed: string[] = [];
+
+  for (const command of commands) {
+    const content = generateCommandFile(command, aidevRoot);
+    const targetFile = join(commandsDir, `${command}.md`);
+    writeFileSync(targetFile, content);
+    installed.push(command);
+  }
+
+  return installed;
+}
+
+function generateCommandFile(command: string, aidevRoot: string): string {
+  const skillPath = resolve(aidevRoot, "skills", command, "SKILL.md");
+  const descriptions: Record<string, string> = {
+    ccplan: "Evolving Constraint Planning: diverge-then-converge requirement engineering with adversarial validation. Use when requirements are ambiguous, conflicting, or multi-session.",
+    cconboard: "Onboard an existing codebase: scan, analyze, modularize, test, document. Transforms messy code into modular, tested, documented code with full audit trail.",
+    ccdebug: "Debug failing tests: trace from failure → source function → change history → root cause → fix → record. Enforces fix-code-not-tests, max 3 retries, full regression.",
+  };
+
+  const schemaFiles: Record<string, string> = {
+    ccplan: "ecl-schema.md",
+    cconboard: "ol-schema.md",
+    ccdebug: "dl-schema.md",
+  };
+
+  const schemaPath = resolve(aidevRoot, "skills", command, schemaFiles[command]);
+
+  return `---
+description: "${descriptions[command]}"
+---
+
+Read the full skill specification at \`${skillPath}\` and the schema at \`${schemaPath}\`, then execute the /${command} workflow.
+
+## Arguments
+
+$ARGUMENTS
+
+## AI Dev Companion
+
+This command is provided by AI Dev Companion installed at: \`${aidevRoot}\`
+`;
+}
