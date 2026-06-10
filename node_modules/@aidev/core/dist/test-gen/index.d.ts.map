@@ -1,1 +1,0 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/test-gen/index.ts"],"names":[],"mappings":"AAAA,OAAO,EACL,eAAe,EACf,iBAAiB,EACjB,iBAAiB,GAClB,MAAM,gBAAgB,CAAC;AACxB,YAAY,EAAE,oBAAoB,EAAE,aAAa,EAAE,MAAM,gBAAgB,CAAC;AAE1E,OAAO,EACL,oBAAoB,EACpB,qBAAqB,GACtB,MAAM,mBAAmB,CAAC;AAC3B,YAAY,EAAE,eAAe,EAAE,eAAe,EAAE,MAAM,mBAAmB,CAAC"}

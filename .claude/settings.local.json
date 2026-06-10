@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(plan)",
-      "Skill(ccplan)"
-    ]
-  }
-}
