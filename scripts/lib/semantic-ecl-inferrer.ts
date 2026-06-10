@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative, dirname, basename } from "node:path";
-import { callClaude } from "./claude-caller.ts";
+import { callClaude } from "../../packages/llm/src/index.ts";
 import type { FunctionAnalysis } from "@aidev/types";
 import { stripMarkdownFences } from "../../packages/core/src/utils.ts";
 import type { ProjectContext } from "./project-context-generator.ts";
@@ -79,7 +79,7 @@ export async function generateFeatureDescription(
   const prompt = buildFeaturePrompt(group, projectContext);
 
   try {
-    const stdout = await callClaude(prompt, { model, timeout });
+    const { output: stdout } = await callClaude(prompt, { model, timeout, maxOutputBytes: 0 });
 
     return parseFeatureResponse(stdout, group);
   } catch {

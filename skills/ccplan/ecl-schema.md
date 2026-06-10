@@ -107,8 +107,13 @@ requirements:
     source: user-stated   # user-stated | inferred | critic-proposed | probe-result
     priority: must        # must | should | could | wont (MoSCoW)
     acceptance_criteria:
-      - "Concrete, testable condition 1"
-      - "Concrete, testable condition 2"
+      # Each entry may carry a `kind` tag (see "Hard vs Soft Criteria" below).
+      # Bare strings default to kind: soft (human-judged until proven otherwise).
+      - text: "p99 latency < 200ms under 1k concurrent requests"
+        kind: hard          # mechanically checkable: a value + comparison
+      - text: "Error messages read as helpful to a first-time user"
+        kind: soft          # human-judged — needs sign-off before this item is done
+        signed_off_by: null # set to reviewer id + date once a human approves
     challenges:           # From Phase 2
       - "Open question or concern"
     decomposition:
@@ -195,13 +200,18 @@ functions:
     constraints:                    # Performance, security, invariant requirements
       - "Performance: <200ms p99"
       - "Must not throw — returns typed error instead"
+    why_this_way: |                  # Rationale for the CHOSEN approach (see "why_this_way" below).
+      Returns a typed AuthResult union instead of throwing so callers handle
+      every failure mode at compile time. Stateless to allow horizontal scaling.
     test_cases:                     # Derived from constraints in Phase 10
       - input: "valid credentials"
         expected: "returns AuthResult with token"
         mocks: ["SessionStore.save → resolves"]
+        kind: hard                  # hard = mechanically checkable (value/command). See "hard vs soft".
       - input: "expired credentials"
         expected: "returns AuthError with code EXPIRED"
         mocks: []
+        kind: hard
 
 # ─── Probes ────────────────────────────────────────────────────
 probes:
@@ -294,6 +304,7 @@ feature_guard:
       verification:
         command: "pytest tests/test_auth.py"  # Command to verify invariants hold
         expected: "all pass"                   # Expected outcome
+        kind: hard                             # runnable command → mechanically checkable
       status: active               # active | suspended | retired
       suspended_reason: null       # Reason for suspension (if applicable)
       retired_date: null           # When retired (if applicable)
@@ -301,6 +312,75 @@ feature_guard:
         - date: "YYYY-MM-DD"
           action: "Generated from FEAT-001 acceptance criteria"
 ```
+
+## Field: `why_this_way`
+
+`why_this_way` is an optional, free-text field on a node (most commonly a
+function `FN-*`, but valid on any node) that records the **rationale for the
+CHOSEN approach** — *why it was built this particular way*.
+
+It is deliberately distinct from `purpose`/`description` (the *why-to-do-it*:
+what the node is for and what problem it solves). `why_this_way` instead
+captures the *how-and-why-this-shape* — the design trade-off behind the
+implementation that was selected over the alternatives.
+
+| Field | Answers | Example |
+|-------|---------|---------|
+| `purpose` / `description` | Why do this at all? What is it for? | "Authenticate a user and issue a session." |
+| `why_this_way` | Why this specific approach over others? | "Returns a typed result union instead of throwing, so every failure is handled at compile time; kept stateless to allow horizontal scaling." |
+
+Use it whenever a non-obvious choice was made (a pattern, a library, a
+trade-off) so a cold-reading agent does not "fix" something that was
+intentional. For broader, project-level choices prefer the `decisions` log
+(`DEC-*`); `why_this_way` is for the node-local rationale.
+
+Example (function node):
+
+```yaml
+functions:
+  - id: FN-007
+    name: "resolveWasmPath"
+    parent: MOD-002
+    description: "Locate the tree-sitter .wasm file for a language"   # why-to-do-it
+    why_this_way: |                                                   # why-this-way
+      Walks up the node_modules tree at runtime instead of hardcoding a
+      path, because the package may be hoisted or nested depending on the
+      installer (npm vs pnpm). Caches the first hit to stay under 100ms.
+```
+
+## Hard vs Soft Criteria
+
+Every `verification` and `acceptance_criteria` entry may carry a `kind` tag:
+
+```
+kind: hard | soft
+```
+
+- **`kind: hard`** — *mechanically checkable*. The entry resolves to a
+  concrete value/number/boolean compared against a threshold (e.g.
+  `p99 < 200ms`, `exit code == 0`, `count >= 3`) **or** is a runnable command
+  whose pass/fail is unambiguous. A machine (test, lint, CI step) can decide
+  it with no human judgment.
+- **`kind: soft`** — *human-judged*. The entry requires a person to look at
+  the result and form an opinion (e.g. "the error copy reads clearly",
+  "the layout looks balanced"). No automated check can settle it.
+
+**Rule — soft items require human sign-off:** a `soft` item can **never**
+reach `done` (or flip its parent feature/requirement to `done`/`verified`) on
+the basis of automation alone. It stays open until a human explicitly signs
+off. Record the sign-off inline so the audit trail is complete:
+
+```yaml
+acceptance_criteria:
+  - text: "Onboarding wizard feels intuitive to a new user"
+    kind: soft
+    signed_off_by: "alice@example.com"   # null until a human approves
+    signed_off_date: "2026-06-01"        # required alongside signed_off_by
+```
+
+A `hard` item may be marked done automatically once its command/comparison
+passes. Entries written as bare strings (no `kind`) are treated as `soft` by
+default, so they too require sign-off until explicitly tagged `hard`.
 
 ## Status Lifecycle
 

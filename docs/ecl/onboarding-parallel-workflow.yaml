@@ -1,0 +1,775 @@
+# ─── Header ────────────────────────────────────────────────────
+ecl_version: "1.0"
+feature: "onboarding-parallel-workflow"
+status: "phase-10-ready-for-execution"
+created: "2026-05-31"
+updated: "2026-05-31"
+related_features:
+  - "onboarding-llm-analysis"   # the current SERIAL pipeline this work parallelizes (supersedes its FEAT-005)
+  - "ccedit-skill"              # reusable DAG / parallel-subagent execution patterns to align with
+owner: "user"
+
+# ─── Conversation State ──────────────────────────────────────
+pending_input: null   # Phase 9 APPROVED; handed off to /ccedit
+
+# ─── Prompt Calibration (Phase 0) ─────────────────────────────
+prompt_calibration:
+  raw_input: |
+    最近 Claude Code 有一个新功能就是它可以把 effort 设置成 ultracode，
+    这样它可以启动多任务并行。我认为这个项目的 onboarding 非常适合用这个来做。
+    研究一下怎么把它改成这个。
+    (User also pasted a claude-code-guide explainer distinguishing effort=max from
+    ultracode: ultracode = effort xhigh + standing permission to orchestrate
+    multi-agent Workflows / spawn parallel subagents.)
+  status: completed
+
+  intent_decomposition:
+    total_intents: 1
+    total_tracks: 1
+    tracks:
+      - track_id: T1
+        name: "Parallelize onboarding via multi-agent workflow"
+        priority: 1
+        intents:
+          - raw: "把项目的 onboarding 改成 ultracode 多任务并行"
+            type: refactor
+
+  tracks:
+    T1:
+      calibrated_scenario: |
+        Re-architect the AI Dev Companion onboarding so its embarrassingly-parallel
+        but currently-sequential LLM work fans out across concurrent subagents —
+        using Claude Code's ultracode / Workflow multi-agent orchestration — instead
+        of running in a single sequential context (the /cconboard 8-phase skill) or a
+        concurrency=4 subprocess pool (scripts/lib/onboarding-pipeline.ts).
+        Parallelizable units: per-function analysis, per-module/directory ECL feature
+        inference, per-function test generation, and (optionally) per-modification code
+        restructuring. Goal: large wall-clock reduction on big codebases while
+        preserving correctness (git-commit cache, adaptive throttle, characterization-
+        test safety net, feature guards).
+      intent_dimensions:
+        task: { status: present, value: "Convert onboarding to multi-agent parallel workflow" }
+        input: { status: enriched, value: "Existing onboarding-pipeline.ts (analysis+ECL+tests) + cconboard 8-phase skill (full refactor)" }
+        output: { status: implicit, value: "Parallel onboarding architecture; this ECL plan handed to /ccedit" }
+        constraints: { status: enriched, value: "Workflow tool is IN-SESSION ONLY; a headless npx tsx script can only spawn `claude -p` subprocesses, not call Workflow" }
+        context: { status: enriched, value: "callClaude() spawns Claude CLI subprocess (packages/llm/src/caller.ts); only analyzeAllFunctions parallel (concurrency 4, adaptive→2)" }
+        audience: { status: implicit, value: "Developers onboarding large/legacy codebases; possibly CI" }
+        memory: { status: present, value: "onboarding-llm-analysis.yaml = current serial pipeline (phase-5); ccedit-skill.yaml = planned DAG/parallel-subagent executor (phase-10)" }
+        success_criteria: { status: missing, resolved: "To be defined in Phase 2 (wall-clock target + correctness invariants)" }
+        examples: { status: missing, deferred: true }
+
+  anti_patterns_found:
+    - category: scope
+      raw: "把它改成这个 / 'the onboarding'"
+      fix: "Ambiguous surface (script pipeline vs cconboard skill vs unified). Disambiguated by Q1 (execution model) + Q2 (scope)."
+    - category: scope
+      raw: "ultracode 多任务并行 (must use ultracode)"
+      fix: "Technology-prescriptive. Verified PARTIAL fit: the true Workflow tool runs in-session only; a headless script can only emulate fan-out via concurrent `claude -p` subprocesses. Surfaced as Q1 so the user chooses knowingly."
+    - category: task
+      raw: "研究一下 (research how)"
+      fix: "Deliverable scoped: an ECL plan (this document) handed to /ccedit. ccplan plans, it does not implement."
+
+  context_enrichment:
+    codebase: |
+      - LLM calls route through packages/llm/src/caller.ts::callClaude() which SPAWNS the
+        Claude Code CLI: `claude -p --output-format text --model {model}` (per-call subprocess).
+      - onboarding-pipeline.ts::runOnboardingAnalysis is SERIAL except analyzeAllFunctions
+        (enhanced-analyzer.ts) which uses chunked Promise.allSettled, concurrency=4, adaptive→2.
+      - Hard serial deps: projectContext → function analysis; Opus understanding → Opus ECL;
+        all → ECL write / test gen. Two Opus calls (120s + 180s) ≈ 45% of wall-clock.
+      - Unrealized parallelism: per-directory generateFeatureDescription (semantic-ecl-inferrer,
+        not currently called); per-function test-skeleton gen (heuristic, fast). Duplicate
+        collectProjectMetadata() call.
+      - cconboard SKILL (8 phases) is fully sequential, single context. Phase 5 (execute)
+        modifies code → would need worktree isolation if parallelized.
+    git: "claude-caller.ts DELETED (commit 38a8f44), replaced by packages/llm/src/caller.ts (CLI subprocess)."
+    conversation: "User pasted claude-code-guide explainer: ultracode = effort xhigh + standing Workflow-orchestration permission; distinct from effort=max (deep single-context)."
+
+  questions_asked: 2
+  questions_skipped: "Fan-out granularity (function vs module vs file) deferred to Phase 3 divergent exploration."
+
+# ─── Original Context ──────────────────────────────────────────
+user_scenario: |
+  最近 code code 有一个新功能就是它可以把 effort 设置成 ultra code，这样的话呢它可以启动一个
+  多任务并行。我认为这个项目的 onboarding 非常适合用这个来做。那来研究一下怎么把它改成这个。
+  (FYI: included a prior claude-code-guide conversation explaining effort levels and ultracode.)
+
+# ─── Reuse Discovery (Phase 1) ─────────────────────────────────
+reuse_discovery:
+  scanned_ecls: ["onboarding-llm-analysis.yaml", "ccedit-skill.yaml", "onboard-packages.yaml", "unified-overview-report.yaml"]
+  matches:
+    - intent: "per-function LLM analysis with concurrency"
+      existing: { ecl: "onboarding-llm-analysis.yaml", item: "FEAT-002", path: "scripts/lib/enhanced-analyzer.ts::analyzeAllFunctions" }
+      classification: reuse-extend
+      action: "Reuse analyzeSingleFunction as the per-unit work; replace the concurrency=4 chunk pool with Workflow fan-out — keep adaptive throttle + heuristic fallback."
+    - intent: "per-directory feature/ECL inference"
+      existing: { ecl: "onboarding-llm-analysis.yaml", item: "FEAT-003", path: "scripts/lib/semantic-ecl-inferrer.ts::generateFeatureDescription" }
+      classification: reuse-direct
+      action: "Already per-directory & independent but UNUSED in current pipeline — wire it as a parallel fan-out stage."
+    - intent: "two-stage Opus ECL synthesis"
+      existing: { ecl: "onboarding-llm-analysis.yaml", item: "FEAT-005", path: "scripts/lib/opus-ecl-generator.ts" }
+      classification: reuse-adapt
+      action: "Keep understanding→ecl as a serial tail (needs all analyses); optionally fan out per-module pre-summaries, then one merge call."
+    - intent: "DAG ordering + parallel subagent spawning + maxConcurrency"
+      existing: { ecl: "ccedit-skill.yaml", item: "FEAT-002/003 (topologicalSort, buildSubagentContext, formatSubagentPrompt, ExecutionLayer)", path: "(planned, phase-10)" }
+      classification: reuse-adapt
+      action: "Align onboarding's parallel-execute DAG with ccedit's ExecutionLayer model so they SHARE one engine, not two."
+    - intent: "test skeleton generation per function"
+      existing: { ecl: "onboarding-llm-analysis.yaml", item: "FEAT-004", path: "scripts/lib/test-skeleton-generator.ts" }
+      classification: reuse-direct
+      action: "Heuristic + fast; LLM-written characterization-test assertions ARE worth fanning out."
+    - intent: "overview HTML render after onboarding"
+      existing: { ecl: "unified-overview-report.yaml", path: "packages/render + scripts/generate-overview.ts" }
+      classification: reuse-direct
+      action: "Unchanged serial tail (single render). Import as-is."
+
+# ─── Decisions Log ─────────────────────────────────────────────
+decisions:
+  - id: DEC-001
+    date: "2026-05-31"
+    phase: 0
+    decision: "Execution model = in-session Workflow (true ultracode). /cconboard authors & runs a Workflow that fans out subagents."
+    rationale: "User explicitly wants the ultracode multi-agent mechanism, which is in-session only."
+    alternatives_considered:
+      - "Headless multi-process (claude -p DAG) — not the Workflow tool; emulated fan-out."
+      - "Both dual-path — deferred to Q1 (headless fate)."
+    reversible: true
+  - id: DEC-002
+    date: "2026-05-31"
+    phase: 0
+    decision: "Scope = full onboarding incl. the code-modification execute phase (cconboard Phase 5), not analysis-only."
+    rationale: "User chose maximum scope. Requires worktree/partition isolation + DAG ordering for parallel edits."
+    alternatives_considered:
+      - "Analysis-only — safer/easier; rejected by user."
+      - "Phased analysis-first — may re-emerge in Q3 (execute-safety)."
+    reversible: true
+  - id: DEC-003
+    date: "2026-05-31"
+    phase: 2
+    decision: "Keep the headless pipeline (onboarding-pipeline.ts) as a fallback for CI/batch/dashboard; add the in-session Workflow as a NEW fast path built on the SAME per-unit functions."
+    rationale: "Existing consumers (run-onboarding.ts, batch-overview.ts, dashboard) call runOnboardingAnalysis() programmatically; Workflow can't run headless. Shared building blocks prevent the two paths from diverging."
+    alternatives_considered: ["Deprecate headless — breaks batch/dashboard.", "Parallelize headless too via claude -p DAG — two orchestrators to maintain."]
+    reversible: true
+    resolves: REQ-006
+  - id: DEC-004
+    date: "2026-05-31"
+    phase: 2
+    decision: "Success = wall-clock target: a ~500-function repo onboards in roughly 1/3 of current sequential time (~10-11 min -> ~3-4 min). Characterization tests + feature guards are ABSOLUTE non-regressions."
+    rationale: "User selected a concrete wall-clock target over a loose 'faster' gate or pure scale ceiling."
+    reversible: true
+    resolves: REQ-004
+    superseded_by: DEC-011   # ~1/3 target revised to Amdahl-derived >=2x speedup
+  - id: DEC-005
+    date: "2026-05-31"
+    phase: 2
+    decision: "Parallel-execute isolation = partition by module into disjoint file sets (no two agents touch the same file -> no merge step). Edits within an agent stay sequential under the char-test+revert guard; dependency-crossing / high-risk items run serially after the parallel tier."
+    rationale: "Conflict-free by construction; avoids git-worktree merge complexity. Matches the aggregateFunctionsByDirectory grouping already in the codebase."
+    alternatives_considered: ["Worktree-per-agent + merge — merge-conflict resolution complexity.", "Keep execute serial — walks back DEC-002."]
+    reversible: true
+    resolves: REQ-002
+  - id: DEC-006
+    date: "2026-05-31"
+    phase: 3
+    decision: "Architecture = Composite: two-phase (analysis fan-out -> batched gate -> partitioned execute) + module-sharded no-barrier pipeline + subagents that shell the existing pipeline functions + execute-DAG aligned with ccedit ExecutionLayer."
+    rationale: "Best balance of speed, safety, and reuse. Adversarial verify kept as an optional toggle (FEAT-008)."
+    alternatives_considered:
+      - "Two-phase-only — less reuse, no ccedit unification."
+      - "Reuse-ccedit-DAG — hard-couples to ccedit which is itself unbuilt (phase-10)."
+      - "Map-reduce+verify — +tokens; demoted to optional FEAT-008."
+    reversible: true
+  - id: DEC-007
+    date: "2026-05-31"
+    phase: 3
+    decision: "Fan-out granularity = ADAPTIVE by repo size/budget for the read-only ANALYSIS phase (function | module | package). The EXECUTE phase stays partition-by-MODULE regardless (disjoint files) for conflict-free safety."
+    rationale: "User chose adaptive. Reconciliation: analysis granularity is elastic; execute granularity is FIXED at module for safety (DEC-005). Analysis shards and execute shards are computed independently via buildShards(unit)."
+    reversible: true
+  - id: DEC-008
+    date: "2026-05-31"
+    phase: 5
+    decision: "Collapse the claude-in-claude nesting (F-01). A Workflow analysis subagent does the LLM analysis DIRECTLY in its own context (reads the shard's function bodies, returns schema-validated FunctionAnalysis[]). The shard CLI (analyze-shard.ts) becomes DATA-PREP ONLY (parse + extract function bodies -> emit AnalysisInput[] JSON); it does NOT call callClaude(). Removes the inner `claude -p`, ~halving LLM cost/latency per unit."
+    rationale: "The wrapping subagent was paying for two LLM context-windows to do one LLM's job, plus a `npx tsx` cold start per shard."
+    reversible: true
+    resolves: F-01
+    refines: [MOD-003, FN-006, FN-007]
+  - id: DEC-009
+    date: "2026-05-31"
+    phase: 5
+    decision: "Execute isolation unit = the modification's EDIT-SET (target file + its import-closure), not the single source file (F-02). Shards are disjoint by edit-set. split_module / move_file / cross-module inject_dependency are NEVER parallel-safe -> always run in the serial dependency-crossing tail. Only low-risk in-file edits (add_types, add_docstring, local extract_function) parallelize; the plan must report the parallelizable %."
+    rationale: "Realistic structural refactors mutate importers in other shards; 'disjoint files' was false."
+    reversible: true
+    resolves: F-02
+    supersedes_part_of: DEC-005
+    refines: [REQ-002, FN-005, FN-010]
+  - id: DEC-010
+    date: "2026-05-31"
+    phase: 5
+    decision: "Gate ownership (F-06): WF1 and WF2 are TWO SEPARATE Workflow invocations with a SESSION-LEVEL barrier. WF1 terminates -> returns Modification[] to the cconboard session -> the SESSION runs the single AskUserQuestion batch gate -> authors WF2 from the approved subset -> launches WF2. The analysis-cache git_commit is re-validated at WF2 launch; stale -> re-analyze affected shards."
+    rationale: "A plain-JS Workflow cannot call AskUserQuestion; the gate must live in the session between two workflow runs."
+    reversible: true
+    resolves: F-06
+    refines: [FEAT-004, FN-013]
+  - id: DEC-011
+    date: "2026-05-31"
+    phase: 5
+    decision: "Scaling + target (F-04/F-08/F-09): concurrency cap = the Workflow tool's per-workflow cap (min(16, cores-2)); selectGranularity targets ~2-3x cap shards. Global throttle/backpressure lives in the Workflow ORCHESTRATOR (reduce next-wave concurrency on shard failures), not per-shard. Wall-clock target RE-DERIVED by Amdahl: with the Opus reduce tail parallelized (FEAT-009), target >=2x speedup (<=~0.5x baseline) on a ~500-fn repo — NOT 1/3. Correctness invariants remain absolute."
+    rationale: "Cap was undefined though load-bearing; per-shard throttle gave no global backpressure; ~1/3 was below the Amdahl floor (~0.45x) set by the serial Opus tail."
+    reversible: true
+    resolves: [F-04, F-08, F-09]
+    supersedes: DEC-004
+    refines: [REQ-001, REQ-004, FN-004, FN-016]
+  - id: DEC-012
+    date: "2026-05-31"
+    phase: 5
+    decision: "Decouple from ccedit (F-07): onboarding defines its OWN minimal execute-DAG contract (topo order + edit-set-disjoint partition + char-test guard). 'Align with ccedit ExecutionLayer' is downgraded to a NON-BLOCKING future-unification note, not an implementation dependency."
+    rationale: "ccedit is unbuilt (phase-10); DEC-006 had reintroduced a coupling it had itself rejected — internal contradiction."
+    reversible: true
+    resolves: F-07
+    refines: [DEC-006, FEAT-005, MOD-007]
+  - id: DEC-013
+    date: "2026-05-31"
+    phase: 9
+    decision: "User APPROVED the plan at the Phase 9 review gate. Handoff to /ccedit; ccplan writes no implementation code."
+    rationale: "Validated through adversarial filtering (14 findings) + red-blue confrontation (12 attacks), all resolved/mitigated; RISK-004 (low speedup on cyclic-legacy repos) accepted with REQ-014 mitigation."
+    reversible: false
+
+# ─── Phase 5 Critic Findings ───────────────────────────────────
+phase5_findings:
+  critic: "context-isolated adversarial critic (Opus)"
+  findings_count: 14
+  min_required: 7          # max(3, 14_items / 2)
+  by_severity: { critical: 2, high: 6, medium: 3, low: 3 }
+  findings:
+    - { id: F-01, target: [REQ-001, FEAT-003], dimension: impossibility/scalability, severity: critical, issue: "claude-spawns-claude nesting = 2 LLM windows + npx tsx cold start per shard; wrapping subagent adds no value", resolution: "DEC-008 (subagent analyzes directly; CLI = data-prep only)", status: resolved }
+    - { id: F-02, target: [REQ-002, DEC-005], dimension: implicit-assumption/contradiction, severity: critical, issue: "'disjoint files' violated by split_module/move_file/inject_dependency mutating importers in other shards", resolution: "DEC-009 (edit-set/import-closure isolation; structural refactors serial)", status: resolved }
+    - { id: F-03, target: [FEAT-003, FN-003], dimension: hidden-coupling/error-path, severity: high, issue: "parallel vitest runs contend on shared .devcompanion/tests/ dir + colliding names; fileParallelism:false assumes single runner", resolution: "REQ-007 (per-shard test-output namespace + scoped include, or write-only + single suite run in tail)", status: resolved }
+    - { id: F-04, target: [REQ-001, REQ-003], dimension: hidden-coupling/scalability, severity: high, issue: "adaptive throttle is in-process state; N shards => no global backpressure on rate-limit", resolution: "DEC-011 + REQ-008 (orchestrator-level global throttle)", status: resolved }
+    - { id: F-05, target: [FEAT-003, DEC-007], dimension: contradiction/missing-edge, severity: high, issue: "monolithic git_commit-keyed analysis.json vs sharded shards/<id>.json with no merge; adaptive-analysis vs module-execute key mismatch", resolution: "REQ-009 (shard-keyed cache + deterministic merge + bridging key)", status: resolved }
+    - { id: F-06, target: [REQ-005, FEAT-004], dimension: missing-edge/contradiction, severity: high, issue: "workflows cannot AskUserQuestion; gate owner + WF1->WF2 barrier never pinned down", resolution: "DEC-010 (two workflows, session-level gate barrier, cache revalidation)", status: resolved }
+    - { id: F-07, target: [FEAT-005, DEC-006], dimension: implicit-assumption/modularity, severity: high, issue: "premature hard-coupling to ccedit ExecutionLayer which is unbuilt; internal contradiction with DEC-006 rejected-alt", resolution: "DEC-012 (decouple; own execute-DAG contract; ccedit = future-unify note)", status: resolved }
+    - { id: F-08, target: [REQ-004, DEC-004], dimension: ambiguous-criteria/scalability, severity: high, issue: "~1/3 wall-clock target below Amdahl floor (~0.45x) due to ~45% serial Opus tail", resolution: "DEC-011 (Amdahl-derived >=2x target) + FEAT-009 (parallelize Opus tail)", status: resolved }
+    - { id: F-09, target: [REQ-001, FN-004], dimension: ambiguous-criteria/scalability, severity: medium, issue: "'Workflow concurrency cap' referenced everywhere, never given a value; FN-004 thresholds arbitrary", resolution: "DEC-011 (cap = min(16, cores-2); thresholds derived from it)", status: resolved }
+    - { id: F-10, target: [REQ-002, FN-010], dimension: error-path/hidden-coupling, severity: medium, issue: "per-mod revert via global git ops not concurrency-safe across shards sharing one working tree", resolution: "FN-010 refined: path-scoped content-level revert (restore recorded before_content); forbid index/stash ops in shard procs", status: resolved }
+    - { id: F-11, target: [REQ-003, FN-015], dimension: error-path/security, severity: medium, issue: "guard eval during concurrent writes sees inconsistent tree; generateVerificationCommands emits non-importable conda import + POSIX `test -f` on Windows", resolution: "Guard eval = serial pre/post-flight over quiesced tree; fix verification-command gen (platform-correct + real paths) before reuse in FN-015", status: resolved }
+    - { id: F-12, target: [FEAT-008], dimension: redundancy/scalability, severity: low, issue: "optional adversarial verify = a 3rd nested LLM/module; overlaps heuristic fallback + char tests", resolution: "keep OFF by default (already a toggle); document multiplicative cost; prefer a deterministic schema/consistency check", status: resolved }
+    - { id: F-13, target: [FEAT-001], dimension: orthogonality, severity: low, issue: "no issue; caveat: analyzeSingleFunction is NOT currently exported from enhanced-analyzer.ts (only analyzeAllFunctions)", resolution: "FEAT-001/MOD-001 must add `export` to analyzeSingleFunction", status: resolved }
+    - { id: F-14, target: [REQ-006, FN-014], dimension: contradiction, severity: low, issue: "no issue; confirms collectProjectMetadata called 3x (lines 86,116,140) so dedup is real", resolution: "FN-014 dedup; assert headless output byte-stable before/after refactor", status: resolved }
+
+# ─── Requirements (hypotheses — validated in Phase 2) ──────────
+requirements:
+  - id: REQ-001
+    text: "Fan out read-only analysis (per-function analysis, per-module ECL inference, characterization/skeleton test generation) across concurrent subagents via an in-session Workflow."
+    status: validated
+    confidence: 0.85
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "Per-function/per-module analysis runs concurrently up to the Workflow concurrency cap."
+      - "Adaptive-throttle + heuristic fallback behavior preserved."
+    challenges: ["Fan-out granularity (function vs module vs file) — open, Phase 3 selection."]
+  - id: REQ-002
+    text: "Parallelize the code-modification execute phase with partition-by-module isolation + dependency-DAG ordering, preserving per-modification char-test + revert safety."
+    status: validated
+    confidence: 0.75
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "Agents own disjoint file sets — no two concurrent agents modify the same file (DEC-005)."
+      - "Every modification: char test before + after; fail -> revert; log ChangeRecord."
+      - "Dependency-crossing / high-risk items execute serially after the parallel tier."
+    challenges: ["Medium-risk confirmation gates vs autonomous fan-out — see REQ-005."]
+  - id: REQ-003
+    text: "Preserve all correctness invariants under parallelism: char-test safety net, feature guards, git-commit analysis cache, adaptive throttle."
+    status: validated
+    confidence: 0.85
+    source: inferred
+    priority: must
+    acceptance_criteria: ["Parallel run yields same or better correctness than serial; no guard bypass."]
+  - id: REQ-004
+    text: "Meet the wall-clock success target for large codebases (DEC-004)."
+    status: validated
+    confidence: 0.8
+    source: user-stated
+    priority: should
+    acceptance_criteria:
+      - "~500-function repo: parallel wall-clock <= ~1/3 of sequential baseline (~10-11 min -> ~3-4 min)."
+      - "Correctness invariants (char tests, guards) never regress vs serial — absolute."
+  - id: REQ-005
+    text: "Reconcile interactive gates (medium-risk confirmations, Phase-9 review) with autonomous parallel fan-out."
+    status: validated
+    confidence: 0.8
+    source: inferred
+    priority: should
+    acceptance_criteria: ["All medium/high-risk modifications batched into ONE human gate BEFORE the parallel execute tier (proposed — confirm Phase 4)."]
+    challenges: ["Workflow agents run autonomously; cannot pause per-item mid-fan-out."]
+  - id: REQ-006
+    text: "Keep the headless pipeline as fallback (CI/batch/dashboard); add the in-session Workflow fast path on shared per-unit functions (DEC-003)."
+    status: validated
+    confidence: 0.9
+    source: inferred
+    priority: must
+    acceptance_criteria: ["runOnboardingAnalysis() still works headless; Workflow path reuses the same per-unit functions, not a fork."]
+  - id: REQ-007
+    text: "Isolate test output per shard: each shard writes char/skeleton tests under .devcompanion/tests/<shardId>/ and runs only its own tests; no two shards write the same path (or: shards only WRITE tests, suite runs once in the serial tail)."
+    status: validated
+    confidence: 0.8
+    source: critic-proposed
+    priority: must
+    acceptance_criteria: ["No two shards write the same test path.", "Each runner executes only its shard's tests; fileParallelism:false single-runner assumption not violated."]
+    history: [{ phase: 5, action: "Created from F-03", date: "2026-05-31" }]
+  - id: REQ-008
+    text: "Global throttle/backpressure across shards — the Workflow orchestrator reduces concurrency on aggregate failures; no per-shard runaway under rate-limiting."
+    status: validated
+    confidence: 0.8
+    source: critic-proposed
+    priority: must
+    acceptance_criteria: ["Aggregate shard-failure signal lowers the next-wave concurrency (DEC-011)."]
+    history: [{ phase: 5, action: "Created from F-04", date: "2026-05-31" }]
+  - id: REQ-009
+    text: "Shard-keyed analysis cache + deterministic merge into the legacy commit-keyed analysis.json, with a defined key bridging adaptive-analysis-shards -> module-execute-shards; headless reuse (REQ-006) preserved."
+    status: validated
+    confidence: 0.75
+    source: critic-proposed
+    priority: must
+    acceptance_criteria: ["Per-shard cache carries its own input hash; merge yields the same analysis.json the headless path expects.", "A module-execute-shard can look up its inputs regardless of the analysis granularity used."]
+    history: [{ phase: 5, action: "Created from F-05", date: "2026-05-31" }]
+  - id: REQ-010
+    text: "Robust analysis-cache keying: never treat git 'unknown' as a cache hit; fall back to a content/tree hash; namespace cache by repo path (no cross-repo/branch reuse)."
+    status: validated
+    confidence: 0.8
+    source: probe-result
+    priority: must
+    acceptance_criteria: ["A non-git or commit-less tree never reuses another tree's cache.", "Cache key distinguishes different trees."]
+    history: [{ phase: 8, action: "Created from ATK-03", date: "2026-05-31" }]
+  - id: REQ-011
+    text: "Typed rate-limit detection + non-silent heuristic fallback: callClaude surfaces 429/quota distinctly; heuristic fallbacks are counted/reported and feed the orchestrator throttle; degraded (all-heuristic) runs are flagged, not silent."
+    status: validated
+    confidence: 0.8
+    source: probe-result
+    priority: must
+    acceptance_criteria: ["Rate-limit != parse error.", "Fallback rate is observable; >threshold throttles the next wave and warns the user."]
+    history: [{ phase: 8, action: "Created from ATK-04", date: "2026-05-31" }]
+  - id: REQ-012
+    text: "Durable per-modification execute journal + idempotent resume: persist before_content to disk BEFORE editing; per-mod idempotency key; resume after orchestrator death reads the journal, not just the aggregate OL status."
+    status: validated
+    confidence: 0.8
+    source: probe-result
+    priority: must
+    acceptance_criteria: ["A killed WF2 is fully recoverable: every applied mod is revertible from disk.", "Resume neither double-applies nor skips."]
+    history: [{ phase: 8, action: "Created from ATK-07", date: "2026-05-31" }]
+  - id: REQ-013
+    text: "Resource-aware test execution: bound char-test concurrency below analysis concurrency (or run char tests in the serial tail) to avoid N concurrent vitest OOM/thrash and load-dependent spurious reverts."
+    status: validated
+    confidence: 0.75
+    source: probe-result
+    priority: should
+    acceptance_criteria: ["Concurrent vitest processes capped independently of agent concurrency.", "Char-test pass/fail is not load-dependent."]
+    history: [{ phase: 8, action: "Created from ATK-06", date: "2026-05-31" }]
+  - id: REQ-014
+    text: "Parallelizability floor + degraded-mode warning: compute shard count + parallelizable %; if below threshold (src/-flat single group, or cyclic-fused closures), warn the speedup target is unreachable and fall back to sequential/coarse."
+    status: validated
+    confidence: 0.8
+    source: probe-result
+    priority: must
+    acceptance_criteria: ["A degenerate 1-shard partition is reported as degraded, not valid.", "User is warned before a no-speedup run."]
+    history: [{ phase: 8, action: "Created from ATK-01 + ATK-09", date: "2026-05-31" }]
+  - id: REQ-015
+    text: "Shared-state write safety + determinism: serialize index.json writes (single writer in tail or per-shard partial + merge); deterministic shard + merge ordering so feature boundaries/guards are stable run-to-run."
+    status: validated
+    confidence: 0.75
+    source: probe-result
+    priority: should
+    acceptance_criteria: ["No corrupt/lost index.json under parallel shards.", "Same commit -> same guard set (no churn)."]
+    history: [{ phase: 8, action: "Created from ATK-08 + ATK-10", date: "2026-05-31" }]
+  - id: REQ-016
+    text: "Trust boundary + platform-correct verification: onboarding RUNS the target repo's tests — surface this at the gate; defer/sandbox test execution for untrusted repos; fix verification-command generation (incl. opus-ecl-generator.ts test -f / conda import-of-dirname) to be platform-correct and use importable paths."
+    status: validated
+    confidence: 0.7
+    source: probe-result
+    priority: should
+    acceptance_criteria: ["Generated guard verification commands run on Windows/PowerShell.", "User is informed onboarding executes repo code; sandbox/defer option exists."]
+    history: [{ phase: 8, action: "Created from ATK-11 + ATK-12", date: "2026-05-31" }]
+
+# ─── Features (Phase 4) ────────────────────────────────────────
+features:
+  - id: FEAT-001
+    name: "Shared per-shard onboarding units"
+    parent: REQ-006
+    modules: [MOD-001]
+    dependencies: []
+    complexity: medium
+    status: pending
+    note: "Extract per-shard building blocks so the headless pipeline AND Workflow subagents call the SAME code (DEC-003, approach G)."
+  - id: FEAT-002
+    name: "Adaptive granularity + module sharder"
+    parent: REQ-001
+    modules: [MOD-002]
+    dependencies: [FEAT-001]
+    complexity: medium
+    status: pending
+    note: "Pick fan-out unit from repo size + budget (DEC-007); build disjoint-file shards for conflict-free execute (DEC-005)."
+  - id: FEAT-003
+    name: "Workflow 1 — parallel read-only analysis"
+    parent: REQ-001
+    modules: [MOD-003, MOD-004]
+    dependencies: [FEAT-001, FEAT-002]
+    complexity: large
+    status: pending
+    note: "pipeline(shards, analyze -> inferModuleEcl -> charTests), no barriers; serial cross-module Opus reduce tail."
+  - id: FEAT-004
+    name: "Restructure plan + batched risk gate"
+    parent: REQ-005
+    modules: [MOD-005]
+    dependencies: [FEAT-003]
+    complexity: medium
+    status: pending
+    note: "Generate modification items + risk tiers + dep-DAG; batch ALL medium/high-risk into ONE human gate before execute (resolves REQ-005)."
+  - id: FEAT-005
+    name: "Workflow 2 — partitioned parallel execute"
+    parent: REQ-002
+    modules: [MOD-006, MOD-007]
+    dependencies: [FEAT-004]
+    complexity: large
+    status: pending
+    note: "parallel(moduleShards) under char-test+revert guard; disjoint files; serial dependency-crossing/high-risk tail; align with ccedit ExecutionLayer."
+  - id: FEAT-006
+    name: "cconboard parallel mode + headless preservation"
+    parent: REQ-006
+    modules: [MOD-008, MOD-009]
+    dependencies: [FEAT-003, FEAT-005]
+    complexity: medium
+    status: pending
+    note: "Rewrite SKILL.md to author/run the two Workflows; keep runOnboardingAnalysis() headless fallback on shared units."
+  - id: FEAT-007
+    name: "State, guards & wall-clock verification"
+    parent: REQ-003
+    modules: [MOD-010]
+    dependencies: [FEAT-005]
+    complexity: small
+    status: pending
+    note: "OL/ECL progress writes, feature-guard generation, post-run check vs DEC-004 wall-clock + correctness targets."
+  - id: FEAT-008
+    name: "Adversarial analysis verify (optional)"
+    parent: REQ-003
+    modules: [MOD-004]
+    dependencies: [FEAT-003]
+    complexity: small
+    status: pending
+    priority: could
+    note: "Optional skeptic-subagent check of per-module analysis/ECL (approach F). OFF by default; multiplicative token cost (F-12); prefer a deterministic schema/consistency check over a full subagent where possible."
+  - id: FEAT-009
+    name: "Parallelize the Opus synthesis tail"
+    parent: REQ-004
+    modules: [MOD-011]
+    dependencies: [FEAT-003]
+    complexity: medium
+    status: pending
+    note: "Attack the ~45% serial fraction (F-08): fan out per-module Opus PRE-SUMMARIES during WF1, then ONE cheap merge call instead of the two big serial Opus calls (generateOpusProjectUnderstanding 120s + generateOpusEcl 180s). Lowers the Amdahl floor so DEC-011's >=2x target becomes reachable."
+
+# ─── Modules (Phase 4) ─────────────────────────────────────────
+modules:
+  - id: MOD-001
+    name: "onboarding-units (per-shard building blocks)"
+    parent: FEAT-001
+    file_path: "scripts/lib/onboarding-units.ts"
+    source: extend
+    entry_point: "onboarding-units.ts"
+    functions: [FN-001, FN-002, FN-003]
+    public_interface:
+      - { name: "analyzeShard", signature: "(shard, ctx, opts) => Promise<FunctionAnalysis[]>" }
+      - { name: "inferModuleEcl", signature: "(shard, analyses, ctx) => Promise<EnhancedFeature>" }
+      - { name: "genShardCharTests", signature: "(shard, analyses, lang) => Promise<TestSkeleton[]>" }
+    dependencies:
+      - { module: "enhanced-analyzer", imports: ["analyzeSingleFunction"], why: "per-function analysis reuse + adaptive throttle" }
+      - { module: "semantic-ecl-inferrer", imports: ["generateFeatureDescription", "generateVerificationCommands"], why: "wire the currently-UNUSED per-directory ECL fn" }
+    modularity_check: { single_responsibility: true, testable_in_isolation: true, no_shared_state: true, config_at_boundary: true }
+  - id: MOD-002
+    name: "onboarding-sharder"
+    parent: FEAT-002
+    file_path: "scripts/lib/onboarding-sharder.ts"
+    source: new
+    functions: [FN-004, FN-005]
+    public_interface:
+      - { name: "selectGranularity", signature: "(fnCount: number, budget?: number) => 'function'|'module'|'package'" }
+      - { name: "buildShards", signature: "(inputs: AnalysisInput[], unit) => Shard[]  // disjoint file sets" }
+  - id: MOD-003
+    name: "analyze-shard CLI (subagent entrypoint)"
+    parent: FEAT-003
+    file_path: "scripts/analyze-shard.ts"
+    source: new
+    functions: [FN-006]
+    note: "DATA-PREP ONLY (DEC-008): parses the shard's files + extracts function bodies -> emits AnalysisInput[] JSON. Does NOT call callClaude(). The Workflow analysis SUBAGENT reads this and performs all LLM work (analysis, ECL inference, char-test assertions) in its own context — no inner `claude -p`."
+  - id: MOD-004
+    name: "Workflow 1 script (analysis fan-out)"
+    parent: FEAT-003
+    config_slot: ".claude/workflows/"
+    file_path: ".claude/workflows/onboard-analyze.js"
+    source: new
+    functions: [FN-007]
+    note: "Plain-JS workflow: pipeline(shards, analyze->ecl->charTests). agent() calls shell the analyze-shard CLI. Optional adversarial verify (FEAT-008)."
+  - id: MOD-005
+    name: "restructure-planner + risk gate"
+    parent: FEAT-004
+    file_path: "scripts/lib/restructure-planner.ts"
+    source: new
+    functions: [FN-008, FN-009]
+    note: "Formalizes cconboard Phase 4 logic into reusable functions."
+    public_interface:
+      - { name: "buildRestructurePlan", signature: "(analyses, ol) => Modification[]  // risk + depends_on" }
+      - { name: "partitionByRisk", signature: "(mods) => { auto: Modification[], gated: Modification[] }" }
+  - id: MOD-006
+    name: "execute-shard CLI (subagent entrypoint)"
+    parent: FEAT-005
+    file_path: "scripts/execute-shard.ts"
+    source: new
+    functions: [FN-010, FN-011]
+    note: "SAFETY HARNESS (non-LLM): runs char test, records before/after, path-scoped revert on fail, emits per-mod status JSON. The execute SUBAGENT performs the actual code edit with its own tools (no inner LLM/codegen subprocess) — consistent with DEC-008."
+  - id: MOD-007
+    name: "Workflow 2 script (execute fan-out)"
+    parent: FEAT-005
+    config_slot: ".claude/workflows/"
+    file_path: ".claude/workflows/onboard-execute.js"
+    source: new
+    functions: [FN-012]
+    note: "parallel(shards shelling execute-shard CLI) -> serial cross-dep/high-risk tail; ExecutionLayer shape aligned with ccedit."
+  - id: MOD-008
+    name: "cconboard SKILL parallel mode"
+    parent: FEAT-006
+    file_path: "skills/cconboard/SKILL.md"
+    source: extend
+    functions: [FN-013]
+    note: "New 'parallel mode' section: detect Workflow availability -> author/run WF1, batch gate, WF2; else sequential fallback."
+  - id: MOD-009
+    name: "headless pipeline on shared units"
+    parent: FEAT-006
+    file_path: "scripts/lib/onboarding-pipeline.ts"
+    source: extend
+    functions: [FN-014]
+    note: "Refactor runOnboardingAnalysis to call MOD-001 units; preserves headless behavior (DEC-003); de-dup collectProjectMetadata."
+  - id: MOD-010
+    name: "guards + wall-clock verifier"
+    parent: FEAT-007
+    file_path: "scripts/lib/onboarding-verify.ts"
+    source: new
+    functions: [FN-015, FN-016]
+    public_interface:
+      - { name: "generateFeatureGuards", signature: "(ecl, ol) => Guard[]" }
+      - { name: "verifyWallClock", signature: "(durationMs, fnCount, baseline) => VerifyResult" }
+  - id: MOD-011
+    name: "opus-tail parallelizer"
+    parent: FEAT-009
+    file_path: "scripts/lib/opus-ecl-generator.ts"
+    source: extend
+    functions: [FN-017, FN-018]
+    note: "Add per-module pre-summary (fanned out in WF1) + a cheap merge call; keep the existing 2-call path as fallback."
+    public_interface:
+      - { name: "summarizeModuleForOpus", signature: "(shard, analyses) => Promise<ModuleSummary>" }
+      - { name: "mergeOpusSummaries", signature: "(summaries: ModuleSummary[], metadata) => Promise<OpusEclResult>" }
+
+# ─── Functions (Phase 4 — key atomic items) ───────────────────
+functions:
+  - id: FN-001
+    name: "analyzeShard"
+    parent: MOD-001
+    visibility: public
+    description: "Analyze all functions in one shard via analyzeSingleFunction; preserve adaptive throttle + heuristic fallback."
+    side_effects: ["network (claude -p subprocess)"]
+    dependencies: ["analyzeSingleFunction"]
+    constraints: ["Throttle on repeated failure; fall back to heuristic; deterministic shard boundaries."]
+  - id: FN-002
+    name: "inferModuleEcl"
+    parent: MOD-001
+    visibility: public
+    description: "Per-module ECL feature description (reuse generateFeatureDescription) + verification commands."
+    dependencies: ["generateFeatureDescription", "generateVerificationCommands"]
+  - id: FN-003
+    name: "genShardCharTests"
+    parent: MOD-001
+    visibility: public
+    description: "Generate characterization-test skeletons + LLM assertions for a shard's functions."
+    dependencies: ["generateFunctionTestSkeleton"]
+  - id: FN-004
+    name: "selectGranularity"
+    parent: MOD-002
+    visibility: public
+    description: "Choose fan-out unit (function|module|package) from function count + optional token budget (DEC-007)."
+    constraints: ["Bounded agent count; large repos -> coarser unit so agents stay <= useful concurrency."]
+    test_cases:
+      - { input: "fnCount=40", expected: "'function'" }
+      - { input: "fnCount=600", expected: "'module'" }
+      - { input: "fnCount=5000", expected: "'package'" }
+  - id: FN-005
+    name: "buildShards"
+    parent: MOD-002
+    visibility: public
+    description: "Partition inputs into shards with DISJOINT file sets so parallel execute never conflicts (DEC-005)."
+    constraints: ["Every file in exactly one shard; a function's file stays within its shard."]
+  - id: FN-006
+    name: "analyzeShardCli"
+    parent: MOD-003
+    visibility: public
+    description: "DATA-PREP CLI (DEC-008): read project + shard id -> parse + extract function bodies -> print AnalysisInput[] JSON. NO LLM call. The subagent does analyzeShard/inferModuleEcl/char-test-assertion work in-context from this JSON."
+    side_effects: ["filesystem (read source; write .devcompanion/shards/<id>.json)"]
+  - id: FN-007
+    name: "onboardAnalyzeWorkflow"
+    parent: MOD-004
+    visibility: public
+    description: "Workflow script: pipeline(shards, analyze->ecl->charTests); agent() shells analyze-shard CLI; returns merged analysis."
+    constraints: ["Plain JS, no fs/Node API; schema-validated agent output; .filter(Boolean) for skipped agents; respect concurrency cap."]
+  - id: FN-008
+    name: "buildRestructurePlan"
+    parent: MOD-005
+    description: "From analyses, generate modification items with risk levels + depends_on DAG (cconboard Phase 4 rules)."
+  - id: FN-009
+    name: "partitionByRisk"
+    parent: MOD-005
+    description: "Split modifications into auto (low-risk) vs gated (medium/high) for the single batched gate."
+  - id: FN-010
+    name: "applyModificationGuarded"
+    parent: MOD-006
+    visibility: public
+    description: "char test before -> apply -> char test after; PASS = log ChangeRecord + update hash; FAIL = PATH-SCOPED revert + escalate risk."
+    constraints:
+      - "Mirrors cconboard Phase 5 protocol; per-modification atomicity; edit only within the shard's edit-set (DEC-009)."
+      - "Revert = restore the recorded before_content to the exact file (F-10); NO repo-wide git checkout/stash/index ops in shard processes."
+  - id: FN-011
+    name: "executeShardCli"
+    parent: MOD-006
+    description: "CLI: apply one shard's approved modifications via applyModificationGuarded; emit per-mod status JSON."
+    side_effects: ["filesystem (edits scoped to the shard's disjoint files only)"]
+  - id: FN-012
+    name: "onboardExecuteWorkflow"
+    parent: MOD-007
+    description: "Workflow script: parallel(shards shelling execute-shard CLI) then serial cross-dep/high-risk tail."
+  - id: FN-013
+    name: "cconboardParallelMode"
+    parent: MOD-008
+    description: "Skill logic: detect Workflow availability; author/run WF1, present batch gate, run WF2; else sequential fallback."
+  - id: FN-014
+    name: "runOnboardingAnalysisOnUnits"
+    parent: MOD-009
+    description: "Refactor runOnboardingAnalysis to delegate to MOD-001 units (headless path keeps current behavior; dedup metadata)."
+  - id: FN-015
+    name: "generateFeatureGuards"
+    parent: MOD-010
+    description: "Generate feature_guard entries from refactored modules' invariants + verification (reuse existing guard schema)."
+  - id: FN-016
+    name: "verifyWallClock"
+    parent: MOD-010
+    description: "Compare run duration vs sequential baseline for fn-count; report pass/fail vs DEC-011 (>=2x speedup) target."
+  - id: FN-017
+    name: "summarizeModuleForOpus"
+    parent: MOD-011
+    description: "Per-module Opus pre-summary, fanned out during WF1 (replaces part of the monolithic generateOpusProjectUnderstanding)."
+  - id: FN-018
+    name: "mergeOpusSummaries"
+    parent: MOD-011
+    description: "One cheap merge call combining module pre-summaries into the final OpusEclResult; replaces the 2 big serial Opus calls. MUST try/catch + fallback (2-call path or deterministic assembly) and cap+validate output to survive a malformed/truncated merge (ATK-05)."
+
+# ─── Dependency Graph (Phase 4 -> refined Phase 6) ─────────────
+dependency_graph:
+  FEAT-001: []
+  FEAT-002: [FEAT-001]
+  FEAT-003: [FEAT-001, FEAT-002]
+  FEAT-004: [FEAT-003]
+  FEAT-005: [FEAT-004]
+  FEAT-006: [FEAT-003, FEAT-005]
+  FEAT-007: [FEAT-005]
+  FEAT-008: [FEAT-003]
+  FEAT-009: [FEAT-003]
+
+# ─── Phase 6: Dependency Completion ────────────────────────────
+phase6_coverage:
+  chain_coverage: "9/9 core REQ map to FEAT->MOD->FN. Hardening REQ-007..016 refine existing FEAT/MOD as constraints (not new subsystems)."
+  req_to_feat:
+    REQ-001: [FEAT-002, FEAT-003]
+    REQ-002: [FEAT-005]
+    REQ-003: [FEAT-007, FEAT-008]
+    REQ-004: [FEAT-009]
+    REQ-005: [FEAT-004]
+    REQ-006: [FEAT-001, FEAT-006]
+    REQ-007: [FEAT-003]                 # test-output isolation -> FN-003/FN-006
+    REQ-008: [FEAT-003]                 # global throttle -> FN-007 orchestrator
+    REQ-009: [FEAT-001, FEAT-002]       # shard cache + merge
+    REQ-010: [FEAT-001]                 # cache keying robustness (ATK-03); also packages/llm or pipeline cache
+    REQ-011: [FEAT-001]                 # rate-limit detection + non-silent fallback (ATK-04); touches packages/llm caller
+    REQ-012: [FEAT-005]                 # durable execute journal (ATK-07)
+    REQ-013: [FEAT-003, FEAT-005]       # resource-aware test exec (ATK-06)
+    REQ-014: [FEAT-002]                 # parallelizability floor (ATK-01/09)
+    REQ-015: [FEAT-005, FEAT-009]       # index.json write safety + deterministic ordering (ATK-08/10)
+    REQ-016: [FEAT-005, FEAT-007]       # trust boundary + platform-correct verification (ATK-11/12)
+  cross_cutting:
+    error_handling: "char-test revert (FN-010); heuristic fallback made NON-silent (REQ-011); merge fallback (FN-018, ATK-05)."
+    observability: "OL progress + Workflow log() + onProgress; degraded-run flag (REQ-011); parallelizable% report (REQ-014)."
+    config: "concurrency cap, granularity, test-concurrency, adversarial toggle -> centralize in .devcompanion config."
+    migration_compat: "headless runOnboardingAnalysis() preserved byte-stable (DEC-003, FN-014)."
+    security: "executing the onboarded repo's tests is a trust boundary (REQ-016, ATK-12)."
+  data_flows:
+    WF1: { input: "source files", transform: "parse (data-prep CLI) -> subagent analyze+ecl+chartests in-context", store: ".devcompanion/shards/<id>.json + namespaced tests + merged analysis.json", output: "Modification[] returned to session" }
+    gate: { input: "Modification[]", transform: "partitionByRisk; human approves medium/high batch", output: "approved subset" }
+    WF2: { input: "approved Modification[]", transform: "applyModificationGuarded per shard (journaled)", store: "edited files + ChangeRecords + OL + index.json (serialized)", output: "guards + report" }
+  circular_deps: 0
+  parallelizability_floor: "If buildShards yields <2 useful shards OR parallelizable% < threshold (ATK-01/09), warn target unreachable + fall back to sequential/coarse (REQ-014)."
+
+# ─── Phase 7: Feasibility Probes (code-inspection; ccplan is read-only) ──
+probe_assessment:
+  - { item: FEAT-003, novelty: 2, integration: 3, perf: 3, data_risk: 1, external: 3, score: 12, tier: high }
+  - { item: FEAT-005, novelty: 3, integration: 3, perf: 2, data_risk: 3, external: 1, score: 12, tier: high }
+  - { item: FEAT-009, novelty: 2, integration: 2, perf: 2, data_risk: 1, external: 3, score: 10, tier: high }
+  - { item: FEAT-002, novelty: 1, integration: 1, perf: 1, data_risk: 0, external: 0, score: 3, tier: low }
+probes:
+  - { id: PROBE-001, target: FEAT-001, type: assumption, method: code-inspection, question: "Is analyzeSingleFunction exportable as the per-shard unit?", result: "enhanced-analyzer.ts:71 defines it WITHOUT export (only analyzeAllFunctions exported, :23).", verdict: needs-modification, note: "FEAT-001 must add the export (F-13)." }
+  - { id: PROBE-002, target: [FEAT-002, FEAT-005], type: assumption, method: code-inspection, question: "Can edit-set/import-closure be computed from existing AST?", result: "analyzeFileCalls exported (call-graph.ts:47); ImportInfo (types.ts:38); parsers populate imports (parser.ts:29, ts-parser.ts:24).", verdict: feasible, note: "Data exists; BUT cyclic graphs fuse closures (ATK-09) -> needs floor (REQ-014)." }
+  - { id: PROBE-003, target: FEAT-003, type: assumption, method: code-inspection, question: "Does DEC-008 remove the claude-in-claude cost?", result: "Yes — subagent analyzes in-context; analyze-shard CLI is data-prep only. Each agent = 1 LLM context.", verdict: feasible }
+  - { id: PROBE-004, target: FEAT-004, type: integration, method: code-inspection, question: "Can WF1->session-gate->WF2 work given workflows can't AskUserQuestion?", result: "Yes via DEC-010: two separate Workflow() invocations; the gate runs in the cconboard session between them.", verdict: feasible }
+
+# ─── Phase 8: Red-Blue Confrontation ───────────────────────────
+confrontation:
+  red_team:
+    - { id: ATK-01, scenario: "Top-level-dir collapse: aggregateFunctionsByDirectory keys on first path segment; everything under src/ -> 1 shard -> no parallelism", targets: [DEC-005, FN-005, FEAT-002], severity: high }
+    - { id: ATK-02, scenario: "Test-file name collision (basename-only) silently dropped by writeTestFiles existsSync -> char-test net keyed to wrong/no test", targets: [REQ-007, FN-003], severity: high }
+    - { id: ATK-03, scenario: "getCurrentGitCommit returns 'unknown' on git failure; 'unknown'==='unknown' -> staleness guard no-op + cross-repo cache reuse", targets: [DEC-010, REQ-009], severity: critical }
+    - { id: ATK-04, scenario: "callClaude collapses 429/quota into generic error; per-fn failures fall back to heuristic reporting SUCCESS -> orchestrator throttle has no signal -> silent all-heuristic run", targets: [DEC-011, REQ-008], severity: critical }
+    - { id: ATK-05, scenario: "Single merged-Opus JSON.parse (no try/catch) -> one malformed/truncated response nukes ALL fanned-out synthesis", targets: [FEAT-009, FN-018], severity: high }
+    - { id: ATK-06, scenario: "N concurrent vitest cold-starts (~300-500MB + WASM each) at cap=cores-2 -> laptop OOM/thrash -> spurious char-test fails -> reverts CORRECT edits", targets: [REQ-007, REQ-002, DEC-011], severity: high }
+    - { id: ATK-07, scenario: "Orchestrator killed mid-WF2: in-flight before_content lost (in-memory) -> unrevertable; aggregate OL status has no per-mod idempotency -> double-apply/skip on resume", targets: [DEC-009, FN-010, REQ-003], severity: critical }
+    - { id: ATK-08, scenario: "Concurrent index.json read-modify-write from N shards -> lost updates/corrupt JSON (F-05 fixed analysis.json only)", targets: [REQ-009, FN-011], severity: high }
+    - { id: ATK-09, scenario: "Cyclic/deep imports fuse edit-set closures into one blob -> partition collapses or all-serial -> ~0 speedup on legacy code (cconboard's actual target)", targets: [DEC-009, REQ-002], severity: high }
+    - { id: ATK-10, scenario: "Non-deterministic dir-grouping + LLM + completion-order merge -> unstable feature boundaries -> feature_guard churn run-to-run", targets: [REQ-003, FEAT-009, FN-015], severity: medium }
+    - { id: ATK-11, scenario: "opus-ecl-generator.ts:290 still emits POSIX `test -f` + conda import-of-dirname; FEAT-009 extends this file -> guards with always-failing verification on Windows", targets: [FN-015, FEAT-009], severity: medium }
+    - { id: ATK-12, scenario: "Char tests run the onboarded repo's code (import-time side effects) fanned out, no sandbox, BEFORE the gate (WF1) -> arbitrary code exec x N, multiplied blast radius", targets: [REQ-003, FEAT-005], severity: high }
+  blue_team:
+    - { attack: ATK-01, verdict: mitigated, mitigation: "REQ-014: adaptive-depth + file-count-balanced bin-packing sharder; degraded-mode warn if <2 shards" }
+    - { attack: ATK-02, verdict: mitigated, mitigation: "REQ-007 refined: test paths include shard/dir hash; char-test existence key is path-qualified, never basename-only" }
+    - { attack: ATK-03, verdict: mitigated, mitigation: "REQ-010: never treat 'unknown' as a hit; content/tree-hash fallback key; namespace cache by repo path" }
+    - { attack: ATK-04, verdict: mitigated, mitigation: "REQ-011: typed rate-limit error in callClaude; counted+reported heuristic fallback; orchestrator throttles on fallback-rate; degraded runs flagged" }
+    - { attack: ATK-05, verdict: mitigated, mitigation: "FN-018 refined: try/catch + fallback to 2-call path / deterministic assembly; cap+validate merge output" }
+    - { attack: ATK-06, verdict: mitigated, mitigation: "REQ-013: test concurrency bounded below analysis concurrency (or char tests in serial tail); resource-pressure aware" }
+    - { attack: ATK-07, verdict: mitigated, mitigation: "REQ-012: durable per-mod journal (before_content to disk pre-edit) + idempotency key; resume from journal" }
+    - { attack: ATK-08, verdict: mitigated, mitigation: "REQ-015: serialize index.json writes (single writer in tail or per-shard partial + merge)" }
+    - { attack: ATK-09, verdict: accepted-with-mitigation, mitigation: "REQ-014 floor: detect fused closures; warn target unreachable; fall back to sequential. Honest limit on cyclic-legacy repos." }
+    - { attack: ATK-10, verdict: mitigated, mitigation: "REQ-015: deterministic shard + fixed merge order; generate guards in serial tail from the merged ECL" }
+    - { attack: ATK-11, verdict: mitigated, mitigation: "REQ-016: fix verification-command gen in opus-ecl-generator.ts:290 too (platform-correct, importable paths) before FEAT-009 reuse" }
+    - { attack: ATK-12, verdict: mitigated, mitigation: "REQ-016: surface trust boundary at the gate; defer/sandbox test execution; prefer generate-then-run-post-gate for untrusted repos" }
+
+# ─── Risk Register ─────────────────────────────────────────────
+risks:
+  - { id: RISK-001, description: "Cache-staleness guard silently disabled on non-git/'unknown' trees", probability: high, impact: high, mitigation: "REQ-010", status: mitigated, related: [ATK-03] }
+  - { id: RISK-002, description: "Silent all-heuristic degradation under rate-limiting", probability: high, impact: high, mitigation: "REQ-011", status: mitigated, related: [ATK-04] }
+  - { id: RISK-003, description: "Unrecoverable torn working tree if orchestrator dies mid-execute", probability: medium, impact: high, mitigation: "REQ-012", status: mitigated, related: [ATK-07] }
+  - { id: RISK-004, description: "Zero/low speedup on legacy-cyclic or src/-flat repos (cconboard's actual target)", probability: high, impact: medium, mitigation: "REQ-014 floor + degraded warn", status: accepted, related: [ATK-01, ATK-09] }
+  - { id: RISK-005, description: "Laptop OOM from N concurrent vitest runs reverts correct edits", probability: medium, impact: high, mitigation: "REQ-013", status: mitigated, related: [ATK-06] }
+  - { id: RISK-006, description: "Executing untrusted onboarded code during fanned-out tests", probability: low, impact: high, mitigation: "REQ-016", status: mitigated, related: [ATK-12] }
+
+iterations: []
+
+# ─── Feature Guard (deferred — generated AFTER implementation by /ccedit) ──
+# ccplan hands off UNBUILT work; guards protect IMPLEMENTED behaviors, so active
+# guards are premature. /ccedit generates them post-implementation + verification.
+feature_guard:
+  generated: null
+  status: deferred-to-ccedit
+  planned_guards:
+    - { feature: FEAT-003, will_protect: "WF1 fan-out read-only analysis", key_files: ["scripts/analyze-shard.ts", ".claude/workflows/onboard-analyze.js", "scripts/lib/onboarding-units.ts"] }
+    - { feature: FEAT-005, will_protect: "WF2 partitioned execute + char-test/revert/journal safety", key_files: ["scripts/execute-shard.ts", ".claude/workflows/onboard-execute.js"] }
+    - { feature: FEAT-006, will_protect: "headless runOnboardingAnalysis() byte-stable", key_files: ["scripts/lib/onboarding-pipeline.ts"] }
+  guards: []

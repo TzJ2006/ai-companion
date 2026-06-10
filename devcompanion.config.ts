@@ -146,6 +146,51 @@ const config: DevCompanionConfig = {
         { module: "hook", imports: ["handlePostToolUse"] },
       ],
     },
+    llm: {
+      path: resolve(ROOT, "packages/llm/src"),
+      description: "Claude LLM calling utility (preflight, timeout, abort)",
+      entryPoint: "index.ts",
+      exports: [
+        { name: "callClaude", kind: "function", signature: "(prompt: string, options?: ClaudeCallOptions) => Promise<ClaudeCallResult>" },
+        { name: "preflight", kind: "function", signature: "() => Promise<PreflightResult>" },
+        { name: "ClaudeNotAvailableError", kind: "class" },
+        { name: "ClaudeTimeoutError", kind: "class" },
+      ],
+      dependencies: [],
+    },
+    exec: {
+      path: resolve(ROOT, "packages/exec/src"),
+      description: "DAG execution engine: topo-sort, subagent context, status management",
+      entryPoint: "index.ts",
+      exports: [
+        { name: "parseEclDag", kind: "function", signature: "(eclPath: string) => Promise<DagGraph>" },
+        { name: "topologicalSort", kind: "function", signature: "(graph: DagGraph) => ExecutionLayer[]" },
+        { name: "getReadyNodes", kind: "function", signature: "(graph: DagGraph) => FnNode[]" },
+        { name: "getExecutionState", kind: "function", signature: "(graph: DagGraph) => ExecutionState" },
+        { name: "buildSubagentContext", kind: "function", signature: "(fnId: string, graph: DagGraph, eclPath: string) => Promise<SubagentContext>" },
+        { name: "formatSubagentPrompt", kind: "function", signature: "(context: SubagentContext) => string" },
+        { name: "updateFnStatus", kind: "function", signature: "(eclPath: string, fnId: string, status: FnStatus) => Promise<void>" },
+        { name: "runVerification", kind: "function", signature: "(config: FnVerify, timeout?: number) => Promise<VerificationResult>" },
+        { name: "loadExecConfig", kind: "function", signature: "(projectRoot?: string) => Promise<ExecConfig>" },
+      ],
+      dependencies: [],
+    },
+    idea: {
+      path: resolve(ROOT, "packages/idea/src"),
+      description: "Idea backlog storage and research engine",
+      entryPoint: "index.ts",
+      exports: [
+        { name: "IdeaStore", kind: "class" },
+        { name: "executeResearch", kind: "function", signature: "(store: IdeaStore, slug: string, options?: ResearchOptions) => Promise<{reportPath, validation}>" },
+        { name: "validateResearchReport", kind: "function", signature: "(markdown: string) => ValidationResult" },
+        { name: "generateSlug", kind: "function", signature: "(title: string) => string" },
+        { name: "IdeaEntry", kind: "type" },
+        { name: "ValidationResult", kind: "type" },
+      ],
+      dependencies: [
+        { module: "llm", imports: ["callClaude"] },
+      ],
+    },
   },
 
   tests: {

@@ -6,6 +6,8 @@ import { historyCommand } from "./commands/history.js";
 import { initCommand } from "./commands/init.js";
 import { onboardCommand } from "./commands/onboard.js";
 import { analyzeCommand } from "./commands/analyze.js";
+import { ideaCommand } from "./commands/idea.js";
+import { installCommand } from "./commands/install.js";
 
 const program = new Command();
 
@@ -20,5 +22,7 @@ program.addCommand(historyCommand);
 program.addCommand(initCommand);
 program.addCommand(onboardCommand);
 program.addCommand(analyzeCommand);
+program.addCommand(ideaCommand);
+program.addCommand(installCommand);
 
 program.parse();

@@ -373,10 +373,11 @@ async function main(): Promise<void> {
   } else {
     console.log("\n  Starting translation for bilingual output...");
 
-    const [enData, zhData] = await Promise.all([
-      translateOverviewData(overviewData, "en"),
-      translateOverviewData(overviewData, "zh"),
-    ]);
+    // Sequential, NOT Promise.all: running both locales at once spawned two
+    // concurrent Claude CLI sessions that contended and overran the timeout.
+    // One locale at a time keeps each batch fast and reliable.
+    const enData = await translateOverviewData(overviewData, "en");
+    const zhData = await translateOverviewData(overviewData, "zh");
 
     const htmlEn = renderOverviewHtml(enData, "en");
     const htmlZh = renderOverviewHtml(zhData, "zh");

@@ -1,0 +1,1090 @@
+# ─── Header ────────────────────────────────────────────────────
+ecl_version: "2.0"
+feature: "ccedit-skill"
+status: "phase-10-implementation"
+created: "2026-05-27"
+updated: "2026-05-27"
+related_features: []
+owner: "user"
+
+# ─── Conversation State ──────────────────────────────────────
+pending_input: null
+
+# ─── Prompt Calibration (Phase 0) ─────────────────────────────
+prompt_calibration:
+  raw_input: |
+    实现 ccedit skill — 独立执行系统，读取 ccplan 产出的 ECL 中的 FN DAG，
+    拓扑排序后 spawn subagent 并行执行原子任务，verify 通过标 done 解锁下游，
+    fail 进入 ccdebug，状态写回 ECL 持久化。
+  status: completed
+
+  intent_decomposition:
+    total_intents: 1
+    total_tracks: 1
+    tracks:
+      - track_id: T1
+        name: "ccedit execution skill"
+        priority: 1
+        intents:
+          - raw: "实现 ccedit skill — 独立执行系统"
+            type: feature
+
+  tracks:
+    T1:
+      calibrated_scenario: |
+        Build a new skill `/ccedit` that acts as the execution engine for
+        approved ECL documents produced by /ccplan. It reads the FN-layer DAG
+        from an ECL file, performs topological sort, spawns subagents in parallel
+        for independent FN nodes, verifies each via its `verify` command, writes
+        status back to ECL, and routes failures to /ccdebug. The skill is
+        triggered manually and resumes from where it left off across sessions.
+      intent_dimensions:
+        task: { status: present, value: "Build ccedit skill — DAG-driven execution engine" }
+        input: { status: present, value: "Approved ECL document with FN-layer DAG (depends_on, output, verify)" }
+        output: { status: present, value: "Implemented code + updated ECL with all FN status: done" }
+        constraints: { status: present, value: "Must integrate with existing skill system, ECL schema, ccdebug" }
+        context: { status: enriched, value: "TypeScript monorepo, skills in skills/<name>/, ECL in docs/ecl/" }
+        audience: { status: present, value: "User invoking /ccedit after /ccplan approval" }
+        memory: { status: present, value: "All design decisions confirmed in conversation (see project memory)" }
+        success_criteria: { status: present, value: "Skill reads ECL, topo-sorts FN DAG, spawns subagents, tracks progress, handles failures" }
+        examples: { status: present, value: "FN-001 (no deps) → execute → verify pass → done → FN-002 (depends FN-001) unlocked" }
+
+  anti_patterns_found: []
+  context_enrichment:
+    codebase: "skills/ has ccplan, cconboard, ccdebug with SKILL.md + <name>.md pattern"
+    git: "Recent commits focus on onboarding and overview translation"
+    conversation: "Full design confirmed: DAG engine, subagent execution, progress persistence, ccdebug integration"
+  questions_asked: 0
+  questions_skipped: "All dimensions fully specified from conversation"
+
+# ─── Original Context ──────────────────────────────────────────
+user_scenario: |
+  实现 ccedit skill — 独立执行系统，读取 ccplan 产出的 ECL 中的 FN DAG，
+  拓扑排序后 spawn subagent 并行执行原子任务，verify 通过标 done 解锁下游，
+  fail 进入 ccdebug，状态写回 ECL 持久化。最大并行数通过 .devcompanion config 调整。
+  ccplan 止步于规划输出，ccedit 从未完成的 ECL 图继续执行。
+
+# ─── Requirements ──────────────────────────────────────────────
+requirements:
+  - id: REQ-001
+    text: "ccedit 读取 approved ECL 文件并提取 FN 层 DAG 结构"
+    status: validated
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "给定 ECL 文件路径，返回所有 FN 节点及其 depends_on 关系"
+      - "ECL 中无 functions 或 functions 为空时返回错误"
+      - "FN 缺少 depends_on/output/verify 字段时报错并指出缺失字段"
+    decomposition:
+      features: [FEAT-001]
+    tags: [parser, ecl]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+  - id: REQ-002
+    text: "DAG 引擎执行拓扑排序，检测环，识别可并行的节点集"
+    status: validated
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "拓扑排序后返回分层执行序列（每层内节点可并行）"
+      - "存在环时抛出错误并报告环中的 FN IDs"
+      - "正确识别入度为零的节点为第一批可执行节点"
+    decomposition:
+      features: [FEAT-002]
+    tags: [dag, algorithm]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+  - id: REQ-003
+    text: "为每个 FN 组装 subagent 执行上下文并 spawn 并行执行"
+    status: validated
+    confidence: 0.90
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "上下文包含：FN 规格、产出位置、所属 MOD 接口、已完成依赖的 output"
+      - "同层无依赖的 FN 并行 spawn，受 maxConcurrency 限制"
+      - "subagent 接收的上下文足以独立完成任务，无需读取整个 ECL"
+    decomposition:
+      features: [FEAT-003]
+    tags: [execution, subagent]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+  - id: REQ-004
+    text: "验收通过写 done、失败写 blocked 并路由到 ccdebug"
+    status: validated
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "verify command exit 0 → FN status 写为 done"
+      - "verify command 非零退出 → FN status 写为 blocked"
+      - "blocked 后输出信息指导用户调用 /ccdebug"
+      - "done 后检查下游 FN 是否所有前置均 done，若是则加入待执行队列"
+      - "verify command timeout 视为 fail（blocked）"
+      - "verify command 不存在或格式错误时报告 EclParseError 而非执行"
+    decomposition:
+      features: [FEAT-004]
+    tags: [verification, status]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+  - id: REQ-005
+    text: "跨 session 恢复：读 ECL 当前 FN 状态从断点继续"
+    status: validated
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "新 session 调用 /ccedit 时，读取 ECL 中所有 FN status"
+      - "跳过 status: done 的 FN"
+      - "找到 pending 且 depends_on 全部 done 的 FN 作为下一批"
+      - "blocked FN 保持 blocked 直到 ccdebug 修复后用户手动 set 回 pending"
+      - "ccedit 提供 reset 子命令: /ccedit reset <FN-ID> 将 blocked 改为 pending"
+    decomposition:
+      features: [FEAT-005]
+    tags: [persistence, recovery]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+  - id: REQ-007
+    text: "ccplan 执行过程中禁止任何代码修改（read-only mode），类似 plan mode"
+    status: validated
+    confidence: 0.95
+    source: user-stated
+    priority: must
+    acceptance_criteria:
+      - "ccplan 激活期间，所有 Edit/Write/Bash(写操作) 工具调用被 hook 拦截"
+      - "只允许读操作：Read, Glob, Grep, WebSearch, WebFetch"
+      - "允许写 ECL 文件本身（ccplan 的产出）"
+      - "用户明确退出 ccplan 或进入 ccedit 后恢复写权限"
+      - "hook 机制保证，不依赖 agent 自觉"
+    decomposition:
+      features: [FEAT-007]
+    tags: [hook, safety, ccplan]
+    history:
+      - phase: 8
+        action: "User added mid-confrontation: ccplan must be read-only like plan mode"
+        date: "2026-05-27"
+
+  - id: REQ-006
+    text: "最大并行数通过 .devcompanion 配置文件可调"
+    status: validated
+    confidence: 0.90
+    source: user-stated
+    priority: should
+    acceptance_criteria:
+      - "配置文件中有 maxConcurrency 字段"
+      - "默认值为合理数值（如 3）"
+      - "运行时读取配置限制同时 spawn 的 subagent 数量"
+    decomposition:
+      features: [FEAT-006]
+    tags: [config]
+    history:
+      - phase: 4
+        action: "Crystallized from calibrated scenario"
+        date: "2026-05-27"
+
+# ─── Features ──────────────────────────────────────────────────
+features:
+  - id: FEAT-001
+    name: "ECL FN DAG Parser"
+    parent: REQ-001
+    modules: [MOD-001]
+    dependencies: []
+    complexity: small
+    status: pending
+
+  - id: FEAT-002
+    name: "Topological Sort Engine"
+    parent: REQ-002
+    modules: [MOD-002]
+    dependencies: [FEAT-001]
+    complexity: small
+    status: pending
+
+  - id: FEAT-003
+    name: "Subagent Context Builder + Executor"
+    parent: REQ-003
+    modules: [MOD-003]
+    dependencies: [FEAT-001, FEAT-002]
+    complexity: medium
+    status: pending
+
+  - id: FEAT-004
+    name: "Verification and Status Management"
+    parent: REQ-004
+    modules: [MOD-004]
+    dependencies: [FEAT-001]
+    complexity: small
+    status: pending
+
+  - id: FEAT-005
+    name: "Session Recovery"
+    parent: REQ-005
+    modules: [MOD-005]
+    dependencies: [FEAT-001, FEAT-002, FEAT-004]
+    complexity: small
+    status: pending
+
+  - id: FEAT-007
+    name: "ccplan Read-Only Hook Guard"
+    parent: REQ-007
+    modules: [MOD-007]
+    dependencies: []
+    complexity: small
+    status: pending
+
+  - id: FEAT-006
+    name: "Execution Configuration"
+    parent: REQ-006
+    modules: [MOD-006]
+    dependencies: []
+    complexity: trivial
+    status: pending
+
+# ─── Modules ──────────────────────────────────────────────────
+modules:
+  - id: MOD-001
+    name: "ECL DAG Parser"
+    parent: FEAT-001
+    config_slot: "modules.exec"
+    functions: [FN-001, FN-002]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "parseEclDag"
+        signature: "(eclPath: string) => Promise<DagGraph>"
+        description: "Read ECL YAML and extract FN nodes with dependency edges"
+      - name: "DagGraph"
+        kind: type
+        description: "Typed DAG structure: nodes (FnNode[]) + edges (depends_on)"
+      - name: "FnNode"
+        kind: type
+        description: "Single FN with id, depends_on, output, verify, status"
+    dependencies:
+      - module: config
+        imports: ["tracking.eclDir"]
+        why: "Resolve default ECL directory path"
+    internal_only:
+      - "parseYamlFile"
+      - "validateFnFields"
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-002
+    name: "Topological Sort"
+    parent: FEAT-002
+    config_slot: "modules.exec"
+    functions: [FN-003, FN-004]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "topologicalSort"
+        signature: "(graph: DagGraph) => ExecutionLayer[]"
+        description: "Kahn's algorithm — returns layers of parallelizable nodes"
+      - name: "getReadyNodes"
+        signature: "(graph: DagGraph) => FnNode[]"
+        description: "Return nodes whose depends_on are all done"
+      - name: "ExecutionLayer"
+        kind: type
+        description: "One layer of nodes that can execute in parallel"
+    dependencies:
+      - module: MOD-001
+        imports: ["DagGraph", "FnNode"]
+        why: "Operates on the parsed DAG structure"
+    internal_only:
+      - "detectCycle"
+      - "computeInDegrees"
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-003
+    name: "Subagent Context Builder"
+    parent: FEAT-003
+    config_slot: "modules.exec"
+    functions: [FN-005, FN-006]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "buildSubagentContext"
+        signature: "(fnId: string, graph: DagGraph, eclPath: string) => Promise<SubagentContext>"
+        description: "Assemble the minimal context a subagent needs to execute one FN"
+      - name: "SubagentContext"
+        kind: type
+        description: "FN spec + output location + MOD interface + completed dep outputs"
+    dependencies:
+      - module: MOD-001
+        imports: ["DagGraph", "FnNode"]
+        why: "Reads FN spec and dependency info"
+    internal_only:
+      - "extractModuleInterface"
+      - "collectCompletedDependencyOutputs"
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-004
+    name: "Status Manager"
+    parent: FEAT-004
+    config_slot: "modules.exec"
+    functions: [FN-007, FN-008]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "updateFnStatus"
+        signature: "(eclPath: string, fnId: string, status: FnStatus) => Promise<void>"
+        description: "Write FN status back to ECL YAML file"
+      - name: "FnStatus"
+        kind: type
+        description: "'pending' | 'in-progress' | 'done' | 'blocked'"
+    dependencies:
+      - module: MOD-001
+        imports: ["FnNode"]
+        why: "Knows FN structure for status update"
+    internal_only:
+      - "readAndPatchYaml"
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-005
+    name: "Session Recovery"
+    parent: FEAT-005
+    config_slot: "modules.exec"
+    functions: [FN-009]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "getExecutionState"
+        signature: "(graph: DagGraph) => ExecutionState"
+        description: "Analyze current FN statuses and return what to do next"
+      - name: "ExecutionState"
+        kind: type
+        description: "{ ready: FnNode[], blocked: FnNode[], done: FnNode[], pending: FnNode[] }"
+    dependencies:
+      - module: MOD-001
+        imports: ["DagGraph", "FnNode"]
+        why: "Reads node statuses"
+      - module: MOD-002
+        imports: ["getReadyNodes"]
+        why: "Identifies next executable nodes"
+    internal_only: []
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-007
+    name: "ccplan Read-Only Guard Hook"
+    parent: FEAT-007
+    config_slot: "modules.hook"
+    functions: [FN-011, FN-012]
+    file_path: "packages/hook/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "handlePreToolUse"
+        signature: "(event: PreToolUseEvent) => PreToolUseResult"
+        description: "Block write operations when ccplan is active"
+    dependencies:
+      - module: config
+        imports: ["tracking.eclDir"]
+        why: "Check if ccplan session is active by reading ECL status"
+    internal_only:
+      - "isCcplanActive"
+      - "isWriteOperation"
+      - "isEclWrite"
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-006
+    name: "Execution Config"
+    parent: FEAT-006
+    config_slot: "modules.exec"
+    functions: [FN-010]
+    file_path: "packages/exec/src/"
+    entry_point: "index.ts"
+    source: new
+    public_interface:
+      - name: "loadExecConfig"
+        signature: "() => ExecConfig"
+        description: "Load execution config from .devcompanion/exec.json"
+      - name: "ExecConfig"
+        kind: type
+        description: "{ maxConcurrency: number }"
+    dependencies:
+      - module: config
+        imports: ["projectRoot"]
+        why: "Resolve .devcompanion path"
+    internal_only: []
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+# ─── Functions ─────────────────────────────────────────────────
+functions:
+  - id: FN-001
+    name: "parseEclDag"
+    parent: MOD-001
+    visibility: public
+    description: "Parse ECL YAML file and extract FN nodes into a typed DagGraph"
+    input_interface:
+      - name: "eclPath"
+        type: "string"
+        source: parameter
+    output_interface:
+      type: "Promise<DagGraph>"
+      error_cases:
+        - type: "EclParseError"
+          when: "File not found, invalid YAML, or missing functions section"
+    side_effects: [file-read]
+    dependencies: []
+    constraints:
+      - "Must validate FN fields: id, depends_on, output, verify, status are all present"
+      - "Return typed structure, not raw YAML"
+    test_cases:
+      - input: "valid ECL with 3 FNs"
+        expected: "DagGraph with 3 nodes and correct edges"
+        mocks: []
+      - input: "ECL with no functions section"
+        expected: "throws EclParseError"
+        mocks: []
+      - input: "FN missing verify field"
+        expected: "throws EclParseError with field name"
+        mocks: []
+    depends_on: []
+    enables: [FN-003, FN-005, FN-007, FN-009]
+    output:
+      file: "packages/exec/src/parse-ecl-dag.ts"
+      symbol: "parseEclDag"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_parseEclDag.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-002
+    name: "validateFnFields"
+    parent: MOD-001
+    visibility: internal
+    description: "Validate that a raw FN object has all required fields for DAG execution"
+    input_interface:
+      - name: "rawFn"
+        type: "Record<string, unknown>"
+        source: parameter
+    output_interface:
+      type: "FnNode"
+      error_cases:
+        - type: "EclParseError"
+          when: "Missing required field (depends_on, output, verify, status)"
+    side_effects: []
+    dependencies: []
+    constraints:
+      - "Must check: id, name, depends_on, output.file, output.symbol, verify.command, verify.pass_condition, status"
+    test_cases:
+      - input: "complete FN object"
+        expected: "returns typed FnNode"
+        mocks: []
+      - input: "FN missing output.file"
+        expected: "throws with 'missing output.file'"
+        mocks: []
+    depends_on: []
+    enables: [FN-001]
+    output:
+      file: "packages/exec/src/parse-ecl-dag.ts"
+      symbol: "validateFnFields"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_validateFnFields.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-003
+    name: "topologicalSort"
+    parent: MOD-002
+    visibility: public
+    description: "Kahn's algorithm: returns execution layers where each layer's nodes can run in parallel"
+    input_interface:
+      - name: "graph"
+        type: "DagGraph"
+        source: parameter
+    output_interface:
+      type: "ExecutionLayer[]"
+      error_cases:
+        - type: "CycleDetectedError"
+          when: "Dependency graph contains a cycle"
+    side_effects: []
+    dependencies: []
+    constraints:
+      - "Must detect cycles and report involved FN IDs"
+      - "Each layer contains only nodes whose dependencies are in prior layers"
+      - "Pure function, no side effects"
+    test_cases:
+      - input: "linear chain: A→B→C"
+        expected: "[[A], [B], [C]]"
+        mocks: []
+      - input: "diamond: A→B, A→C, B→D, C→D"
+        expected: "[[A], [B,C], [D]]"
+        mocks: []
+      - input: "cycle: A→B→A"
+        expected: "throws CycleDetectedError with [A, B]"
+        mocks: []
+      - input: "no dependencies (all independent)"
+        expected: "[[A, B, C]] (single layer)"
+        mocks: []
+    depends_on: [FN-001]
+    enables: [FN-004, FN-009]
+    output:
+      file: "packages/exec/src/topological-sort.ts"
+      symbol: "topologicalSort"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_topologicalSort.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-004
+    name: "getReadyNodes"
+    parent: MOD-005
+    visibility: public
+    description: "Convenience wrapper: returns getExecutionState(graph).ready"
+    input_interface:
+      - name: "graph"
+        type: "DagGraph"
+        source: parameter
+    output_interface:
+      type: "FnNode[]"
+      error_cases: []
+    side_effects: []
+    dependencies: ["getExecutionState"]
+    constraints:
+      - "Delegates to getExecutionState, returns .ready field"
+      - "Pure function"
+    test_cases:
+      - input: "graph with mixed statuses"
+        expected: "same as getExecutionState(graph).ready"
+        mocks: []
+    depends_on: [FN-009]
+    enables: []
+    output:
+      file: "packages/exec/src/session-recovery.ts"
+      symbol: "getReadyNodes"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_getReadyNodes.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-005
+    name: "buildSubagentContext"
+    parent: MOD-003
+    visibility: public
+    description: "Assemble the minimal context for a subagent to execute one FN"
+    input_interface:
+      - name: "fnId"
+        type: "string"
+        source: parameter
+      - name: "graph"
+        type: "DagGraph"
+        source: parameter
+      - name: "eclPath"
+        type: "string"
+        source: parameter
+    output_interface:
+      type: "Promise<SubagentContext>"
+      error_cases:
+        - type: "Error"
+          when: "FN not found in graph"
+    side_effects: [file-read]
+    dependencies: ["parseEclDag"]
+    constraints:
+      - "Must include: FN spec, output location, parent MOD public_interface, completed deps' outputs"
+      - "Must NOT include: unrelated FNs, confrontation data, probe history"
+      - "Total context size must not exceed 4000 tokens; truncate dep outputs if exceeds"
+    test_cases:
+      - input: "FN-002 with FN-001 done"
+        expected: "context includes FN-002 spec + FN-001 output location"
+        mocks: []
+      - input: "FN with no dependencies"
+        expected: "context with empty completedDeps"
+        mocks: []
+    depends_on: [FN-001]
+    enables: [FN-006]
+    output:
+      file: "packages/exec/src/build-subagent-context.ts"
+      symbol: "buildSubagentContext"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_buildSubagentContext.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-006
+    name: "formatSubagentPrompt"
+    parent: MOD-003
+    visibility: public
+    description: "Convert SubagentContext into a formatted prompt string for the Agent tool"
+    input_interface:
+      - name: "context"
+        type: "SubagentContext"
+        source: parameter
+    output_interface:
+      type: "string"
+      error_cases: []
+    side_effects: []
+    dependencies: []
+    constraints:
+      - "Output must be self-contained: agent can execute from this string alone"
+      - "Include verify command so agent knows how to check its work"
+      - "Include output file path so agent knows where to write"
+    test_cases:
+      - input: "SubagentContext for FN-001"
+        expected: "string containing FN spec, output path, verify command"
+        mocks: []
+    depends_on: [FN-005]
+    enables: []
+    output:
+      file: "packages/exec/src/build-subagent-context.ts"
+      symbol: "formatSubagentPrompt"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_formatSubagentPrompt.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-007
+    name: "updateFnStatus"
+    parent: MOD-004
+    visibility: public
+    description: "Write a FN's status back to the ECL YAML file on disk"
+    input_interface:
+      - name: "eclPath"
+        type: "string"
+        source: parameter
+      - name: "fnId"
+        type: "string"
+        source: parameter
+      - name: "status"
+        type: "FnStatus"
+        source: parameter
+    output_interface:
+      type: "Promise<void>"
+      error_cases:
+        - type: "Error"
+          when: "ECL file not writable or FN not found"
+    side_effects: [file-write]
+    dependencies: []
+    constraints:
+      - "Must preserve all other ECL content unchanged"
+      - "Only modify the specific FN's status field"
+      - "Must be atomic — no partial writes on error"
+      - "Only called by orchestrator (never by subagents) — serialized, no concurrent writes"
+    test_cases:
+      - input: "set FN-001 to done"
+        expected: "ECL file has FN-001 status: done, all else unchanged"
+        mocks: []
+      - input: "FN not found in ECL"
+        expected: "throws Error"
+        mocks: []
+    depends_on: [FN-001]
+    enables: [FN-008, FN-009]
+    output:
+      file: "packages/exec/src/status-manager.ts"
+      symbol: "updateFnStatus"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_updateFnStatus.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-008
+    name: "runVerification"
+    parent: MOD-004
+    visibility: public
+    description: "Run a FN's verify command and return pass/fail result"
+    input_interface:
+      - name: "verifyConfig"
+        type: "{ command: string, pass_condition: string }"
+        source: parameter
+    output_interface:
+      type: "Promise<VerificationResult>"
+      error_cases: []
+    side_effects: [process-spawn]
+    dependencies: []
+    constraints:
+      - "Must capture stdout/stderr for failure diagnosis"
+      - "Timeout after configurable duration (default 60s)"
+      - "Return structured result, not raw exit code"
+    test_cases:
+      - input: "command that exits 0"
+        expected: "{ passed: true, output: ... }"
+        mocks: [child_process.exec]
+      - input: "command that exits 1"
+        expected: "{ passed: false, output: ..., error: ... }"
+        mocks: [child_process.exec]
+      - input: "command that times out"
+        expected: "{ passed: false, error: 'timeout' }"
+        mocks: [child_process.exec]
+    depends_on: []
+    enables: [FN-007]
+    output:
+      file: "packages/exec/src/status-manager.ts"
+      symbol: "runVerification"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_runVerification.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-009
+    name: "getExecutionState"
+    parent: MOD-005
+    visibility: public
+    description: "Analyze all FN statuses and categorize into ready/blocked/done/pending"
+    input_interface:
+      - name: "graph"
+        type: "DagGraph"
+        source: parameter
+    output_interface:
+      type: "ExecutionState"
+      error_cases: []
+    side_effects: []
+    dependencies: ["getReadyNodes"]
+    constraints:
+      - "Pure function"
+      - "ready = pending + all deps done"
+      - "blocked = status blocked"
+      - "done = status done"
+      - "pending = everything else"
+    test_cases:
+      - input: "fresh graph (all pending, some with no deps)"
+        expected: "ready=[no-dep nodes], pending=[rest], done=[], blocked=[]"
+        mocks: []
+      - input: "partially executed graph"
+        expected: "correct categorization of mixed statuses"
+        mocks: []
+    depends_on: [FN-001, FN-003, FN-007]
+    enables: []
+    output:
+      file: "packages/exec/src/session-recovery.ts"
+      symbol: "getExecutionState"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_getExecutionState.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-011
+    name: "handlePreToolUse"
+    parent: MOD-007
+    visibility: public
+    description: "PreToolUse hook: block write operations when ccplan is active"
+    input_interface:
+      - name: "event"
+        type: "PreToolUseEvent"
+        source: parameter
+    output_interface:
+      type: "PreToolUseResult"
+      error_cases: []
+    side_effects: []
+    dependencies: []
+    constraints:
+      - "Must check if ccplan is active (ECL status starts with 'phase-' and not 'phase-10')"
+      - "Block: Edit, Write, Bash commands that write (rm, mv, cp, git commit, etc.)"
+      - "Allow: Read, Glob, Grep, WebSearch, WebFetch, AskUserQuestion"
+      - "Allow: Write to docs/ecl/*.yaml (ccplan's own output)"
+      - "Return { blocked: true, message: 'ccplan is in planning mode...' } when blocked"
+      - "Must execute in <50ms"
+    test_cases:
+      - input: "Edit tool call while ccplan active"
+        expected: "{ blocked: true, message: ... }"
+        mocks: []
+      - input: "Read tool call while ccplan active"
+        expected: "{ blocked: false }"
+        mocks: []
+      - input: "Write to docs/ecl/feature.yaml while ccplan active"
+        expected: "{ blocked: false } (ECL write allowed)"
+        mocks: []
+      - input: "Edit tool call while ccplan NOT active"
+        expected: "{ blocked: false }"
+        mocks: []
+    depends_on: [FN-012]
+    enables: []
+    output:
+      file: "packages/hook/src/pre-tool-use-guard.ts"
+      symbol: "handlePreToolUse"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_handlePreToolUse.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-012
+    name: "isCcplanActive"
+    parent: MOD-007
+    visibility: internal
+    description: "Check if ccplan is currently in planning phases (not implementation)"
+    input_interface: []
+    output_interface:
+      type: "boolean"
+      error_cases: []
+    side_effects: [file-read]
+    dependencies: []
+    constraints:
+      - "Read .devcompanion/.ccplan-active marker file (created by ccplan on start, deleted on exit)"
+      - "Must be fast (<10ms) — just check file existence"
+      - "No YAML parsing needed — presence of marker = active"
+    test_cases:
+      - input: "marker file exists"
+        expected: "true"
+        mocks: [filesystem]
+      - input: "marker file does not exist"
+        expected: "false"
+        mocks: [filesystem]
+    depends_on: []
+    enables: [FN-011]
+    output:
+      file: "packages/hook/src/pre-tool-use-guard.ts"
+      symbol: "isCcplanActive"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_isCcplanActive.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+  - id: FN-010
+    name: "loadExecConfig"
+    parent: MOD-006
+    visibility: public
+    description: "Load ccedit execution config from .devcompanion/exec.json"
+    input_interface: []
+    output_interface:
+      type: "ExecConfig"
+      error_cases: []
+    side_effects: [file-read]
+    dependencies: []
+    constraints:
+      - "Return defaults if file does not exist (maxConcurrency: 3)"
+      - "Validate maxConcurrency is positive integer"
+    test_cases:
+      - input: "file exists with maxConcurrency: 5"
+        expected: "{ maxConcurrency: 5 }"
+        mocks: []
+      - input: "file does not exist"
+        expected: "{ maxConcurrency: 3 } (default)"
+        mocks: []
+    depends_on: []
+    enables: []
+    output:
+      file: "packages/exec/src/config.ts"
+      symbol: "loadExecConfig"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_exec_loadExecConfig.test.ts"
+      pass_condition: "exit 0"
+    status: pending
+
+# ─── Probes ────────────────────────────────────────────────────
+probes:
+  - id: PROBE-001
+    target: FEAT-004
+    question: "Can we write a single FN status field in ECL YAML without corrupting comments/formatting?"
+    method: code-inspection
+    code_path: null
+    result: "js-yaml drops comments on round-trip; yaml package (v2+) preserves comments via parseDocument(). No yaml dep exists in project yet — must add."
+    verdict: feasible
+    date: "2026-05-27"
+    impact_if_infeasible:
+      invalidates: [FEAT-004]
+      alternatives: ["Use regex-based status replacement instead of full YAML parse"]
+
+# ─── Confrontation ─────────────────────────────────────────────
+confrontation:
+  red_team:
+    - id: ATK-004
+      scenario: "Crash between ECL read and write allows dual-orchestrator corruption"
+      severity: critical
+      targets: [FEAT-004]
+    - id: ATK-006
+      scenario: "Shell injection via malicious verify command in ECL YAML"
+      severity: critical
+      targets: [FEAT-004]
+    - id: ATK-009
+      scenario: "Two parallel subagents write to same source file, last-write-wins"
+      severity: critical
+      targets: [FEAT-003]
+    - id: ATK-011
+      scenario: "Non-deterministic topo-sort order causes flaky cross-session behavior"
+      severity: medium
+      targets: [FEAT-002]
+  blue_team:
+    - attack: ATK-004
+      verdict: mitigated
+      mitigation: "Atomic write via temp file + rename; lockfile for multi-instance guard"
+      new_requirements: []
+    - attack: ATK-006
+      verdict: mitigated
+      mitigation: "Use execFile with argv array (no shell); validate command matches allowlist regex"
+      new_requirements: []
+    - attack: ATK-009
+      verdict: mitigated
+      mitigation: "Before dispatching parallel batch, detect same-file FNs and serialize them"
+      new_requirements: []
+    - attack: ATK-011
+      verdict: mitigated
+      mitigation: "Lexicographic priority queue in Kahn's frontier for deterministic ordering"
+      new_requirements: []
+
+# ─── Dependency Graph ──────────────────────────────────────────
+dependency_graph:
+  FEAT-001: []
+  FEAT-002: [FEAT-001]
+  FEAT-003: [FEAT-001, FEAT-002]
+  FEAT-004: [FEAT-001]
+  FEAT-005: [FEAT-001, FEAT-002, FEAT-004]
+  FEAT-006: []
+  FEAT-007: []
+
+# ─── Risk Register ─────────────────────────────────────────────
+risks:
+  - id: RISK-001
+    description: "Concurrent ECL writes from crash/re-invoke could corrupt status"
+    probability: low
+    impact: high
+    mitigation: "Atomic write (temp + rename) + lockfile"
+    status: mitigated
+    related: [ATK-004]
+  - id: RISK-002
+    description: "Shell injection via crafted verify command"
+    probability: low
+    impact: critical
+    mitigation: "execFile with argv array, no shell; allowlist regex validation"
+    status: mitigated
+    related: [ATK-006]
+  - id: RISK-003
+    description: "Parallel subagents writing same source file"
+    probability: medium
+    impact: high
+    mitigation: "Scheduler serializes FNs targeting same output file"
+    status: mitigated
+    related: [ATK-009]
+
+# ─── Decisions Log ─────────────────────────────────────────────
+decisions:
+  - id: DEC-001
+    date: "2026-05-27"
+    phase: 0
+    decision: "Skill named ccedit, separate from ccplan"
+    rationale: "ccplan handles planning only (Phase 0-9), execution is a distinct concern"
+    alternatives_considered:
+      - "ccexec — rejected, less memorable"
+      - "cctask — rejected, conflicts with task tracking tools"
+    reversible: true
+  - id: DEC-002
+    date: "2026-05-27"
+    phase: 0
+    decision: "DAG operates at FN level, not FEAT level"
+    rationale: "FN is the atomic unit that satisfies all 5 atomicity conditions"
+    alternatives_considered:
+      - "FEAT-level DAG — rejected, too coarse for parallel execution"
+      - "New TASK layer — rejected, FN already has sufficient granularity"
+    reversible: true
+  - id: DEC-003
+    date: "2026-05-27"
+    phase: 0
+    decision: "Status persisted by writing back to ECL FN status field"
+    rationale: "ECL is single source of truth, no separate progress file needed"
+    alternatives_considered:
+      - "Separate progress.json — rejected, adds sync complexity"
+    reversible: true
+  - id: DEC-004
+    date: "2026-05-27"
+    phase: 0
+    decision: "Verification failure routes to ccdebug, not internal retry"
+    rationale: "ccdebug has structured debugging methodology; ccedit should not duplicate it"
+    alternatives_considered:
+      - "Internal retry loop — rejected, duplicates ccdebug"
+    reversible: true
+
+  - id: DEC-005
+    date: "2026-05-27"
+    phase: 3
+    decision: "Skill + Library approach: SKILL.md defines workflow, packages/exec/ provides utility functions"
+    rationale: "Deterministic DAG computation, testable, correct for large DAGs (20+ FN)"
+    alternatives_considered:
+      - "Pure Skill (agent does topo-sort mentally) — rejected, unreliable for large DAGs"
+    reversible: true
+  - id: DEC-006
+    date: "2026-05-27"
+    phase: 5
+    decision: "FN-004 (getReadyNodes) becomes thin wrapper of FN-009 (getExecutionState) to eliminate redundancy"
+    rationale: "Critic identified FN-004 as strict subset of FN-009; merged to avoid duplication"
+    alternatives_considered:
+      - "Delete FN-004 entirely — rejected, convenience API is useful for SKILL.md instructions"
+    reversible: true
+  - id: DEC-007
+    date: "2026-05-27"
+    phase: 5
+    decision: "Only orchestrator writes ECL status (never subagents) — eliminates write race"
+    rationale: "Concurrent subagent writes to same YAML file would corrupt; sequential orchestrator writes are safe"
+    alternatives_considered:
+      - "File locking — rejected, complex cross-platform, unnecessary with serialized writes"
+    reversible: true
+  - id: DEC-008
+    date: "2026-05-27"
+    phase: 5
+    decision: "Add /ccedit reset <FN-ID> subcommand to transition blocked → pending after ccdebug fix"
+    rationale: "Without this, blocked nodes have no re-entry path except manual YAML editing"
+    alternatives_considered:
+      - "Auto-detect ccdebug completion — rejected, too coupled"
+    reversible: true
+  - id: DEC-009
+    date: "2026-05-27"
+    phase: 8
+    decision: "ccplan enters read-only mode (like plan mode) — hook blocks all write operations except ECL"
+    rationale: "User requirement: ccplan should only plan, never modify code. Enforced by PreToolUse hook, not agent self-discipline"
+    alternatives_considered:
+      - "Rely on SKILL.md instructions only — rejected, agent might still write"
+      - "Use plan mode directly — rejected, plan mode can't write ECL YAML either"
+    reversible: true
+  - id: DEC-010
+    date: "2026-05-27"
+    phase: 8
+    decision: "Use marker file (.devcompanion/.ccplan-active) for fast hook detection"
+    rationale: "Checking ECL YAML status on every tool call would be too slow; marker file is O(1) stat"
+    alternatives_considered:
+      - "Parse ECL status field — rejected, too slow for PreToolUse hook"
+      - "Environment variable — rejected, not persistent across sessions"
+    reversible: true
+
+# ─── Iteration Log ─────────────────────────────────────────────
+iterations: []
+
+# ─── Feature Guard ────────────────────────────────────────────
+feature_guard:
+  generated: null
+  guards: []
