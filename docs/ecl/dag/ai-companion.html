@@ -1,0 +1,955 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ai-companion — 依赖关系图（DAG）</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.55 system-ui,sans-serif; margin: 0; background:#11151a; color:#e6edf3; }
+  .layout { display:flex; align-items:stretch; min-height:100vh; }
+  /* ---- sidebar ---- */
+  .sidebar { width:300px; flex:0 0 300px; background:#0d1117; border-right:1px solid #222b34;
+    padding:16px 12px; position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto; }
+  .sidebar h1 { font-size:16px; margin:0 0 12px; }
+  .page-link { display:block; color:#c9d4df; text-decoration:none; font-size:14px;
+    padding:8px 10px; margin:3px 0; border-radius:6px; border-left:2px solid transparent; }
+  .page-link:hover { background:#161b22; color:#e6edf3; }
+  .page-link.current { background:#1f6feb22; color:#e6edf3; border-left-color:#58a6ff; }
+  .count { font-size:11px; color:#7d8896; background:#222b34; border-radius:10px; padding:1px 7px; margin-left:4px; }
+  /* ---- main pane ---- */
+  .main { flex:1 1 auto; min-width:0; padding:24px; max-width:1100px; }
+  h1.title { margin:0 0 4px; }
+  .overview { color:#9aa7b4; max-width:70ch; }
+  .legend span { display:inline-block; margin-right:14px; font-size:13px; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+  .graph { background:#0d1117; border:1px solid #222b34; border-radius:10px; padding:12px; margin:16px 0; overflow:auto; }
+  h2 { border-bottom:1px solid #222b34; padding-bottom:6px; margin-top:8px; }
+  h3.sub { border-bottom:1px solid #222b34; padding-bottom:6px; margin-top:28px; color:#c9d4df; }
+  .layerbadge { font-size:12px; padding:2px 9px; border-radius:10px; background:#222b34; color:#9aa7b4; font-weight:normal; vertical-align:middle; }
+  .rec { border:1px solid #222b34; border-left:4px solid #555; border-radius:8px; padding:12px 16px; margin:12px 0; scroll-margin-top:12px; }
+  .rec.done { border-left-color:#1b5e20; } .rec.pending { border-left-color:#37474f; }
+  .rec.blocked { border-left-color:#5d4037; } .rec.terminal { border-left-color:#4a148c; }
+  .rec h3 { margin:0 0 8px; font-size:16px; }
+  .rec.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background:#1f6feb55; } to { background:transparent; } }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#222b34; color:#9aa7b4; font-weight:normal; }
+  /* ---- per-layer 5-question summary ---- */
+  .tree-summary { background:#0d1117; border:1px solid #2d4a63; border-left:4px solid #58a6ff; border-radius:10px; padding:14px 18px; margin:14px 0; }
+  .tree-summary h3 { margin:0 0 10px; font-size:15px; color:#cfe3ff; }
+  .parent { margin:0 0 8px; font-size:13px; color:#9aa7b4; }
+  dl { margin:0; display:grid; grid-template-columns:max-content 1fr; gap:4px 16px; }
+  dt { color:#7d8896; white-space:nowrap; } dd { margin:0; }
+  a { color:#58a6ff; } ul { line-height:1.8; }
+  /* ---- pagination: exactly one page visible ---- */
+  .page { display:none; }
+  .page.active { display:block; }
+</style></head><body>
+<div class="layout">
+  <nav class="sidebar">
+    <h1>ai-companion</h1>
+    <a class="page-link layer-link" data-target="page-overview" href="#page-overview">总览</a>
+<a class="page-link layer-link" data-target="page-Foundation" href="#page-Foundation"><b>基础层</b> <span class="count">6</span></a>
+<a class="page-link layer-link" data-target="page-Capture" href="#page-Capture"><b>捕获层</b> <span class="count">2</span></a>
+<a class="page-link layer-link" data-target="page-Engines" href="#page-Engines"><b>引擎层</b> <span class="count">4</span></a>
+<a class="page-link layer-link" data-target="page-Skills" href="#page-Skills"><b>命令层</b> <span class="count">8</span></a>
+<a class="page-link layer-link" data-target="page-Endpoints" href="#page-Endpoints"><b>终点层</b> <span class="count">3</span></a>
+  </nav>
+  <main class="main">
+    <h1 class="title">ai-companion — 依赖关系图（DAG）</h1>
+    <p class="legend">
+      <span><i class="sw" style="background:#1b5e20"></i>已完成</span>
+      <span><i class="sw" style="background:#37474f"></i>待办</span>
+      <span><i class="sw" style="background:#5d4037"></i>受阻</span>
+      <span><i class="sw" style="background:#4a148c"></i>终点</span>
+      <span>· 点击任意节点 → 查看它的五问记录</span>
+    </p>
+    <section class="page active" data-page="overview" id="page-overview">
+  <h2>总览</h2>
+  <p class="overview">AI Dev Companion 是一个 TypeScript 单体仓库（monorepo），由 12 个包组成。它能够在 函数这一级别的粒度上追踪代码的每一次改动；除此之外，它还自带一套定制的『规划与执行』 工作流（也就是一组 Claude Code 命令／技能），而这个仓库本身就是用这套工作流来开发的。 整个 DAG（有向无环图）自下而上展开：从最底层的共享类型定义出发，向上经过变更追踪核心、 大模型（LLM）与执行（exec）两大引擎、接好线的各个命令，最后抵达三个最终交付的终点： 一条真正能运转起来的命令工作流、一个可用的 dashboard（网页界面），以及一套可以安装到 其它仓库里的分发机制。</p>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_01["FEAT-aic-01<br>共享类型 @aidev/types"]
+n_FEAT_aic_02["FEAT-aic-02<br>语法解析与函数身份 @aidev/ast"]
+n_FEAT_aic_03["FEAT-aic-03<br>变更追踪核心 @aidev/core"]
+n_FEAT_aic_04["FEAT-aic-04<br>历史存储 @aidev/history"]
+n_FEAT_aic_05["FEAT-aic-05<br>HTML 报告渲染 @aidev/render"]
+n_FEAT_aic_06["FEAT-aic-06<br>aidev 命令行工具 @aidev/cli"]
+n_FEAT_aic_07["FEAT-aic-07<br>PostToolUse 钩子 @aidev/hook"]
+n_FEAT_aic_08["FEAT-aic-08<br>后台常驻进程 @aidev/daemon"]
+n_FEAT_aic_09["FEAT-aic-09<br>Claude 命令行封装 @aidev/llm"]
+n_FEAT_aic_11["FEAT-aic-11<br>ECL FN-DAG 执行器 @aidev/exec"]
+n_FEAT_aic_10["FEAT-aic-10<br>Onboarding 流水线 scripts/lib"]
+n_FEAT_aic_12["FEAT-aic-12<br>想法清单与研究 @aidev/idea"]
+n_FEAT_aic_13["FEAT-aic-13<br>Dashboard 网页界面 @aidev/dashboard"]
+n_FEAT_aic_14["FEAT-aic-14<br>/idea 命令"]
+n_FEAT_aic_15["FEAT-aic-15<br>/ccdiscuss 命令（最小可用版本）"]
+n_FEAT_aic_16["FEAT-aic-16<br>/ccplan 命令"]
+n_FEAT_aic_17["FEAT-aic-17<br>/ccedit 命令"]
+n_FEAT_aic_18["FEAT-aic-18<br>/ccdebug 命令"]
+n_FEAT_aic_19["FEAT-aic-19<br>/cconboard 命令"]
+n_FEAT_aic_20["FEAT-aic-20<br>/ccoverview 命令"]
+n_FEAT_aic_21["FEAT-aic-21<br>安装／更新／查看状态／卸载 生命周期 + 注册表"]
+n_FEAT_aic_22["FEAT-aic-22<br>可运转的命令工作流"]
+n_FEAT_aic_23["FEAT-aic-23<br>/ccdiscuss 强制层（已推迟）"]
+n_FEAT_aic_01 --> n_FEAT_aic_02
+n_FEAT_aic_02 --> n_FEAT_aic_03
+n_FEAT_aic_03 --> n_FEAT_aic_04
+n_FEAT_aic_04 --> n_FEAT_aic_05
+n_FEAT_aic_05 --> n_FEAT_aic_06
+n_FEAT_aic_03 --> n_FEAT_aic_07
+n_FEAT_aic_04 --> n_FEAT_aic_07
+n_FEAT_aic_07 --> n_FEAT_aic_08
+n_FEAT_aic_02 --> n_FEAT_aic_10
+n_FEAT_aic_09 --> n_FEAT_aic_10
+n_FEAT_aic_09 --> n_FEAT_aic_12
+n_FEAT_aic_05 --> n_FEAT_aic_13
+n_FEAT_aic_12 --> n_FEAT_aic_14
+n_FEAT_aic_10 --> n_FEAT_aic_16
+n_FEAT_aic_15 --> n_FEAT_aic_16
+n_FEAT_aic_11 --> n_FEAT_aic_17
+n_FEAT_aic_16 --> n_FEAT_aic_17
+n_FEAT_aic_17 --> n_FEAT_aic_18
+n_FEAT_aic_10 --> n_FEAT_aic_19
+n_FEAT_aic_05 --> n_FEAT_aic_20
+n_FEAT_aic_06 --> n_FEAT_aic_21
+n_FEAT_aic_14 --> n_FEAT_aic_22
+n_FEAT_aic_15 --> n_FEAT_aic_22
+n_FEAT_aic_16 --> n_FEAT_aic_22
+n_FEAT_aic_17 --> n_FEAT_aic_22
+n_FEAT_aic_18 --> n_FEAT_aic_22
+n_FEAT_aic_19 --> n_FEAT_aic_22
+n_FEAT_aic_15 --> n_FEAT_aic_23
+class n_FEAT_aic_01,n_FEAT_aic_02,n_FEAT_aic_03,n_FEAT_aic_04,n_FEAT_aic_05,n_FEAT_aic_06,n_FEAT_aic_07,n_FEAT_aic_08,n_FEAT_aic_09,n_FEAT_aic_11,n_FEAT_aic_10,n_FEAT_aic_12,n_FEAT_aic_14,n_FEAT_aic_15,n_FEAT_aic_16,n_FEAT_aic_17,n_FEAT_aic_18,n_FEAT_aic_19,n_FEAT_aic_20 done;
+class n_FEAT_aic_13,n_FEAT_aic_21,n_FEAT_aic_22 terminal;
+class n_FEAT_aic_23 pending;
+click n_FEAT_aic_01 call nodeClick("FEAT-aic-01")
+click n_FEAT_aic_02 call nodeClick("FEAT-aic-02")
+click n_FEAT_aic_03 call nodeClick("FEAT-aic-03")
+click n_FEAT_aic_04 call nodeClick("FEAT-aic-04")
+click n_FEAT_aic_05 call nodeClick("FEAT-aic-05")
+click n_FEAT_aic_06 call nodeClick("FEAT-aic-06")
+click n_FEAT_aic_07 call nodeClick("FEAT-aic-07")
+click n_FEAT_aic_08 call nodeClick("FEAT-aic-08")
+click n_FEAT_aic_09 call nodeClick("FEAT-aic-09")
+click n_FEAT_aic_11 call nodeClick("FEAT-aic-11")
+click n_FEAT_aic_10 call nodeClick("FEAT-aic-10")
+click n_FEAT_aic_12 call nodeClick("FEAT-aic-12")
+click n_FEAT_aic_13 call nodeClick("FEAT-aic-13")
+click n_FEAT_aic_14 call nodeClick("FEAT-aic-14")
+click n_FEAT_aic_15 call nodeClick("FEAT-aic-15")
+click n_FEAT_aic_16 call nodeClick("FEAT-aic-16")
+click n_FEAT_aic_17 call nodeClick("FEAT-aic-17")
+click n_FEAT_aic_18 call nodeClick("FEAT-aic-18")
+click n_FEAT_aic_19 call nodeClick("FEAT-aic-19")
+click n_FEAT_aic_20 call nodeClick("FEAT-aic-20")
+click n_FEAT_aic_21 call nodeClick("FEAT-aic-21")
+click n_FEAT_aic_22 call nodeClick("FEAT-aic-22")
+click n_FEAT_aic_23 call nodeClick("FEAT-aic-23")</pre></div>
+  <h3 class="sub">里程碑详解</h3>
+  <section class="rec done" id="FEAT-aic-01">
+  <h3>FEAT-aic-01 · 共享类型 (@aidev/types) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是所有包共用的『接口词汇表』，定义了变更分析、模块化、历史记录以及 ECL 相关的各种类型。</dd>
+    <dt>为什么做</dt><dd>其它每一个包都要用到这些类型；如果没有一份统一的契约，各个包对同一个概念的理解就会逐渐走样、彼此对不上。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/types/src，是一个只含接口定义、不含任何运行逻辑的纯类型包，例如 FunctionAnalysis、ProjectIndex、ChangeRecord 等接口。</dd>
+    <dt>为什么这样做</dt><dd>把一个零依赖的类型包放在整张依赖图的最底层，可以让所有包都引用同一份契约，又不会引入循环依赖。</dd>
+    <dt>期望结果</dt><dd>所有包都引入 @aidev/types，并以这唯一一份事实来源为准做类型检查。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-02">
+  <h3>FEAT-aic-02 · 语法解析与函数身份 (@aidev/ast) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>面向 Python 和 TypeScript 的 tree-sitter WASM 解析器，负责从代码中提取出函数，并为每个函数计算一个稳定不变的身份哈希。</dd>
+    <dt>为什么做</dt><dd>要在函数这一级别追踪代码，就必须给每个函数一个稳定的标识符——这个标识符不能因为代码行号上下挪动就发生变化。</dd>
+    <dt>如何做</dt><dd>由几个文件协作完成：wasm-resolver.ts 负责定位 WASM 文件路径，parser-factory.ts 负责创建解析器，parser.ts／ts-parser.ts 分别处理 Python 与 TypeScript，multi-lang.ts 通过 parseFileAuto 按文件扩展名分发。函数身份的算法是 sha256(文件路径+类名+函数名+参数类型)[0:16]。</dd>
+    <dt>为什么这样做</dt><dd>用代码结构（而不是行号）来计算身份，函数即使被反复编辑、位置挪动，它的历史记录也能连贯保留；采用 WASM 解析器则免去了本地编译原生模块的麻烦。</dd>
+    <dt>期望结果</dt><dd>parseFileAuto 能从 .py／.ts 文件中提取出函数；同一个函数即使在文件里被上下移动，也会算出完全相同的哈希值。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-03">
+  <h3>FEAT-aic-03 · 变更追踪核心 (@aidev/core) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是整个产品的核心，集成了一整套能力：解析 diff、给变更打上注释、做变更分析（既有启发式规则，也有大模型分析）、计算模块化指标，以及生成测试。</dd>
+    <dt>为什么做</dt><dd>它是整个产品的心脏：要搞清楚到底是哪些函数被改了、为什么改、以及这些改动需要配上什么样的测试。</dd>
+    <dt>如何做</dt><dd>按子系统分文件夹：diff/ 负责解析统一格式的 diff 并与 git 集成，analysis/ 负责按函数粒度做分析（含批量处理），modularity/ 负责衡量内聚与耦合并生成契约，test-gen/ 负责为 Python 和 TypeScript 生成测试骨架。</dd>
+    <dt>为什么这样做</dt><dd>把 diff、分析、模块化、测试生成各自拆成独立的子系统文件夹，它们就能在共用同一个 ast 层的同时，各自被单独测试、互不牵连。</dd>
+    <dt>期望结果</dt><dd>给定一个 git diff，系统能把它解析成带注释的、函数级别的变更清单，并附带自动生成的测试骨架。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-04">
+  <h3>FEAT-aic-04 · 历史存储 (@aidev/history) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个用纯 JSON 文件来存储数据的存储层，分别保存评审记录（reviews/）、历史记录（history/）和索引文件（index.json）。</dd>
+    <dt>为什么做</dt><dd>为了能够随时间推移追踪代码变更，又不想引入任何数据库依赖。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/history/src，把数据以 JSON 文件的形式存放在 .devcompanion/ 目录下；其中 ProjectIndex 带有一份 function_index（函数索引）。</dd>
+    <dt>为什么这样做</dt><dd>采用纯 JSON、不依赖数据库，可以让这个 companion 直接塞进任何仓库就能用，而且存下来的内容人可以直接打开查看。</dd>
+    <dt>期望结果</dt><dd>变更记录能被持久化保存、之后又能重新加载回来；index.json 把函数的哈希值映射到它对应的历史记录。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-05">
+  <h3>FEAT-aic-05 · HTML 报告渲染 (@aidev/render) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把带注释的内容渲染成 HTML 报告，包含两种视图：单次会话视图（session view）和代码库 onboarding 视图（onboard view）。</dd>
+    <dt>为什么做</dt><dd>让追踪到的代码变更，以及对代码库做的 onboarding 分析，能以人能读懂的方式呈现出来。</dd>
+    <dt>如何做</dt><dd>renderSessionToHtml 按『改动原因』把变更分组，并内嵌对应的 diff；renderOnboardHtml 则渲染模块、函数和整体概览。</dd>
+    <dt>为什么这样做</dt><dd>在服务端直接渲染出静态 HTML，既不需要任何前端构建步骤，生成的文件又可以在任何地方直接打开。</dd>
+    <dt>期望结果</dt><dd>一个 ReviewSession 或 ProjectIndex 能被渲染成一个自包含的、单独的 HTML 文件。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-06">
+  <h3>FEAT-aic-06 · aidev 命令行工具 (@aidev/cli) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个基于 Commander 的命令行工具 `aidev`，提供 init、review、render、history、onboard、analyze、idea 等子命令。</dd>
+    <dt>为什么做</dt><dd>提供一个由人手动触发追踪和报告的入口，独立于自动触发的 hook 之外。</dd>
+    <dt>如何做</dt><dd>调用方式是 packages/cli/dist/main.js &lt;子命令&gt; -p &lt;项目路径&gt;；它把 core、history、render 三个包封装起来供使用。</dd>
+    <dt>为什么这样做</dt><dd>命令行工具提供了一种『由用户主动触发』的方式，与自动触发的 hook 并存，而两者共用同一套核心。</dd>
+    <dt>期望结果</dt><dd>执行 `aidev &lt;子命令&gt; -p &lt;路径&gt;` 就能针对某个目标项目运行对应的子命令。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-07">
+  <h3>FEAT-aic-07 · PostToolUse 钩子 (@aidev/hook) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个 Claude Code 的 PostToolUse 处理器（必须在 100 毫秒内完成），负责在每次编辑动作之后把改动记录到函数级别。</dd>
+    <dt>为什么做</dt><dd>用来自动捕获：AI 的每一次编辑都会变成一条带有『改动原因』的可追踪事件，全程不需要人手动登记。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/hook/src，对 .py／.ts 文件精确记录到函数级别，对不支持解析的扩展名（如 .yaml／.md）则退化为文件级别记录；记录下来的事件被排队写入 .devcompanion/queue/events.jsonl。</dd>
+    <dt>为什么这样做</dt><dd>对不支持的文件采取『退化而不是丢弃』的做法，可以保留一份完整、不缺漏的审计记录；而 100 毫秒的上限则保证编辑器始终流畅、不卡顿。</dd>
+    <dt>期望结果</dt><dd>对一个 .py／.ts／.yaml／.md 文件做一次编辑，队列里就恰好多出一条对应的事件。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-08">
+  <h3>FEAT-aic-08 · 后台常驻进程 (@aidev/daemon) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个后台常驻进程，从队列里取出事件，异步地完成耗时的 diff 计算与存储工作。</dd>
+    <dt>为什么做</dt><dd>把繁重的 diff、分析、存储等工作挪到关键路径之外延后处理，从而让 hook 始终保持快速。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/daemon/src，负责把事件队列里的事件逐条取出，并异步地运行 hook 那部分真正耗时的处理逻辑。</dd>
+    <dt>为什么这样做</dt><dd>把『捕获』（由 hook 完成）和『处理』（由 daemon 完成）拆开，可以让同步执行的 hook 始终守在它的延迟预算之内。</dd>
+    <dt>期望结果</dt><dd>排在队列里的事件会被处理进历史记录，整个过程不会阻塞、拖慢编辑动作。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-09">
+  <h3>FEAT-aic-09 · Claude 命令行封装 (@aidev/llm) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>对 Claude 命令行的一层薄封装，主要提供 callClaude 和 preflight 两个能力。</dd>
+    <dt>为什么做</dt><dd>把所有调用大模型的逻辑收拢到同一个地方，这样变更分析、onboarding、idea 这些功能就不必各自重复造一遍。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/llm/src，是一个独立的包；它负责拉起 Claude 命令行进程，并处理调用前的环境检查（preflight）。</dd>
+    <dt>为什么这样做</dt><dd>选择封装命令行（而不是某个 SDK），既可以直接复用用户本机已有的 Claude 登录凭据，又能把额外依赖压到最少。</dd>
+    <dt>期望结果</dt><dd>callClaude 能返回模型的输出；当 Claude 命令行不可用时，preflight 会立刻失败、尽早报错。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-11">
+  <h3>FEAT-aic-11 · ECL FN-DAG 执行器 (@aidev/exec) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是 /ccedit 背后的执行引擎：解析 ECL 的 FN 层 DAG、做拓扑排序、找出当前可以开跑的节点、运行验证、再把状态写回去。</dd>
+    <dt>为什么做</dt><dd>把一份已经批准的计划（ECL），变成一次按依赖顺序、可以并行的真实执行。</dd>
+    <dt>如何做</dt><dd>由若干能力组成：parseEclDag（解析）、validateFnFields（字段校验）、topologicalSort（用 Kahn 算法把图排成 ExecutionLayer[] 一层层）、getReadyNodes（找出可执行节点）、runVerification（运行验证）、updateFnStatus（更新状态）；命令行提供 parse、state、set-status、verify 等子命令。runVerification 里还带有针对 Win32 的进程拉起回退处理。</dd>
+    <dt>为什么这样做</dt><dd>这个执行器只依赖 `yaml` 这一个库，因此可以独立、可复用地使用；而拓扑排序分出来的每一层，正好把可以并行的独立节点暴露出来，交给多个并行的子智能体（subagent）去跑。</dd>
+    <dt>期望结果</dt><dd>一份带有 functions: DAG 的 ECL，能被成功解析、排成一层层，并报告出哪些节点已就绪、哪些被阻塞。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-10">
+  <h3>FEAT-aic-10 · Onboarding 流水线 (scripts/lib) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一条完整的流水线，依次是：探测项目类型 → 用 AST 扫描代码 → 用大模型分析每个函数 → 推断出语义层面的 ECL → 生成测试骨架 → 生成概览 HTML。</dd>
+    <dt>为什么做</dt><dd>这是 /cconboard 以及 /ccplan 第 10 阶段背后的引擎，用来端到端地读懂一个已有的代码库。</dd>
+    <dt>如何做</dt><dd>入口 run-onboarding.ts 调用 onboarding-pipeline.ts 来编排全过程；其中 enhanced-analyzer.ts 负责逐个函数分析其 why／what／how，opus-ecl-generator.ts 负责生成 feature 层的 ECL，ecl-inferrer.ts 负责推断。最终产出 .devcompanion/analysis.json 以及 docs/ecl/&lt;项目名&gt;-features.yaml。</dd>
+    <dt>为什么这样做</dt><dd>采用 Opus→Haiku→Opus 的分级策略：用便宜的 Haiku 做逐函数分析以控制成本，而在首尾两端用更强的 Opus 来做整体理解与综合归纳。</dd>
+    <dt>期望结果</dt><dd>对一个仓库运行它，就能产出 analysis.json、一份 feature 级别的 ECL，以及一批测试骨架。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-12">
+  <h3>FEAT-aic-12 · 想法清单与研究 (@aidev/idea) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>/idea 背后的后端：一个用来存放想法清单（backlog）的存储层，加上一个能对想法做研究的执行器。</dd>
+    <dt>为什么做</dt><dd>让人能在不离开当前工作流的情况下，随手记下想法、并触发对它的研究。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/idea/src，把想法存放在 .devcompanion/ideas/ 目录下；做研究的执行器则调用 @aidev/llm。</dd>
+    <dt>为什么这样做</dt><dd>用一个真正的包来支撑 /idea，可以让想法的存储与研究逻辑能够被测试，而不是东一处西一处临时拼凑。</dd>
+    <dt>期望结果</dt><dd>/idea 的 add、list、research、show 子命令都能正常地保存和取回想法。</dd>
+  </dl>
+</section>
+<section class="rec terminal" id="FEAT-aic-13">
+  <h3>FEAT-aic-13 · Dashboard 网页界面 (@aidev/dashboard) <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个基于 Fastify 的网页界面，负责扫描各个项目，并把它们的报告呈现出来。</dd>
+    <dt>为什么做</dt><dd>为所有被扫描过的项目提供一个可以集中浏览的入口，而不只是散落在各个仓库里的一个个 HTML 文件。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/dashboard/src，是一个 Fastify 服务器；通过 npm run dashboard:start｜stop｜restart｜status 来管理。它在代码上是独立的，只消费已经渲染好的报告。</dd>
+    <dt>为什么这样做</dt><dd>用一个独立的 Web 服务器，把界面的生命周期和变更追踪核心彻底解耦开。</dd>
+    <dt>期望结果</dt><dd>执行 dashboard:start 后，会启动一个界面，列出所有被扫描过的项目及其报告。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-14">
+  <h3>FEAT-aic-14 · /idea 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>对应想法清单的斜杠命令，提供 add、list、research、show 等子命令。</dd>
+    <dt>为什么做</dt><dd>让想法清单可以直接从 Claude Code 里被调用、被用到。</dd>
+    <dt>如何做</dt><dd>完全自包含在 .claude/commands/idea.md 这一个文件里（没有单独的 skills/idea/ 目录），内部调用 @aidev/idea。</dd>
+    <dt>为什么这样做</dt><dd>之所以完全自包含，是因为它要做的事足够简单，不需要再单独写一份 SKILL.md。</dd>
+    <dt>期望结果</dt><dd>在一个 Claude Code 会话里，/idea 的各个子命令都能正常工作。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-15">
+  <h3>FEAT-aic-15 · /ccdiscuss 命令（最小可用版本） <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个在正式规划之前先做的、尽力而为的六步对齐循环：先由人写下自己期望的结果，然后 AI 抛出『五个问题』并标出双方理解出现分歧的地方，最终产出一份对齐好的 ECL。</dd>
+    <dt>为什么做</dt><dd>在还没开始为任何代码做规划之前，就先把人和 AI 之间理解上的分歧找出来。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccdiscuss.md 和 skills/ccdiscuss/SKILL.md 两个文件定义；它会写出 docs/ecl/*.yaml；/ccplan 在运行时会『如果发现它的产物存在就读取』，但并不强制（没有门禁）。</dd>
+    <dt>为什么这样做</dt><dd>把它定位成一种尽力而为的自律习惯（而不是强制的门禁），这样它能带来对齐的好处，又不会卡住整条流水线——真正的强制层被有意推迟到后面（FEAT-aic-23）。</dd>
+    <dt>期望结果</dt><dd>运行 /ccdiscuss 会产出一份对齐好的 ECL，里面包含那五个问题以及标记出来的分歧点。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-16">
+  <h3>FEAT-aic-16 · /ccplan 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一套『先发散、再收敛』的需求工程方法（一个包含 12 个阶段的螺旋流程，其中第 9 阶段设有一道评审门禁）；最终产出一份 ECL。</dd>
+    <dt>为什么做</dt><dd>把模糊不清、相互冲突的需求，转化成一份经过验证、并经受过对抗性检查的计划。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccplan.md 和 skills/ccplan/SKILL.md（外加 ecl-schema.md）定义；如果 /ccdiscuss 产出的 ECL 存在，它会读取；第 10 阶段会用到 onboarding 流水线。</dd>
+    <dt>为什么这样做</dt><dd>在第 9 阶段设一道明确的『停下来等人批准』的门禁，让整个过程在人点头之前都保持只读、不动代码。</dd>
+    <dt>期望结果</dt><dd>运行 /ccplan 会产出一份获批的 ECL（含 REQ／FEAT／MOD／FN 以及 dependency_graph 依赖图）。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-17">
+  <h3>FEAT-aic-17 · /ccedit 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>针对一份已获批的 ECL，按 DAG 驱动执行：先做拓扑排序，再为每一个相互独立的 FN 节点派出一个子智能体（subagent），运行验证，并把状态写回去。</dd>
+    <dt>为什么做</dt><dd>按依赖顺序把计划执行起来，既能并行，又能在失败时自动转交处理。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccedit.md 和 skills/ccedit/SKILL.md 定义；它驱动 @aidev/exec；遇到失败时会把问题转交给 /ccdebug。</dd>
+    <dt>为什么这样做</dt><dd>只有总协调者才会写状态（用『先写临时文件再原子重命名』的方式），各个子智能体绝不写状态——以此防止并发竞争把状态写坏。</dd>
+    <dt>期望结果</dt><dd>对一份已获批的 ECL 运行 /ccedit，它会执行已就绪的节点、做验证，并更新状态。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-18">
+  <h3>FEAT-aic-18 · /ccdebug 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一条调试链路：从失败出发 → 定位到出问题的源函数 → 查阅它的变更历史 → 找出根本原因 → 修复 → 记录下来；并坚持『改代码而不是改测试』、最多重试 3 次、修完后跑完整回归。</dd>
+    <dt>为什么做</dt><dd>在执行过程中某项验证失败时，把这个失败闭环地解决掉。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccdebug.md 和 skills/ccdebug/SKILL.md 定义；它会消费历史记录，用来追踪那个出问题的函数。</dd>
+    <dt>为什么这样做</dt><dd>强制要求『改代码而不是改测试』再加上重试次数上限，可以阻止智能体靠『把测试改松』来假装通过，或者陷入无限循环。</dd>
+    <dt>期望结果</dt><dd>一项失败的验证会被追溯到根本原因并修复，全程不动测试；如果 3 次仍未修好，就停下来。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-19">
+  <h3>FEAT-aic-19 · /cconboard 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把一个已有的代码库接入进来（onboard）：扫描、分析、模块化、补测试、写文档；并把原始版本归档备份。</dd>
+    <dt>为什么做</dt><dd>把一个杂乱无章或者不熟悉的仓库纳入这个 companion 的管理，并留下一份完整的审计记录。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/cconboard.md 和 skills/cconboard/SKILL.md（外加 ol-schema.md）定义；它驱动 onboarding 流水线；并把原始版本归档到 archive/&lt;时间戳&gt;/ 目录下。</dd>
+    <dt>为什么这样做</dt><dd>在重构之前先把原始版本归档，可以让每一处改动都可回退、可审计。</dd>
+    <dt>期望结果</dt><dd>运行 /cconboard 会得到模块化好、带测试、有文档的代码，外加一份 onboarding 日志，以及一份带有 guard（守卫）的 ECL。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-20">
+  <h3>FEAT-aic-20 · /ccoverview 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一层很薄的封装，用来生成项目的概览 HTML（默认产出中英双语两份）。</dd>
+    <dt>为什么做</dt><dd>用一条命令，就能为当前这个仓库（重新）生成那份面向人阅读的项目概览。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccoverview.md 和 skills/ccoverview/SKILL.md 定义；它封装了 scripts/generate-overview.ts；加上 --skip-translation 参数则只产出单独一份 overview.html。</dd>
+    <dt>为什么这样做</dt><dd>做成一层薄封装（且永远不带 --target），可以把它牢牢限定在当前项目范围内，又避免把脚本逻辑重复抄一遍。</dd>
+    <dt>期望结果</dt><dd>/ccoverview 会产出 overview-en.html 和 overview-zh.html 两份文件（若加 --skip-translation 则只产出一份 overview.html）。</dd>
+  </dl>
+</section>
+<section class="rec terminal" id="FEAT-aic-21">
+  <h3>FEAT-aic-21 · 安装／更新／查看状态／卸载 生命周期 + 注册表 <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把这个 companion 安装到其它仓库里去——整个过程是幂等的，并由一份注册表（registry）追踪。</dd>
+    <dt>为什么做</dt><dd>让其它项目能够采用这个 companion（它的各个命令、配置和 hook），而不必靠人手动把文件复制过去。</dd>
+    <dt>如何做</dt><dd>命令是 scripts/install.ts &lt;目标路径&gt; [--enforce] [--no-commands]；配套还有 update.ts／status.ts／uninstall.ts；由注册表来追踪每一次安装。目前已经装进了 5 个相邻的仓库。</dd>
+    <dt>为什么这样做</dt><dd>正因为它幂等、又有注册表追踪，所以重复运行安装是安全的，而每个目标仓库的更新内容也都能逐个对比（diff）出来。</dd>
+    <dt>期望结果</dt><dd>向某个目标仓库安装时，会把命令、配置、hook 都接好；status／update／uninstall 负责后续管理；重复安装则是一个无副作用的空操作。</dd>
+  </dl>
+</section>
+<section class="rec terminal" id="FEAT-aic-22">
+  <h3>FEAT-aic-22 · 可运转的命令工作流 <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一整条『发散 → 规划 → 执行 → 调试』的完整工作流（/idea → /ccdiscuss → /ccplan → /ccedit → /ccdebug，再加上 /cconboard），全部接好线、可以真正使用。</dd>
+    <dt>为什么做</dt><dd>这个仓库本身就是用它自己的这条流水线来开发的——所以『这条流水线能够运转起来』本身，就是这个项目最主要的交付物。</dd>
+    <dt>如何做</dt><dd>全部 7 条命令都已接好（.claude/commands/* 加上 skills/*/SKILL.md）；它们之间靠 ECL 的 YAML 文件串接起来；这一切已经在 commit d683ce4 中落地。</dd>
+    <dt>为什么这样做</dt><dd>各条命令之间通过持久化的 ECL 文件来交接（『发现就读取』），因此整条链路是可自由组合的，而不是一个铁板一块的单体。</dd>
+    <dt>期望结果</dt><dd>一个改动可以借助这些斜杠命令，从想法 → 讨论 → 规划 → 编辑 → 调试，端到端地完整流转。</dd>
+  </dl>
+</section>
+<section class="rec pending" id="FEAT-aic-23">
+  <h3>FEAT-aic-23 · /ccdiscuss 强制层（已推迟） <span class="badge">待办</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把 /ccdiscuss 的对齐从『尽力而为』升级成一道强制门禁，包含三部分：对齐门禁、价值验证步骤，以及对 ecl-parser 的改造。</dd>
+    <dt>为什么做</dt><dd>目前最小可用版本的 /ccdiscuss 只是建议性质的；引入强制层之后，对齐就会成为开始规划之前一道硬性的前置条件。</dd>
+    <dt>如何做</dt><dd>在 /ccplan 之前加一道门禁，再加一个价值验证步骤，外加解析器的改造——这些在 /ccdiscuss 最小可用版本的 ECL 里就已经被明确标注为推迟。</dd>
+    <dt>为什么这样做</dt><dd>这是有意推迟的：先把建议性质的最小可用版本发出去，用它验证那套五问循环到底值不值得，然后再决定是否花力气去做强制的那套机制。</dd>
+    <dt>期望结果</dt><dd>对齐成为一个可被检查的前置条件；当 ECL 没有对齐时，/ccplan 会拒绝执行或者打上标记。</dd>
+  </dl>
+</section>
+</section>
+    <section class="page" data-page="Foundation" id="page-Foundation">
+  <h2>基础层 技能树</h2>
+  <section class="tree-summary" data-layer-summary="Foundation">
+  <h3>基础层 技能树 · 五问总结</h3>
+  <dl>
+    <dt>是什么</dt><dd>这是整个产品最底层的纵向链路，从最下面的『共享类型定义』一路往上，依次是：类型定义、代码语法解析（AST）、变更分析核心、历史存储、HTML 报告渲染、命令行工具。它负责把『代码发生了什么变化』这件事，在每个函数的粒度上解析出来、记录下来、再呈现给人看。</dd>
+    <dt>为什么做</dt><dd>整个 AI Dev Companion 要做的事，是在函数这一级别追踪代码改动并解释改动的原因。要做到这一点，必须先有一套稳定的底座：能解析代码、能给每个函数一个不随行号变动的稳定身份、能把变更存下来、能渲染成报告。没有这一层，上面的一切都无从谈起。</dd>
+    <dt>如何做</dt><dd>六个包按单向依赖串成一条链：类型定义（只定义接口、不含运行逻辑）被语法解析使用，语法解析被变更核心使用，变更核心被历史存储使用，再依次到报告渲染和命令行工具。每一层只依赖它的上一层，不允许反向依赖。</dd>
+    <dt>为什么这样做</dt><dd>把零依赖的『类型定义』放在整条链的最底部，让所有包都引用同一份契约，就不会出现互相循环引用的问题；而严格分层让变更解析、分析、存储、渲染这些子系统可以各自独立测试，改动一处不会牵连全身。</dd>
+    <dt>期望结果</dt><dd>给定一个 git diff，系统能把它解析成『哪些函数改了、改了什么』，存进历史记录，并渲染成一份 HTML 报告；同时用户也能通过 aidev 命令行手动触发这整套流程。</dd>
+  </dl>
+</section>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_01["FEAT-aic-01<br>共享类型 @aidev/types"]
+n_FEAT_aic_02["FEAT-aic-02<br>语法解析与函数身份 @aidev/ast"]
+n_FEAT_aic_03["FEAT-aic-03<br>变更追踪核心 @aidev/core"]
+n_FEAT_aic_04["FEAT-aic-04<br>历史存储 @aidev/history"]
+n_FEAT_aic_05["FEAT-aic-05<br>HTML 报告渲染 @aidev/render"]
+n_FEAT_aic_06["FEAT-aic-06<br>aidev 命令行工具 @aidev/cli"]
+n_FEAT_aic_07["FEAT-aic-07<br>PostToolUse 钩子 @aidev/hook"]
+n_FEAT_aic_10["FEAT-aic-10<br>Onboarding 流水线 scripts/lib"]
+n_FEAT_aic_13["FEAT-aic-13<br>Dashboard 网页界面 @aidev/dashboard"]
+n_FEAT_aic_20["FEAT-aic-20<br>/ccoverview 命令"]
+n_FEAT_aic_21["FEAT-aic-21<br>安装／更新／查看状态／卸载 生命周期 + 注册表"]
+n_FEAT_aic_01 --> n_FEAT_aic_02
+n_FEAT_aic_02 --> n_FEAT_aic_03
+n_FEAT_aic_03 --> n_FEAT_aic_04
+n_FEAT_aic_04 --> n_FEAT_aic_05
+n_FEAT_aic_05 --> n_FEAT_aic_06
+n_FEAT_aic_03 --> n_FEAT_aic_07
+n_FEAT_aic_04 --> n_FEAT_aic_07
+n_FEAT_aic_02 --> n_FEAT_aic_10
+n_FEAT_aic_05 --> n_FEAT_aic_13
+n_FEAT_aic_05 --> n_FEAT_aic_20
+n_FEAT_aic_06 --> n_FEAT_aic_21
+class n_FEAT_aic_01,n_FEAT_aic_02,n_FEAT_aic_03,n_FEAT_aic_04,n_FEAT_aic_05,n_FEAT_aic_06,n_FEAT_aic_07,n_FEAT_aic_10,n_FEAT_aic_20 done;
+class n_FEAT_aic_13,n_FEAT_aic_21 terminal;
+click n_FEAT_aic_01 call nodeClick("FEAT-aic-01")
+click n_FEAT_aic_02 call nodeClick("FEAT-aic-02")
+click n_FEAT_aic_03 call nodeClick("FEAT-aic-03")
+click n_FEAT_aic_04 call nodeClick("FEAT-aic-04")
+click n_FEAT_aic_05 call nodeClick("FEAT-aic-05")
+click n_FEAT_aic_06 call nodeClick("FEAT-aic-06")
+click n_FEAT_aic_07 call nodeClick("FEAT-aic-07")
+click n_FEAT_aic_10 call nodeClick("FEAT-aic-10")
+click n_FEAT_aic_13 call nodeClick("FEAT-aic-13")
+click n_FEAT_aic_20 call nodeClick("FEAT-aic-20")
+click n_FEAT_aic_21 call nodeClick("FEAT-aic-21")</pre></div>
+  <h3 class="sub">里程碑详解（五问）</h3>
+  <section class="rec done" id="FEAT-aic-01">
+  <h3>FEAT-aic-01 · 共享类型 (@aidev/types) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是所有包共用的『接口词汇表』，定义了变更分析、模块化、历史记录以及 ECL 相关的各种类型。</dd>
+    <dt>为什么做</dt><dd>其它每一个包都要用到这些类型；如果没有一份统一的契约，各个包对同一个概念的理解就会逐渐走样、彼此对不上。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/types/src，是一个只含接口定义、不含任何运行逻辑的纯类型包，例如 FunctionAnalysis、ProjectIndex、ChangeRecord 等接口。</dd>
+    <dt>为什么这样做</dt><dd>把一个零依赖的类型包放在整张依赖图的最底层，可以让所有包都引用同一份契约，又不会引入循环依赖。</dd>
+    <dt>期望结果</dt><dd>所有包都引入 @aidev/types，并以这唯一一份事实来源为准做类型检查。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-02">
+  <h3>FEAT-aic-02 · 语法解析与函数身份 (@aidev/ast) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>面向 Python 和 TypeScript 的 tree-sitter WASM 解析器，负责从代码中提取出函数，并为每个函数计算一个稳定不变的身份哈希。</dd>
+    <dt>为什么做</dt><dd>要在函数这一级别追踪代码，就必须给每个函数一个稳定的标识符——这个标识符不能因为代码行号上下挪动就发生变化。</dd>
+    <dt>如何做</dt><dd>由几个文件协作完成：wasm-resolver.ts 负责定位 WASM 文件路径，parser-factory.ts 负责创建解析器，parser.ts／ts-parser.ts 分别处理 Python 与 TypeScript，multi-lang.ts 通过 parseFileAuto 按文件扩展名分发。函数身份的算法是 sha256(文件路径+类名+函数名+参数类型)[0:16]。</dd>
+    <dt>为什么这样做</dt><dd>用代码结构（而不是行号）来计算身份，函数即使被反复编辑、位置挪动，它的历史记录也能连贯保留；采用 WASM 解析器则免去了本地编译原生模块的麻烦。</dd>
+    <dt>期望结果</dt><dd>parseFileAuto 能从 .py／.ts 文件中提取出函数；同一个函数即使在文件里被上下移动，也会算出完全相同的哈希值。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-03">
+  <h3>FEAT-aic-03 · 变更追踪核心 (@aidev/core) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是整个产品的核心，集成了一整套能力：解析 diff、给变更打上注释、做变更分析（既有启发式规则，也有大模型分析）、计算模块化指标，以及生成测试。</dd>
+    <dt>为什么做</dt><dd>它是整个产品的心脏：要搞清楚到底是哪些函数被改了、为什么改、以及这些改动需要配上什么样的测试。</dd>
+    <dt>如何做</dt><dd>按子系统分文件夹：diff/ 负责解析统一格式的 diff 并与 git 集成，analysis/ 负责按函数粒度做分析（含批量处理），modularity/ 负责衡量内聚与耦合并生成契约，test-gen/ 负责为 Python 和 TypeScript 生成测试骨架。</dd>
+    <dt>为什么这样做</dt><dd>把 diff、分析、模块化、测试生成各自拆成独立的子系统文件夹，它们就能在共用同一个 ast 层的同时，各自被单独测试、互不牵连。</dd>
+    <dt>期望结果</dt><dd>给定一个 git diff，系统能把它解析成带注释的、函数级别的变更清单，并附带自动生成的测试骨架。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-04">
+  <h3>FEAT-aic-04 · 历史存储 (@aidev/history) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个用纯 JSON 文件来存储数据的存储层，分别保存评审记录（reviews/）、历史记录（history/）和索引文件（index.json）。</dd>
+    <dt>为什么做</dt><dd>为了能够随时间推移追踪代码变更，又不想引入任何数据库依赖。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/history/src，把数据以 JSON 文件的形式存放在 .devcompanion/ 目录下；其中 ProjectIndex 带有一份 function_index（函数索引）。</dd>
+    <dt>为什么这样做</dt><dd>采用纯 JSON、不依赖数据库，可以让这个 companion 直接塞进任何仓库就能用，而且存下来的内容人可以直接打开查看。</dd>
+    <dt>期望结果</dt><dd>变更记录能被持久化保存、之后又能重新加载回来；index.json 把函数的哈希值映射到它对应的历史记录。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-05">
+  <h3>FEAT-aic-05 · HTML 报告渲染 (@aidev/render) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把带注释的内容渲染成 HTML 报告，包含两种视图：单次会话视图（session view）和代码库 onboarding 视图（onboard view）。</dd>
+    <dt>为什么做</dt><dd>让追踪到的代码变更，以及对代码库做的 onboarding 分析，能以人能读懂的方式呈现出来。</dd>
+    <dt>如何做</dt><dd>renderSessionToHtml 按『改动原因』把变更分组，并内嵌对应的 diff；renderOnboardHtml 则渲染模块、函数和整体概览。</dd>
+    <dt>为什么这样做</dt><dd>在服务端直接渲染出静态 HTML，既不需要任何前端构建步骤，生成的文件又可以在任何地方直接打开。</dd>
+    <dt>期望结果</dt><dd>一个 ReviewSession 或 ProjectIndex 能被渲染成一个自包含的、单独的 HTML 文件。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-06">
+  <h3>FEAT-aic-06 · aidev 命令行工具 (@aidev/cli) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个基于 Commander 的命令行工具 `aidev`，提供 init、review、render、history、onboard、analyze、idea 等子命令。</dd>
+    <dt>为什么做</dt><dd>提供一个由人手动触发追踪和报告的入口，独立于自动触发的 hook 之外。</dd>
+    <dt>如何做</dt><dd>调用方式是 packages/cli/dist/main.js &lt;子命令&gt; -p &lt;项目路径&gt;；它把 core、history、render 三个包封装起来供使用。</dd>
+    <dt>为什么这样做</dt><dd>命令行工具提供了一种『由用户主动触发』的方式，与自动触发的 hook 并存，而两者共用同一套核心。</dd>
+    <dt>期望结果</dt><dd>执行 `aidev &lt;子命令&gt; -p &lt;路径&gt;` 就能针对某个目标项目运行对应的子命令。</dd>
+  </dl>
+</section>
+</section>
+<section class="page" data-page="Capture" id="page-Capture">
+  <h2>捕获层 技能树</h2>
+  <section class="tree-summary" data-layer-summary="Capture">
+  <h3>捕获层 技能树 · 五问总结</h3>
+  <dl>
+    <dt>是什么</dt><dd>这是『自动记录』那一层。它由两部分组成：一个在每次编辑动作之后立刻触发的钩子（PostToolUse hook），以及一个在后台慢慢处理这些记录的常驻进程（daemon）。</dd>
+    <dt>为什么做</dt><dd>我们希望开发者每改一次代码，这次改动连同『为什么改』都能被自动记下来，而不需要人去手动登记。与此同时，这个记录动作绝对不能拖慢编辑器，让人感觉卡顿。</dd>
+    <dt>如何做</dt><dd>钩子在 100 毫秒之内完成工作：Python 和 TypeScript 文件精确记录到函数级别，其它类型的文件则退化为文件级别记录，然后把事件写进一个队列。后台常驻进程再从队列里把事件取出来，做真正耗时的 diff 与分析。</dd>
+    <dt>为什么这样做</dt><dd>把『快速捕获』和『耗时处理』拆成两件事：前者守住 100 毫秒的延迟预算、保证编辑器流畅，后者把重活搬到后台、移出关键路径，两者互不拖累。</dd>
+    <dt>期望结果</dt><dd>编辑一个文件之后，队列里恰好多出一条对应的事件；这条事件随后被后台处理进历史记录，而整个过程不会让编辑出现卡顿。</dd>
+  </dl>
+</section>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_07["FEAT-aic-07<br>PostToolUse 钩子 @aidev/hook"]
+n_FEAT_aic_08["FEAT-aic-08<br>后台常驻进程 @aidev/daemon"]
+n_FEAT_aic_03["FEAT-aic-03<br>变更追踪核心 @aidev/core"]
+n_FEAT_aic_04["FEAT-aic-04<br>历史存储 @aidev/history"]
+n_FEAT_aic_03 --> n_FEAT_aic_04
+n_FEAT_aic_03 --> n_FEAT_aic_07
+n_FEAT_aic_04 --> n_FEAT_aic_07
+n_FEAT_aic_07 --> n_FEAT_aic_08
+class n_FEAT_aic_07,n_FEAT_aic_08,n_FEAT_aic_03,n_FEAT_aic_04 done;
+click n_FEAT_aic_07 call nodeClick("FEAT-aic-07")
+click n_FEAT_aic_08 call nodeClick("FEAT-aic-08")
+click n_FEAT_aic_03 call nodeClick("FEAT-aic-03")
+click n_FEAT_aic_04 call nodeClick("FEAT-aic-04")</pre></div>
+  <h3 class="sub">里程碑详解（五问）</h3>
+  <section class="rec done" id="FEAT-aic-07">
+  <h3>FEAT-aic-07 · PostToolUse 钩子 (@aidev/hook) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个 Claude Code 的 PostToolUse 处理器（必须在 100 毫秒内完成），负责在每次编辑动作之后把改动记录到函数级别。</dd>
+    <dt>为什么做</dt><dd>用来自动捕获：AI 的每一次编辑都会变成一条带有『改动原因』的可追踪事件，全程不需要人手动登记。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/hook/src，对 .py／.ts 文件精确记录到函数级别，对不支持解析的扩展名（如 .yaml／.md）则退化为文件级别记录；记录下来的事件被排队写入 .devcompanion/queue/events.jsonl。</dd>
+    <dt>为什么这样做</dt><dd>对不支持的文件采取『退化而不是丢弃』的做法，可以保留一份完整、不缺漏的审计记录；而 100 毫秒的上限则保证编辑器始终流畅、不卡顿。</dd>
+    <dt>期望结果</dt><dd>对一个 .py／.ts／.yaml／.md 文件做一次编辑，队列里就恰好多出一条对应的事件。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-08">
+  <h3>FEAT-aic-08 · 后台常驻进程 (@aidev/daemon) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个后台常驻进程，从队列里取出事件，异步地完成耗时的 diff 计算与存储工作。</dd>
+    <dt>为什么做</dt><dd>把繁重的 diff、分析、存储等工作挪到关键路径之外延后处理，从而让 hook 始终保持快速。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/daemon/src，负责把事件队列里的事件逐条取出，并异步地运行 hook 那部分真正耗时的处理逻辑。</dd>
+    <dt>为什么这样做</dt><dd>把『捕获』（由 hook 完成）和『处理』（由 daemon 完成）拆开，可以让同步执行的 hook 始终守在它的延迟预算之内。</dd>
+    <dt>期望结果</dt><dd>排在队列里的事件会被处理进历史记录，整个过程不会阻塞、拖慢编辑动作。</dd>
+  </dl>
+</section>
+</section>
+<section class="page" data-page="Engines" id="page-Engines">
+  <h2>引擎层 技能树</h2>
+  <section class="tree-summary" data-layer-summary="Engines">
+  <h3>引擎层 技能树 · 五问总结</h3>
+  <dl>
+    <dt>是什么</dt><dd>这一层是四个可复用的『能力引擎』：调用大模型的封装（llm）、读懂一个代码库的 onboarding 流水线、按依赖关系并行执行计划的执行器（exec）、以及管理想法的后端（idea）。</dd>
+    <dt>为什么做</dt><dd>上层的各种工作流命令（skill）需要一些公共能力——调用大模型、理解一个陌生的代码库、把计划真正跑起来、记录和研究想法。把这些能力沉淀成独立的引擎，各个命令才不必各自重复造轮子。</dd>
+    <dt>如何做</dt><dd>llm 封装了对 Claude 命令行的调用；onboarding 把『扫描代码 → 大模型分析 → 生成 ECL → 生成测试』串成一条流水线；exec 负责把任务做拓扑排序并并行执行；idea 负责想法的存储与研究。</dd>
+    <dt>为什么这样做</dt><dd>每个引擎职责单一、能够单独测试（例如 exec 只依赖一个 yaml 库），这样它们可以被多个不同的命令自由组合调用，而不会彼此纠缠在一起。</dd>
+    <dt>期望结果</dt><dd>每个引擎都能被对应的命令驱动起来，并各自产出可以被验证的结果。</dd>
+  </dl>
+</section>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_09["FEAT-aic-09<br>Claude 命令行封装 @aidev/llm"]
+n_FEAT_aic_11["FEAT-aic-11<br>ECL FN-DAG 执行器 @aidev/exec"]
+n_FEAT_aic_10["FEAT-aic-10<br>Onboarding 流水线 scripts/lib"]
+n_FEAT_aic_12["FEAT-aic-12<br>想法清单与研究 @aidev/idea"]
+n_FEAT_aic_02["FEAT-aic-02<br>语法解析与函数身份 @aidev/ast"]
+n_FEAT_aic_14["FEAT-aic-14<br>/idea 命令"]
+n_FEAT_aic_16["FEAT-aic-16<br>/ccplan 命令"]
+n_FEAT_aic_17["FEAT-aic-17<br>/ccedit 命令"]
+n_FEAT_aic_19["FEAT-aic-19<br>/cconboard 命令"]
+n_FEAT_aic_02 --> n_FEAT_aic_10
+n_FEAT_aic_09 --> n_FEAT_aic_10
+n_FEAT_aic_09 --> n_FEAT_aic_12
+n_FEAT_aic_12 --> n_FEAT_aic_14
+n_FEAT_aic_10 --> n_FEAT_aic_16
+n_FEAT_aic_11 --> n_FEAT_aic_17
+n_FEAT_aic_16 --> n_FEAT_aic_17
+n_FEAT_aic_10 --> n_FEAT_aic_19
+class n_FEAT_aic_09,n_FEAT_aic_11,n_FEAT_aic_10,n_FEAT_aic_12,n_FEAT_aic_02,n_FEAT_aic_14,n_FEAT_aic_16,n_FEAT_aic_17,n_FEAT_aic_19 done;
+click n_FEAT_aic_09 call nodeClick("FEAT-aic-09")
+click n_FEAT_aic_11 call nodeClick("FEAT-aic-11")
+click n_FEAT_aic_10 call nodeClick("FEAT-aic-10")
+click n_FEAT_aic_12 call nodeClick("FEAT-aic-12")
+click n_FEAT_aic_02 call nodeClick("FEAT-aic-02")
+click n_FEAT_aic_14 call nodeClick("FEAT-aic-14")
+click n_FEAT_aic_16 call nodeClick("FEAT-aic-16")
+click n_FEAT_aic_17 call nodeClick("FEAT-aic-17")
+click n_FEAT_aic_19 call nodeClick("FEAT-aic-19")</pre></div>
+  <h3 class="sub">里程碑详解（五问）</h3>
+  <section class="rec done" id="FEAT-aic-09">
+  <h3>FEAT-aic-09 · Claude 命令行封装 (@aidev/llm) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>对 Claude 命令行的一层薄封装，主要提供 callClaude 和 preflight 两个能力。</dd>
+    <dt>为什么做</dt><dd>把所有调用大模型的逻辑收拢到同一个地方，这样变更分析、onboarding、idea 这些功能就不必各自重复造一遍。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/llm/src，是一个独立的包；它负责拉起 Claude 命令行进程，并处理调用前的环境检查（preflight）。</dd>
+    <dt>为什么这样做</dt><dd>选择封装命令行（而不是某个 SDK），既可以直接复用用户本机已有的 Claude 登录凭据，又能把额外依赖压到最少。</dd>
+    <dt>期望结果</dt><dd>callClaude 能返回模型的输出；当 Claude 命令行不可用时，preflight 会立刻失败、尽早报错。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-11">
+  <h3>FEAT-aic-11 · ECL FN-DAG 执行器 (@aidev/exec) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>这是 /ccedit 背后的执行引擎：解析 ECL 的 FN 层 DAG、做拓扑排序、找出当前可以开跑的节点、运行验证、再把状态写回去。</dd>
+    <dt>为什么做</dt><dd>把一份已经批准的计划（ECL），变成一次按依赖顺序、可以并行的真实执行。</dd>
+    <dt>如何做</dt><dd>由若干能力组成：parseEclDag（解析）、validateFnFields（字段校验）、topologicalSort（用 Kahn 算法把图排成 ExecutionLayer[] 一层层）、getReadyNodes（找出可执行节点）、runVerification（运行验证）、updateFnStatus（更新状态）；命令行提供 parse、state、set-status、verify 等子命令。runVerification 里还带有针对 Win32 的进程拉起回退处理。</dd>
+    <dt>为什么这样做</dt><dd>这个执行器只依赖 `yaml` 这一个库，因此可以独立、可复用地使用；而拓扑排序分出来的每一层，正好把可以并行的独立节点暴露出来，交给多个并行的子智能体（subagent）去跑。</dd>
+    <dt>期望结果</dt><dd>一份带有 functions: DAG 的 ECL，能被成功解析、排成一层层，并报告出哪些节点已就绪、哪些被阻塞。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-10">
+  <h3>FEAT-aic-10 · Onboarding 流水线 (scripts/lib) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一条完整的流水线，依次是：探测项目类型 → 用 AST 扫描代码 → 用大模型分析每个函数 → 推断出语义层面的 ECL → 生成测试骨架 → 生成概览 HTML。</dd>
+    <dt>为什么做</dt><dd>这是 /cconboard 以及 /ccplan 第 10 阶段背后的引擎，用来端到端地读懂一个已有的代码库。</dd>
+    <dt>如何做</dt><dd>入口 run-onboarding.ts 调用 onboarding-pipeline.ts 来编排全过程；其中 enhanced-analyzer.ts 负责逐个函数分析其 why／what／how，opus-ecl-generator.ts 负责生成 feature 层的 ECL，ecl-inferrer.ts 负责推断。最终产出 .devcompanion/analysis.json 以及 docs/ecl/&lt;项目名&gt;-features.yaml。</dd>
+    <dt>为什么这样做</dt><dd>采用 Opus→Haiku→Opus 的分级策略：用便宜的 Haiku 做逐函数分析以控制成本，而在首尾两端用更强的 Opus 来做整体理解与综合归纳。</dd>
+    <dt>期望结果</dt><dd>对一个仓库运行它，就能产出 analysis.json、一份 feature 级别的 ECL，以及一批测试骨架。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-12">
+  <h3>FEAT-aic-12 · 想法清单与研究 (@aidev/idea) <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>/idea 背后的后端：一个用来存放想法清单（backlog）的存储层，加上一个能对想法做研究的执行器。</dd>
+    <dt>为什么做</dt><dd>让人能在不离开当前工作流的情况下，随手记下想法、并触发对它的研究。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/idea/src，把想法存放在 .devcompanion/ideas/ 目录下；做研究的执行器则调用 @aidev/llm。</dd>
+    <dt>为什么这样做</dt><dd>用一个真正的包来支撑 /idea，可以让想法的存储与研究逻辑能够被测试，而不是东一处西一处临时拼凑。</dd>
+    <dt>期望结果</dt><dd>/idea 的 add、list、research、show 子命令都能正常地保存和取回想法。</dd>
+  </dl>
+</section>
+</section>
+<section class="page" data-page="Skills" id="page-Skills">
+  <h2>命令层 技能树</h2>
+  <section class="tree-summary" data-layer-summary="Skills">
+  <h3>命令层 技能树 · 五问总结</h3>
+  <dl>
+    <dt>是什么</dt><dd>这一层把下面的各个引擎包装成一组可以在 Claude Code 里直接调用的斜杠命令，比如 /idea、/ccdiscuss、/ccplan、/ccedit、/ccdebug、/cconboard、/ccoverview。</dd>
+    <dt>为什么做</dt><dd>这个仓库本身就是用它自己的这套流水线来开发的。把能力做成命令，开发者才能真正走完『记录想法 → 对齐需求 → 规划 → 执行 → 调试』这一条完整链路。</dd>
+    <dt>如何做</dt><dd>每个命令由两个文件定义：.claude/commands/ 下的命令入口，加上 skills/ 下的完整规格说明（SKILL.md）。命令之间并不直接耦合，而是通过持久化的 ECL 文件互相衔接——下一个命令『如果发现上一个的产物存在，就读取它』。</dd>
+    <dt>为什么这样做</dt><dd>用 ECL 文件做『软衔接』、而不是写成一个大而全的单体程序，链条因此可以自由组合、每个步骤也可以单独使用；其中的强制校验层是故意推迟的——先用最小可用版本验证这套五问循环到底有没有价值，再决定是否投入精力去做强制。</dd>
+    <dt>期望结果</dt><dd>一个改动能够用这些斜杠命令，从『想法』一路走到『调试』，端到端完整跑通。</dd>
+  </dl>
+</section>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_14["FEAT-aic-14<br>/idea 命令"]
+n_FEAT_aic_15["FEAT-aic-15<br>/ccdiscuss 命令（最小可用版本）"]
+n_FEAT_aic_16["FEAT-aic-16<br>/ccplan 命令"]
+n_FEAT_aic_17["FEAT-aic-17<br>/ccedit 命令"]
+n_FEAT_aic_18["FEAT-aic-18<br>/ccdebug 命令"]
+n_FEAT_aic_19["FEAT-aic-19<br>/cconboard 命令"]
+n_FEAT_aic_20["FEAT-aic-20<br>/ccoverview 命令"]
+n_FEAT_aic_23["FEAT-aic-23<br>/ccdiscuss 强制层（已推迟）"]
+n_FEAT_aic_12["FEAT-aic-12<br>想法清单与研究 @aidev/idea"]
+n_FEAT_aic_10["FEAT-aic-10<br>Onboarding 流水线 scripts/lib"]
+n_FEAT_aic_11["FEAT-aic-11<br>ECL FN-DAG 执行器 @aidev/exec"]
+n_FEAT_aic_05["FEAT-aic-05<br>HTML 报告渲染 @aidev/render"]
+n_FEAT_aic_22["FEAT-aic-22<br>可运转的命令工作流"]
+n_FEAT_aic_12 --> n_FEAT_aic_14
+n_FEAT_aic_10 --> n_FEAT_aic_16
+n_FEAT_aic_15 --> n_FEAT_aic_16
+n_FEAT_aic_11 --> n_FEAT_aic_17
+n_FEAT_aic_16 --> n_FEAT_aic_17
+n_FEAT_aic_17 --> n_FEAT_aic_18
+n_FEAT_aic_10 --> n_FEAT_aic_19
+n_FEAT_aic_05 --> n_FEAT_aic_20
+n_FEAT_aic_14 --> n_FEAT_aic_22
+n_FEAT_aic_15 --> n_FEAT_aic_22
+n_FEAT_aic_16 --> n_FEAT_aic_22
+n_FEAT_aic_17 --> n_FEAT_aic_22
+n_FEAT_aic_18 --> n_FEAT_aic_22
+n_FEAT_aic_19 --> n_FEAT_aic_22
+n_FEAT_aic_15 --> n_FEAT_aic_23
+class n_FEAT_aic_14,n_FEAT_aic_15,n_FEAT_aic_16,n_FEAT_aic_17,n_FEAT_aic_18,n_FEAT_aic_19,n_FEAT_aic_20,n_FEAT_aic_12,n_FEAT_aic_10,n_FEAT_aic_11,n_FEAT_aic_05 done;
+class n_FEAT_aic_23 pending;
+class n_FEAT_aic_22 terminal;
+click n_FEAT_aic_14 call nodeClick("FEAT-aic-14")
+click n_FEAT_aic_15 call nodeClick("FEAT-aic-15")
+click n_FEAT_aic_16 call nodeClick("FEAT-aic-16")
+click n_FEAT_aic_17 call nodeClick("FEAT-aic-17")
+click n_FEAT_aic_18 call nodeClick("FEAT-aic-18")
+click n_FEAT_aic_19 call nodeClick("FEAT-aic-19")
+click n_FEAT_aic_20 call nodeClick("FEAT-aic-20")
+click n_FEAT_aic_23 call nodeClick("FEAT-aic-23")
+click n_FEAT_aic_12 call nodeClick("FEAT-aic-12")
+click n_FEAT_aic_10 call nodeClick("FEAT-aic-10")
+click n_FEAT_aic_11 call nodeClick("FEAT-aic-11")
+click n_FEAT_aic_05 call nodeClick("FEAT-aic-05")
+click n_FEAT_aic_22 call nodeClick("FEAT-aic-22")</pre></div>
+  <h3 class="sub">里程碑详解（五问）</h3>
+  <section class="rec done" id="FEAT-aic-14">
+  <h3>FEAT-aic-14 · /idea 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>对应想法清单的斜杠命令，提供 add、list、research、show 等子命令。</dd>
+    <dt>为什么做</dt><dd>让想法清单可以直接从 Claude Code 里被调用、被用到。</dd>
+    <dt>如何做</dt><dd>完全自包含在 .claude/commands/idea.md 这一个文件里（没有单独的 skills/idea/ 目录），内部调用 @aidev/idea。</dd>
+    <dt>为什么这样做</dt><dd>之所以完全自包含，是因为它要做的事足够简单，不需要再单独写一份 SKILL.md。</dd>
+    <dt>期望结果</dt><dd>在一个 Claude Code 会话里，/idea 的各个子命令都能正常工作。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-15">
+  <h3>FEAT-aic-15 · /ccdiscuss 命令（最小可用版本） <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个在正式规划之前先做的、尽力而为的六步对齐循环：先由人写下自己期望的结果，然后 AI 抛出『五个问题』并标出双方理解出现分歧的地方，最终产出一份对齐好的 ECL。</dd>
+    <dt>为什么做</dt><dd>在还没开始为任何代码做规划之前，就先把人和 AI 之间理解上的分歧找出来。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccdiscuss.md 和 skills/ccdiscuss/SKILL.md 两个文件定义；它会写出 docs/ecl/*.yaml；/ccplan 在运行时会『如果发现它的产物存在就读取』，但并不强制（没有门禁）。</dd>
+    <dt>为什么这样做</dt><dd>把它定位成一种尽力而为的自律习惯（而不是强制的门禁），这样它能带来对齐的好处，又不会卡住整条流水线——真正的强制层被有意推迟到后面（FEAT-aic-23）。</dd>
+    <dt>期望结果</dt><dd>运行 /ccdiscuss 会产出一份对齐好的 ECL，里面包含那五个问题以及标记出来的分歧点。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-16">
+  <h3>FEAT-aic-16 · /ccplan 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一套『先发散、再收敛』的需求工程方法（一个包含 12 个阶段的螺旋流程，其中第 9 阶段设有一道评审门禁）；最终产出一份 ECL。</dd>
+    <dt>为什么做</dt><dd>把模糊不清、相互冲突的需求，转化成一份经过验证、并经受过对抗性检查的计划。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccplan.md 和 skills/ccplan/SKILL.md（外加 ecl-schema.md）定义；如果 /ccdiscuss 产出的 ECL 存在，它会读取；第 10 阶段会用到 onboarding 流水线。</dd>
+    <dt>为什么这样做</dt><dd>在第 9 阶段设一道明确的『停下来等人批准』的门禁，让整个过程在人点头之前都保持只读、不动代码。</dd>
+    <dt>期望结果</dt><dd>运行 /ccplan 会产出一份获批的 ECL（含 REQ／FEAT／MOD／FN 以及 dependency_graph 依赖图）。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-17">
+  <h3>FEAT-aic-17 · /ccedit 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>针对一份已获批的 ECL，按 DAG 驱动执行：先做拓扑排序，再为每一个相互独立的 FN 节点派出一个子智能体（subagent），运行验证，并把状态写回去。</dd>
+    <dt>为什么做</dt><dd>按依赖顺序把计划执行起来，既能并行，又能在失败时自动转交处理。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccedit.md 和 skills/ccedit/SKILL.md 定义；它驱动 @aidev/exec；遇到失败时会把问题转交给 /ccdebug。</dd>
+    <dt>为什么这样做</dt><dd>只有总协调者才会写状态（用『先写临时文件再原子重命名』的方式），各个子智能体绝不写状态——以此防止并发竞争把状态写坏。</dd>
+    <dt>期望结果</dt><dd>对一份已获批的 ECL 运行 /ccedit，它会执行已就绪的节点、做验证，并更新状态。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-18">
+  <h3>FEAT-aic-18 · /ccdebug 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一条调试链路：从失败出发 → 定位到出问题的源函数 → 查阅它的变更历史 → 找出根本原因 → 修复 → 记录下来；并坚持『改代码而不是改测试』、最多重试 3 次、修完后跑完整回归。</dd>
+    <dt>为什么做</dt><dd>在执行过程中某项验证失败时，把这个失败闭环地解决掉。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccdebug.md 和 skills/ccdebug/SKILL.md 定义；它会消费历史记录，用来追踪那个出问题的函数。</dd>
+    <dt>为什么这样做</dt><dd>强制要求『改代码而不是改测试』再加上重试次数上限，可以阻止智能体靠『把测试改松』来假装通过，或者陷入无限循环。</dd>
+    <dt>期望结果</dt><dd>一项失败的验证会被追溯到根本原因并修复，全程不动测试；如果 3 次仍未修好，就停下来。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-19">
+  <h3>FEAT-aic-19 · /cconboard 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把一个已有的代码库接入进来（onboard）：扫描、分析、模块化、补测试、写文档；并把原始版本归档备份。</dd>
+    <dt>为什么做</dt><dd>把一个杂乱无章或者不熟悉的仓库纳入这个 companion 的管理，并留下一份完整的审计记录。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/cconboard.md 和 skills/cconboard/SKILL.md（外加 ol-schema.md）定义；它驱动 onboarding 流水线；并把原始版本归档到 archive/&lt;时间戳&gt;/ 目录下。</dd>
+    <dt>为什么这样做</dt><dd>在重构之前先把原始版本归档，可以让每一处改动都可回退、可审计。</dd>
+    <dt>期望结果</dt><dd>运行 /cconboard 会得到模块化好、带测试、有文档的代码，外加一份 onboarding 日志，以及一份带有 guard（守卫）的 ECL。</dd>
+  </dl>
+</section>
+<section class="rec done" id="FEAT-aic-20">
+  <h3>FEAT-aic-20 · /ccoverview 命令 <span class="badge">已完成</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一层很薄的封装，用来生成项目的概览 HTML（默认产出中英双语两份）。</dd>
+    <dt>为什么做</dt><dd>用一条命令，就能为当前这个仓库（重新）生成那份面向人阅读的项目概览。</dd>
+    <dt>如何做</dt><dd>由 .claude/commands/ccoverview.md 和 skills/ccoverview/SKILL.md 定义；它封装了 scripts/generate-overview.ts；加上 --skip-translation 参数则只产出单独一份 overview.html。</dd>
+    <dt>为什么这样做</dt><dd>做成一层薄封装（且永远不带 --target），可以把它牢牢限定在当前项目范围内，又避免把脚本逻辑重复抄一遍。</dd>
+    <dt>期望结果</dt><dd>/ccoverview 会产出 overview-en.html 和 overview-zh.html 两份文件（若加 --skip-translation 则只产出一份 overview.html）。</dd>
+  </dl>
+</section>
+<section class="rec pending" id="FEAT-aic-23">
+  <h3>FEAT-aic-23 · /ccdiscuss 强制层（已推迟） <span class="badge">待办</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把 /ccdiscuss 的对齐从『尽力而为』升级成一道强制门禁，包含三部分：对齐门禁、价值验证步骤，以及对 ecl-parser 的改造。</dd>
+    <dt>为什么做</dt><dd>目前最小可用版本的 /ccdiscuss 只是建议性质的；引入强制层之后，对齐就会成为开始规划之前一道硬性的前置条件。</dd>
+    <dt>如何做</dt><dd>在 /ccplan 之前加一道门禁，再加一个价值验证步骤，外加解析器的改造——这些在 /ccdiscuss 最小可用版本的 ECL 里就已经被明确标注为推迟。</dd>
+    <dt>为什么这样做</dt><dd>这是有意推迟的：先把建议性质的最小可用版本发出去，用它验证那套五问循环到底值不值得，然后再决定是否花力气去做强制的那套机制。</dd>
+    <dt>期望结果</dt><dd>对齐成为一个可被检查的前置条件；当 ECL 没有对齐时，/ccplan 会拒绝执行或者打上标记。</dd>
+  </dl>
+</section>
+</section>
+<section class="page" data-page="Endpoints" id="page-Endpoints">
+  <h2>终点层 技能树</h2>
+  <section class="tree-summary" data-layer-summary="Endpoints">
+  <h3>终点层 技能树 · 五问总结</h3>
+  <dl>
+    <dt>是什么</dt><dd>这是仓库的三个最终交付物，也就是『做完了』的定义：一个可用的 dashboard（网页界面）、一套可以装进别的仓库的安装分发机制、以及一条真正能跑起来的工作流流水线。</dd>
+    <dt>为什么做</dt><dd>前面所有的层级和工作，最终都是为了抵达这三个终点。它们本身就是这个项目存在的目的。</dd>
+    <dt>如何做</dt><dd>dashboard 是一个基于 Fastify 的网页界面，用来浏览被扫描过的项目；install 是一套幂等的、用注册表追踪的安装生命周期（安装、更新、查看状态、卸载）；pipeline 则是把七个命令全部接好、串成一条可用的工作流。</dd>
+    <dt>为什么这样做</dt><dd>在三者之中，『流水线本身能跑起来』是首要交付物（因为这个仓库就是用它来开发的）；dashboard 和 install 则让做出来的成果能够被浏览、并被其它仓库采用。</dd>
+    <dt>期望结果</dt><dd>三个终点都以最小可用版本达成——dashboard 能正常启动、install 能把 companion 装进别的仓库、整条流水线能端到端跑通。</dd>
+  </dl>
+</section>
+  <div class="graph"><pre class="mermaid">flowchart TD
+classDef done fill:#1b5e20,stroke:#a5d6a7,color:#fff;
+classDef pending fill:#37474f,stroke:#b0bec5,color:#fff,stroke-dasharray:5 3;
+classDef blocked fill:#5d4037,stroke:#bcaaa4,color:#fff,stroke-dasharray:2 2;
+classDef terminal fill:#4a148c,stroke:#ce93d8,color:#fff,stroke-width:3px;
+n_FEAT_aic_13["FEAT-aic-13<br>Dashboard 网页界面 @aidev/dashboard"]
+n_FEAT_aic_21["FEAT-aic-21<br>安装／更新／查看状态／卸载 生命周期 + 注册表"]
+n_FEAT_aic_22["FEAT-aic-22<br>可运转的命令工作流"]
+n_FEAT_aic_05["FEAT-aic-05<br>HTML 报告渲染 @aidev/render"]
+n_FEAT_aic_06["FEAT-aic-06<br>aidev 命令行工具 @aidev/cli"]
+n_FEAT_aic_14["FEAT-aic-14<br>/idea 命令"]
+n_FEAT_aic_15["FEAT-aic-15<br>/ccdiscuss 命令（最小可用版本）"]
+n_FEAT_aic_16["FEAT-aic-16<br>/ccplan 命令"]
+n_FEAT_aic_17["FEAT-aic-17<br>/ccedit 命令"]
+n_FEAT_aic_18["FEAT-aic-18<br>/ccdebug 命令"]
+n_FEAT_aic_19["FEAT-aic-19<br>/cconboard 命令"]
+n_FEAT_aic_05 --> n_FEAT_aic_06
+n_FEAT_aic_05 --> n_FEAT_aic_13
+n_FEAT_aic_15 --> n_FEAT_aic_16
+n_FEAT_aic_16 --> n_FEAT_aic_17
+n_FEAT_aic_17 --> n_FEAT_aic_18
+n_FEAT_aic_06 --> n_FEAT_aic_21
+n_FEAT_aic_14 --> n_FEAT_aic_22
+n_FEAT_aic_15 --> n_FEAT_aic_22
+n_FEAT_aic_16 --> n_FEAT_aic_22
+n_FEAT_aic_17 --> n_FEAT_aic_22
+n_FEAT_aic_18 --> n_FEAT_aic_22
+n_FEAT_aic_19 --> n_FEAT_aic_22
+class n_FEAT_aic_13,n_FEAT_aic_21,n_FEAT_aic_22 terminal;
+class n_FEAT_aic_05,n_FEAT_aic_06,n_FEAT_aic_14,n_FEAT_aic_15,n_FEAT_aic_16,n_FEAT_aic_17,n_FEAT_aic_18,n_FEAT_aic_19 done;
+click n_FEAT_aic_13 call nodeClick("FEAT-aic-13")
+click n_FEAT_aic_21 call nodeClick("FEAT-aic-21")
+click n_FEAT_aic_22 call nodeClick("FEAT-aic-22")
+click n_FEAT_aic_05 call nodeClick("FEAT-aic-05")
+click n_FEAT_aic_06 call nodeClick("FEAT-aic-06")
+click n_FEAT_aic_14 call nodeClick("FEAT-aic-14")
+click n_FEAT_aic_15 call nodeClick("FEAT-aic-15")
+click n_FEAT_aic_16 call nodeClick("FEAT-aic-16")
+click n_FEAT_aic_17 call nodeClick("FEAT-aic-17")
+click n_FEAT_aic_18 call nodeClick("FEAT-aic-18")
+click n_FEAT_aic_19 call nodeClick("FEAT-aic-19")</pre></div>
+  <h3 class="sub">里程碑详解（五问）</h3>
+  <section class="rec terminal" id="FEAT-aic-13">
+  <h3>FEAT-aic-13 · Dashboard 网页界面 (@aidev/dashboard) <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一个基于 Fastify 的网页界面，负责扫描各个项目，并把它们的报告呈现出来。</dd>
+    <dt>为什么做</dt><dd>为所有被扫描过的项目提供一个可以集中浏览的入口，而不只是散落在各个仓库里的一个个 HTML 文件。</dd>
+    <dt>如何做</dt><dd>代码位于 packages/dashboard/src，是一个 Fastify 服务器；通过 npm run dashboard:start｜stop｜restart｜status 来管理。它在代码上是独立的，只消费已经渲染好的报告。</dd>
+    <dt>为什么这样做</dt><dd>用一个独立的 Web 服务器，把界面的生命周期和变更追踪核心彻底解耦开。</dd>
+    <dt>期望结果</dt><dd>执行 dashboard:start 后，会启动一个界面，列出所有被扫描过的项目及其报告。</dd>
+  </dl>
+</section>
+<section class="rec terminal" id="FEAT-aic-21">
+  <h3>FEAT-aic-21 · 安装／更新／查看状态／卸载 生命周期 + 注册表 <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>把这个 companion 安装到其它仓库里去——整个过程是幂等的，并由一份注册表（registry）追踪。</dd>
+    <dt>为什么做</dt><dd>让其它项目能够采用这个 companion（它的各个命令、配置和 hook），而不必靠人手动把文件复制过去。</dd>
+    <dt>如何做</dt><dd>命令是 scripts/install.ts &lt;目标路径&gt; [--enforce] [--no-commands]；配套还有 update.ts／status.ts／uninstall.ts；由注册表来追踪每一次安装。目前已经装进了 5 个相邻的仓库。</dd>
+    <dt>为什么这样做</dt><dd>正因为它幂等、又有注册表追踪，所以重复运行安装是安全的，而每个目标仓库的更新内容也都能逐个对比（diff）出来。</dd>
+    <dt>期望结果</dt><dd>向某个目标仓库安装时，会把命令、配置、hook 都接好；status／update／uninstall 负责后续管理；重复安装则是一个无副作用的空操作。</dd>
+  </dl>
+</section>
+<section class="rec terminal" id="FEAT-aic-22">
+  <h3>FEAT-aic-22 · 可运转的命令工作流 <span class="badge">终点</span></h3>
+  
+  <dl>
+    <dt>是什么</dt><dd>一整条『发散 → 规划 → 执行 → 调试』的完整工作流（/idea → /ccdiscuss → /ccplan → /ccedit → /ccdebug，再加上 /cconboard），全部接好线、可以真正使用。</dd>
+    <dt>为什么做</dt><dd>这个仓库本身就是用它自己的这条流水线来开发的——所以『这条流水线能够运转起来』本身，就是这个项目最主要的交付物。</dd>
+    <dt>如何做</dt><dd>全部 7 条命令都已接好（.claude/commands/* 加上 skills/*/SKILL.md）；它们之间靠 ECL 的 YAML 文件串接起来；这一切已经在 commit d683ce4 中落地。</dd>
+    <dt>为什么这样做</dt><dd>各条命令之间通过持久化的 ECL 文件来交接（『发现就读取』），因此整条链路是可自由组合的，而不是一个铁板一块的单体。</dd>
+    <dt>期望结果</dt><dd>一个改动可以借助这些斜杠命令，从想法 → 讨论 → 规划 → 编辑 → 调试，端到端地完整流转。</dd>
+  </dl>
+</section>
+</section>
+  </main>
+</div>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  // Render every diagram up front: Mermaid can't size a diagram inside a
+  // display:none container, so render all pages while they're laid out, then
+  // paginate purely with CSS afterward.
+  mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "dark" });
+
+  function showPage(pageId) {
+    document.querySelectorAll(".page").forEach((p) =>
+      p.classList.toggle("active", p.id === pageId));
+    document.querySelectorAll(".page-link").forEach((l) =>
+      l.classList.toggle("current", l.getAttribute("data-target") === pageId));
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  document.querySelectorAll(".page-link").forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      showPage(link.getAttribute("data-target"));
+    });
+  });
+
+  window.nodeClick = (id) => {
+    // record lives inside the currently-active page
+    const page = document.querySelector(".page.active");
+    const el = page ? page.querySelector("#" + CSS.escape(id)) : document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  };
+
+  // Render all diagrams once while the document is fully laid out, THEN switch
+  // to single-page CSS pagination. We temporarily reveal each page so Mermaid
+  // can measure it.
+  (async () => {
+    const pages = Array.from(document.querySelectorAll(".page"));
+    const prevActive = document.querySelector(".page.active");
+    for (const p of pages) {
+      p.style.display = "block";
+      await mermaid.run({ nodes: p.querySelectorAll(".mermaid") });
+      p.style.display = "";
+    }
+    // restore default page = Overview
+    showPage(prevActive ? prevActive.id : "page-overview");
+  })();
+</script></body></html>

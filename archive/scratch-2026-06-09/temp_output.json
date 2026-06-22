@@ -1,0 +1,30 @@
+{
+  "function_hash": "5e7f38c00f2092a97538f214fca5380e",
+  "file_path": "shared\mimicgen_workspace\mimicgen\mimicgen\envs\robosuite\mug_cleanup.py",
+  "function_name": "_reset_internal",
+  "class_name": "MugCleanup",
+  "why": "Initializes the simulation environment to a consistent starting state for each episode of mug cleanup task training or execution.",
+  "what": "Resets object positions and orientations according to a placement sampler, handles drawer-specific positioning constraints, and ensures the drawer starts in a closed state.",
+  "how": "Calls parent class reset, samples object placements, iterates through objects to set poses (with special handling for drawer fixtures), and resets drawer joint position before advancing simulation.",
+  "inputs": [
+    {
+      "name": "self",
+      "type": "MugCleanup",
+      "role": "Instance of the MugCleanup class containing simulation state and configuration",
+      "constraints": "Must be a valid MugCleanup instance with initialized sim, placement_initializer, and drawer attributes"
+    }
+  ],
+  "outputs": {
+    "type": "None",
+    "meaning": "Modifies simulation state in-place; no return value",
+    "nullable": false
+  },
+  "throws": [],
+  "depends_on": [
+    "super()._reset_internal()",
+    "self.placement_initializer.sample()",
+    "self.sim.model.body_name2id()",
+    "self.sim.data.set_joint_qpos()",
+    "self.sim.forward()"
+  ]
+}
