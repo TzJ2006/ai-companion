@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { initDevcompanion } from "./init-devcompanion.ts";
 
@@ -10,6 +10,7 @@ export interface InstallOptions {
   aidevRoot: string;
   enforce: boolean;
   includeCommands: boolean;
+  agent: "claude" | "codex" | "both";
 }
 
 export interface InstallResult {
@@ -18,31 +19,107 @@ export interface InstallResult {
   commands_installed: string[];
   devcompanion_initialized: boolean;
   pre_tool_hook_installed: boolean;
+  codex_hooks_updated: boolean;
+  codex_skills_installed: string[];
 }
 
 export function installAgentConfig(options: InstallOptions): InstallResult {
-  const { targetPath, aidevRoot, enforce, includeCommands } = options;
+  const { targetPath, aidevRoot, enforce, includeCommands, agent } = options;
   const result: InstallResult = {
     settings_json_updated: false,
     claude_md_updated: false,
     commands_installed: [],
     devcompanion_initialized: false,
     pre_tool_hook_installed: false,
+    codex_hooks_updated: false,
+    codex_skills_installed: [],
   };
 
   initDevcompanion(targetPath);
   result.devcompanion_initialized = true;
 
-  result.settings_json_updated = installSettingsJson(targetPath, aidevRoot, enforce);
-  result.pre_tool_hook_installed = enforce;
+  if (agent === "claude" || agent === "both") {
+    result.settings_json_updated = installSettingsJson(targetPath, aidevRoot, enforce);
+    result.pre_tool_hook_installed = enforce;
+    result.claude_md_updated = installClaudeMd(targetPath, aidevRoot);
+    if (includeCommands) {
+      result.commands_installed = installCommands(targetPath, aidevRoot);
+    }
+  }
 
-  result.claude_md_updated = installClaudeMd(targetPath, aidevRoot);
-
-  if (includeCommands) {
-    result.commands_installed = installCommands(targetPath, aidevRoot);
+  if (agent === "codex" || agent === "both") {
+    result.codex_hooks_updated = installCodexHooks(targetPath, aidevRoot, enforce);
+    result.codex_skills_installed = installCodexSkills(targetPath, aidevRoot);
   }
 
   return result;
+}
+
+function installCodexHooks(targetPath: string, aidevRoot: string, enforce: boolean): boolean {
+  const codexDir = join(targetPath, ".codex");
+  // ponytail: mkdirSync throws EEXIST when .codex is a file — surface a clear fix
+  if (existsSync(codexDir) && statSync(codexDir).isFile()) {
+    throw new Error(
+      `Cannot install: ${codexDir} exists as a file. Delete the file so .codex/ can be created as a directory.`
+    );
+  }
+  mkdirSync(codexDir, { recursive: true });
+  const hooksPath = join(codexDir, "hooks.json");
+  let existing: Record<string, unknown> = {};
+  if (existsSync(hooksPath)) {
+    try {
+      existing = JSON.parse(readFileSync(hooksPath, "utf-8")) as Record<string, unknown>;
+    } catch {
+      existing = {};
+    }
+  }
+
+  const hooks = (existing.hooks ?? {}) as Record<string, Array<Record<string, unknown>>>;
+  const installHook = (event: string, fileName: string): void => {
+    const groups = hooks[event] ?? [];
+    const needle = `packages/hook/dist/${fileName}`;
+    const retained = groups.map((group) => ({
+      ...group,
+      hooks: Array.isArray(group.hooks)
+        ? (group.hooks as Array<Record<string, unknown>>).filter((hook) =>
+          typeof hook.command !== "string" || !hook.command.replace(/\\/g, "/").includes(needle)
+        )
+        : [],
+    })).filter((group) => Array.isArray(group.hooks) && group.hooks.length > 0);
+    retained.push({
+      matcher: "^apply_patch$",
+      hooks: [{
+        type: "command",
+        command: `node "${aidevRoot.replace(/\\/g, "/")}/packages/hook/dist/${fileName}"`,
+        commandWindows: `node "${aidevRoot.replace(/\\/g, "/")}/packages/hook/dist/${fileName}"`,
+        timeout: 10,
+      }],
+    });
+    hooks[event] = retained;
+  };
+
+  installHook("PostToolUse", "index.js");
+  if (enforce) installHook("PreToolUse", "pre-tool-use.js");
+  writeFileSync(hooksPath, JSON.stringify({ ...existing, hooks }, null, 2) + "\n");
+  return true;
+}
+
+function installCodexSkills(targetPath: string, aidevRoot: string): string[] {
+  const sourceDir = join(aidevRoot, ".agents", "skills");
+  const targetDir = join(targetPath, ".agents", "skills");
+  mkdirSync(targetDir, { recursive: true });
+  const installed: string[] = [];
+  for (const name of readdirSync(sourceDir)) {
+    const source = join(sourceDir, name, "SKILL.md");
+    if (!existsSync(source)) continue;
+    const destination = join(targetDir, name);
+    mkdirSync(destination, { recursive: true });
+    const content = readFileSync(source, "utf-8")
+      .replaceAll("../../../skills/", `${aidevRoot.replace(/\\/g, "/")}/skills/`);
+    writeFileSync(join(destination, "SKILL.md"), content);
+    installed.push(name);
+  }
+  return installed;
 }
 
 function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boolean): boolean {
@@ -246,52 +323,18 @@ ${MARKER_END}`;
 }
 
 function installCommands(targetPath: string, aidevRoot: string): string[] {
+  const sourceDir = join(aidevRoot, ".claude", "commands");
   const commandsDir = join(targetPath, ".claude", "commands");
-  if (!existsSync(commandsDir)) {
-    mkdirSync(commandsDir, { recursive: true });
-  }
-
-  const commands = ["ccplan", "cconboard", "ccdebug"];
+  mkdirSync(commandsDir, { recursive: true });
   const installed: string[] = [];
 
-  for (const command of commands) {
-    const content = generateCommandFile(command, aidevRoot);
-    const targetFile = join(commandsDir, `${command}.md`);
-    writeFileSync(targetFile, content);
-    installed.push(command);
+  for (const file of readdirSync(sourceDir).filter((name) => name.endsWith(".md"))) {
+    const content = readFileSync(join(sourceDir, file), "utf-8").replace(
+      /(?<![\w./-])(skills|packages|scripts)\//g,
+      `${aidevRoot.replace(/\\/g, "/")}/$1/`
+    );
+    writeFileSync(join(commandsDir, file), content);
+    installed.push(file.replace(/\.md$/, ""));
   }
-
   return installed;
-}
-
-function generateCommandFile(command: string, aidevRoot: string): string {
-  const skillPath = resolve(aidevRoot, "skills", command, "SKILL.md");
-  const descriptions: Record<string, string> = {
-    ccplan: "Evolving Constraint Planning: diverge-then-converge requirement engineering with adversarial validation. Use when requirements are ambiguous, conflicting, or multi-session.",
-    cconboard: "Onboard an existing codebase: scan, analyze, modularize, test, document. Transforms messy code into modular, tested, documented code with full audit trail.",
-    ccdebug: "Debug failing tests: trace from failure → source function → change history → root cause → fix → record. Enforces fix-code-not-tests, max 3 retries, full regression.",
-  };
-
-  const schemaFiles: Record<string, string> = {
-    ccplan: "ecl-schema.md",
-    cconboard: "ol-schema.md",
-    ccdebug: "dl-schema.md",
-  };
-
-  const schemaPath = resolve(aidevRoot, "skills", command, schemaFiles[command]);
-
-  return `---
-description: "${descriptions[command]}"
----
-
-Read the full skill specification at \`${skillPath}\` and the schema at \`${schemaPath}\`, then execute the /${command} workflow.
-
-## Arguments
-
-$ARGUMENTS
-
-## AI Dev Companion
-
-This command is provided by AI Dev Companion installed at: \`${aidevRoot}\`
-`;
 }
