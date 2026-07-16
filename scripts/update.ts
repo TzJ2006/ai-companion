@@ -3,7 +3,14 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { installAgentConfig } from "./lib/install-agent-config.ts";
-import { loadRegistry, saveRegistry, addTarget, getRegistryPath } from "./lib/registry.ts";
+import {
+  loadRegistry,
+  saveRegistry,
+  addTarget,
+  getRegistryPath,
+  normalizeTargetPath,
+  pathKey,
+} from "./lib/registry.ts";
 
 const args = process.argv.slice(2);
 
@@ -37,7 +44,8 @@ if (args.includes("--help") || args.includes("-h")) {
 
 const skipBuild = args.includes("--skip-build");
 const targetIndex = args.indexOf("--target");
-const singleTarget = targetIndex >= 0 ? resolve(args[targetIndex + 1]) : null;
+const singleTarget =
+  targetIndex >= 0 ? normalizeTargetPath(args[targetIndex + 1]) : null;
 
 const aidevRoot = resolve(import.meta.dirname, "..");
 
@@ -68,7 +76,7 @@ if (!skipBuild) {
 }
 
 const targets = singleTarget
-  ? registry.targets.filter((t) => resolve(t.path) === singleTarget)
+  ? registry.targets.filter((t) => pathKey(t.path) === pathKey(singleTarget))
   : registry.targets;
 
 if (targets.length === 0) {
@@ -88,7 +96,7 @@ let successCount = 0;
 let failCount = 0;
 
 for (const target of targets) {
-  const targetPath = resolve(target.path);
+  const targetPath = normalizeTargetPath(target.path);
   if (!existsSync(targetPath)) {
     console.log(`  SKIP: ${targetPath} (directory no longer exists)`);
     failCount++;
@@ -101,8 +109,11 @@ for (const target of targets) {
       aidevRoot,
       enforce: target.enforce,
       includeCommands: target.commands,
+      agent: target.agent ?? "both",
     });
-    saveRegistry(addTarget(registry, targetPath, target.enforce, target.commands));
+    saveRegistry(
+      addTarget(registry, targetPath, target.enforce, target.commands, target.agent ?? "both")
+    );
     console.log(`  OK: ${targetPath}`);
     successCount++;
   } catch (error) {

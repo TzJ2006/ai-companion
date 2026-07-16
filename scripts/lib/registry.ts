@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
@@ -8,6 +8,7 @@ export interface RegistryEntry {
   updated_at: string;
   enforce: boolean;
   commands: boolean;
+  agent?: "claude" | "codex" | "both";
 }
 
 export interface Registry {
@@ -18,6 +19,22 @@ export interface Registry {
 
 const REGISTRY_DIR = join(homedir(), ".aidev-companion");
 const REGISTRY_FILE = join(REGISTRY_DIR, "registry.json");
+
+/** Resolve + real filesystem casing (fixes Github vs GitHub on Windows). */
+export function normalizeTargetPath(targetPath: string): string {
+  const resolved = resolve(targetPath);
+  try {
+    return realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+/** Equality key: case-insensitive on win32 so registry lookups survive casing drift. */
+export function pathKey(targetPath: string): string {
+  const normalized = normalizeTargetPath(targetPath);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
 
 export function loadRegistry(): Registry {
   if (!existsSync(REGISTRY_FILE)) {
@@ -37,9 +54,16 @@ export function saveRegistry(registry: Registry): void {
   writeFileSync(REGISTRY_FILE, JSON.stringify(registry, null, 2) + "\n");
 }
 
-export function addTarget(registry: Registry, targetPath: string, enforce: boolean, commands: boolean): Registry {
-  const resolved = resolve(targetPath);
-  const existing = registry.targets.findIndex((t) => resolve(t.path) === resolved);
+export function addTarget(
+  registry: Registry,
+  targetPath: string,
+  enforce: boolean,
+  commands: boolean,
+  agent: "claude" | "codex" | "both" = "both"
+): Registry {
+  const resolved = normalizeTargetPath(targetPath);
+  const key = pathKey(resolved);
+  const existing = registry.targets.findIndex((t) => pathKey(t.path) === key);
 
   const entry: RegistryEntry = {
     path: resolved,
@@ -47,6 +71,7 @@ export function addTarget(registry: Registry, targetPath: string, enforce: boole
     updated_at: new Date().toISOString(),
     enforce,
     commands,
+    agent,
   };
 
   if (existing >= 0) {
@@ -59,8 +84,8 @@ export function addTarget(registry: Registry, targetPath: string, enforce: boole
 }
 
 export function removeTarget(registry: Registry, targetPath: string): Registry {
-  const resolved = resolve(targetPath);
-  registry.targets = registry.targets.filter((t) => resolve(t.path) !== resolved);
+  const key = pathKey(targetPath);
+  registry.targets = registry.targets.filter((t) => pathKey(t.path) !== key);
   return registry;
 }
 
