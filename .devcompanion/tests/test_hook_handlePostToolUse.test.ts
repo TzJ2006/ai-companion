@@ -19,6 +19,17 @@ describe("handlePostToolUse", () => {
     expect(appendFileSync).not.toHaveBeenCalled();
   });
 
+  it("accepts a UTF-8 BOM before a valid hook event", () => {
+    (existsSync as ReturnType<typeof vi.fn>).mockImplementation((p: string) => {
+      return p.includes(".devcompanion") || p.includes(".git") || p.includes("queue");
+    });
+    handlePostToolUse(`\uFEFF${JSON.stringify({
+      tool_name: "Edit",
+      tool_input: { file_path: "/project/app.ts" },
+    })}`);
+    expect(appendFileSync).toHaveBeenCalled();
+  });
+
   it("should ignore non-Edit/Write tools", () => {
     handlePostToolUse(JSON.stringify({ tool_name: "Read", tool_input: { file_path: "/a/b.ts" } }));
     expect(appendFileSync).not.toHaveBeenCalled();
@@ -66,6 +77,20 @@ describe("handlePostToolUse", () => {
       customExts
     );
     expect(appendFileSync).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when queue recording fails", () => {
+    (existsSync as ReturnType<typeof vi.fn>).mockImplementation((p: string) => {
+      return p.includes(".devcompanion") || p.includes(".git") || p.includes("queue");
+    });
+    (appendFileSync as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error("queue unavailable");
+    });
+
+    expect(() => handlePostToolUse(JSON.stringify({
+      tool_name: "Edit",
+      tool_input: { file_path: "/project/app.ts" },
+    }))).not.toThrow();
   });
 });
 

@@ -40,6 +40,7 @@ for (const target of registry.targets) {
   console.log(`  Updated:   ${formatDate(target.updated_at)}`);
   console.log(`  Enforce:   ${target.enforce ? "yes (PreToolUse guard active)" : "no (PostToolUse only)"}`);
   console.log(`  Commands:  ${target.commands ? "yes" : "no"}`);
+  console.log(`  Agent:     ${target.agent ?? "both"}`);
 
   if (!exists) {
     console.log(`  Health:    MISSING (directory does not exist)`);
@@ -61,12 +62,20 @@ function runHealthChecks(targetPath: string): string[] {
     issues.push(".devcompanion/ directory missing");
   }
 
-  if (!existsSync(join(targetPath, ".claude", "settings.json"))) {
+  const agent = targetAgent(targetPath);
+  if ((agent === "claude" || agent === "both") && !existsSync(join(targetPath, ".claude", "settings.json"))) {
     issues.push(".claude/settings.json missing");
   }
 
-  if (!existsSync(join(targetPath, "CLAUDE.md"))) {
+  if ((agent === "claude" || agent === "both") && !existsSync(join(targetPath, "CLAUDE.md"))) {
     issues.push("CLAUDE.md missing");
+  }
+
+  if ((agent === "codex" || agent === "both") && !existsSync(join(targetPath, ".codex", "hooks.json"))) {
+    issues.push(".codex/hooks.json missing");
+  }
+  if ((agent === "codex" || agent === "both") && !existsSync(join(targetPath, ".agents", "skills"))) {
+    issues.push(".agents/skills/ directory missing");
   }
 
   if (!existsSync(join(targetPath, "docs", "ecl"))) {
@@ -86,6 +95,11 @@ function runHealthChecks(targetPath: string): string[] {
   }
 
   return issues;
+}
+
+function targetAgent(targetPath: string): "claude" | "codex" | "both" {
+  const entry = registry.targets.find((target) => resolve(target.path) === resolve(targetPath));
+  return entry?.agent ?? "both";
 }
 
 function formatDate(iso: string): string {
