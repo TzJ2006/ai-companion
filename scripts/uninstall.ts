@@ -1,7 +1,12 @@
 #!/usr/bin/env npx tsx
 import { resolve, join } from "node:path";
-import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
-import { loadRegistry, saveRegistry, removeTarget } from "./lib/registry.ts";
+import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync, rmSync } from "node:fs";
+import {
+  loadRegistry,
+  saveRegistry,
+  removeTarget,
+  normalizeTargetPath,
+} from "./lib/registry.ts";
 
 const MARKER_START = "<!-- AI-DEV-COMPANION:START -->";
 const MARKER_END = "<!-- AI-DEV-COMPANION:END -->";
@@ -12,9 +17,9 @@ function printUsage(): void {
   console.log(`Usage: npx tsx scripts/uninstall.ts <target-path> [options]
 
 Remove AI Dev Companion from a target project. This removes:
-  - Hook entries from .claude/settings.json
+  - Hook entries from .claude/settings.json and .codex/hooks.json
   - Constraint block from CLAUDE.md
-  - .claude/commands/ skill files (ccplan, cconboard, ccdebug)
+  - Claude command files and Codex .agents/skills adapters
   - Registry entry
 
 Does NOT remove:
@@ -41,7 +46,7 @@ const registry = loadRegistry();
 
 const targets = removeAll
   ? registry.targets.map((t) => t.path)
-  : [resolve(args[0])];
+  : [normalizeTargetPath(args[0])];
 
 if (targets.length === 0) {
   console.log("No targets to uninstall.");
@@ -58,11 +63,35 @@ for (const targetPath of targets) {
   }
 
   removeHooksFromSettings(targetPath);
+  removeCodexHooks(targetPath);
   removeConstraintBlockFromClaudeMd(targetPath);
   removeCommandFiles(targetPath);
+  removeCodexSkills(targetPath);
   saveRegistry(removeTarget(registry, targetPath));
 
   console.log("  Done.");
+}
+
+function removeCodexHooks(targetPath: string): void {
+  const hooksPath = join(targetPath, ".codex", "hooks.json");
+  if (!existsSync(hooksPath)) return;
+
+  try {
+    const settings = JSON.parse(readFileSync(hooksPath, "utf-8"));
+    const hooks = settings.hooks;
+    if (!hooks) return;
+    for (const event of ["PostToolUse", "PreToolUse"]) {
+      if (!Array.isArray(hooks[event])) continue;
+      hooks[event] = hooks[event].filter(
+        (entry: Record<string, unknown>) => !JSON.stringify(entry).includes("ai-companion")
+      );
+      if (hooks[event].length === 0) delete hooks[event];
+    }
+    writeFileSync(hooksPath, JSON.stringify(settings, null, 2) + "\n");
+    console.log("  Removed hooks from .codex/hooks.json");
+  } catch {
+    console.log("  Warning: could not parse .codex/hooks.json");
+  }
 }
 
 saveRegistry(registry);
@@ -127,7 +156,10 @@ function removeCommandFiles(targetPath: string): void {
   const commandsDir = join(targetPath, ".claude", "commands");
   if (!existsSync(commandsDir)) return;
 
-  const commands = ["ccplan.md", "cconboard.md", "ccdebug.md"];
+  const sourceDir = join(resolve(import.meta.dirname, ".."), ".claude", "commands");
+  const commands = existsSync(sourceDir)
+    ? readdirSync(sourceDir).filter((file) => file.endsWith(".md"))
+    : [];
   let removed = 0;
 
   for (const file of commands) {
@@ -135,7 +167,7 @@ function removeCommandFiles(targetPath: string): void {
     if (existsSync(filePath)) {
       try {
         const content = readFileSync(filePath, "utf-8");
-        if (content.includes("AI Dev Companion")) {
+        if (content.includes("skills/") || content.includes("AI Dev Companion")) {
           unlinkSync(filePath);
           removed++;
         }
@@ -147,5 +179,29 @@ function removeCommandFiles(targetPath: string): void {
 
   if (removed > 0) {
     console.log(`  Removed ${removed} command file(s) from .claude/commands/`);
+  }
+}
+
+function removeCodexSkills(targetPath: string): void {
+  const sourceDir = join(resolve(import.meta.dirname, ".."), ".agents", "skills");
+  const skillsDir = join(targetPath, ".agents", "skills");
+  if (!existsSync(sourceDir) || !existsSync(skillsDir)) return;
+
+  let removed = 0;
+  for (const name of readdirSync(sourceDir)) {
+    const skillPath = join(skillsDir, name);
+    const marker = join(skillPath, "SKILL.md");
+    if (!existsSync(marker)) continue;
+    try {
+      if (readFileSync(marker, "utf-8").includes("AI Dev Companion Codex Adapter")) {
+        rmSync(skillPath, { recursive: true, force: true });
+        removed++;
+      }
+    } catch {
+      // skip files we can't read
+    }
+  }
+  if (removed > 0) {
+    console.log(`  Removed ${removed} Codex skill adapter(s) from .agents/skills/`);
   }
 }

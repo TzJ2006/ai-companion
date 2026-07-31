@@ -1,135 +1,101 @@
 # AGENTS.md
 
-This file provides guidance to Codex (codex.ai/code) when working with code in this repository.
-
-## Project Overview
-
-AI Dev Companion — a TypeScript monorepo that tracks code changes at function-level granularity for Python and TypeScript projects. It parses git diffs, identifies which functions were modified, records reasons, generates test skeletons, and renders annotated HTML reports.
-
-On top of that tracking core, the repo carries a **custom planning/execution workflow** (a set of Claude Code skills) that this project is developed *with*. Understanding that workflow (below) is usually more important than the tracking core, because most changes here flow through it.
+AI Dev Companion — a TypeScript monorepo (npm workspaces, `packages/*`, ESM, TypeScript project
+references) that tracks code changes at function-level granularity for Python and TypeScript
+projects: it parses git diffs, attributes hunks to functions via tree-sitter, records reasons, and
+renders annotated HTML reports. On top of the tracking core sits a skill pipeline
+(`/idea → /ccdiscuss → /ccplan → /ccedit → /ccdebug`, plus `/cconboard`, `/ccoverview`, `/ccaudit`)
+that `scripts/install.ts` installs into other repos. This repo dogfoods its own tracker: the hooks
+in `.claude/settings.json` run `packages/hook/dist`. Main entry points: `packages/cli/dist/main.js`
+(the `aidev` CLI) and `scripts/*.ts` (run with `npx tsx`).
 
 ## Commands
 
 ```bash
-npm install
-npm run build          # tsc --build (project references)
+npm install            # also fetches the tree-sitter .wasm files tests need
+npm run build          # tsc --build (project references) — outputs packages/*/dist
 npm run clean          # tsc --build --clean
-npm run test           # vitest (sequential, no parallelism)
-npm run lint           # eslint packages/*/src/**/*.ts
+npx vitest run                                             # full test suite, one-shot
+npx vitest run .devcompanion/tests/test_exec_parseEclDag.test.ts   # single test file
 
-# Single test (path-based — tests live in .devcompanion/tests/, not colocated)
-npx vitest run .devcompanion/tests/test_ast_parseFile.test.ts
+# aidev CLI (build first): init | review | render | history | onboard | analyze | idea | install
+node packages/cli/dist/main.js <command> -p <target-project-path>
 
-# Report generation
-npx tsx scripts/collect-report-data.ts
-npx tsx scripts/generate-report.ts
+# Install/manage the companion in other repos (idempotent, registry-tracked)
+npx tsx scripts/install.ts <target-path> [--enforce] [--no-commands]
+npx tsx scripts/update.ts | scripts/status.ts | scripts/uninstall.ts <target-path>
+
+# Onboarding pipeline (LLM analysis → ECL → tests → overview HTML)
+npx tsx scripts/run-onboarding.ts <project-path>
 npx tsx scripts/generate-overview.ts --target <project-path>
 
-# Onboarding pipeline (LLM analysis → ECL → tests → overview)
-npx tsx scripts/run-onboarding.ts <project-path>
-
-# Dashboard (Fastify web UI for scanned projects)
+# Dashboard (Fastify web UI over scanned projects)
 npm run dashboard:start | dashboard:stop | dashboard:restart | dashboard:status
+
+# ECL DAG executor CLI (the /ccedit engine)
+npx tsx packages/exec/src/cli.ts parse|state|set-status|verify <ecl-path> [...]
 ```
-
-## Skills Pipeline (how work happens in this repo)
-
-This repo is developed through a chain of Claude Code **slash commands**. Each is registered by a file in `.claude/commands/<name>.md` (frontmatter `description` + body) that points to the full spec in `skills/<name>/SKILL.md`. Adding/wiring a skill = create both files; a skill that has a `SKILL.md` but no `.claude/commands/` entry is **not invocable**.
-
-```
-/idea  ──▶  /ccdiscuss  ──▶  /ccplan  ──▶  /ccedit  ──▶  /ccdebug
- backlog     alignment       planning      execution     debug-on-fail
-                                  ▲
-                            /cconboard (onboard an existing codebase)
-```
-
-- **/ccdiscuss** — best-effort conversational alignment BEFORE planning. Human writes the expected result FIRST, then the AI emits its "5 questions" (是什么 / 为什么做 / 如何做 / 为什么这样做 / 期望结果) and flags divergence; output is an aligned ECL. NOT a gate — `/ccplan` reads it *if present*. Read-only (only writes `docs/ecl/*.yaml`).
-- **/ccplan** — diverge-then-converge requirement engineering (12-phase spiral: calibrate → hypothesize → challenge → diverge → converge → probe → confront → **review-gate (Phase 9, STOP for approval)** → implement → loop). Output is an ECL document. Read-only until approved.
-- **/ccedit** — DAG-driven executor for an *approved* ECL. Topologically sorts the FN-layer graph, fans out one subagent per independent node (parallel), runs each node's `verify`, and writes `status` back. Routes failures to `/ccdebug`. See `@aidev/exec` below.
-- **/ccdebug** — failure → source function → change history → root cause → fix. Enforces fix-code-not-tests, max 3 retries, full regression.
-- **/cconboard** — scan/analyze/modularize/test/document an existing codebase; archives originals into `archive/`.
-- **/idea** — idea backlog + research (`/idea add|list|research|show`).
-
-When asked to plan, design, or implement a non-trivial change, prefer invoking the relevant skill over ad-hoc edits.
-
-## ECL — Evolving Constraint Language (`docs/ecl/*.yaml`)
-
-ECL YAML files are the persistent artifact threaded through the whole pipeline. A single file can play three roles:
-
-1. **Planning document** — `/ccplan` output: requirements (REQ), features (FEAT), modules (MOD), functions (FN), decisions (DEC), adversarial findings, phase status. Schema in `skills/ccplan/ecl-schema.md`.
-2. **Execution DAG** — `/ccedit` input: the `functions:` list, where each FN node has the *executable* schema `{ id, name, depends_on[], output{file,symbol}, verify{command,pass_condition}, status }`. `status` ∈ `pending|in-progress|done|blocked`. Only the `/ccedit` orchestrator writes `status` (atomic temp-file + rename); subagents never do.
-3. **Feature guard** — a `feature_guard` section lists `key_files`, `invariants`, and a `verification` command. When present, the guard activates on any edit to a key file; run the verification after touching guarded files. Consumed by `/ccplan --guard [--verify]`.
-
-`verify.command` is split on whitespace and spawned as a single argv (no pipes/`&&`/redirection) — use `npx vitest run <path>`, not shell one-liners.
 
 ## Architecture
 
 ```
 packages/
-├── types      @aidev/types     — Shared interfaces (analysis, modularity, history)
-├── ast        @aidev/ast       — Tree-sitter WASM parsers (Python + TS), function extraction, identity hashing
-├── core        @aidev/core     — Diff parsing, change annotation, test generation, analysis, modularity
-├── history     @aidev/history  — JSON file store (reviews/, history/, index.json)
-├── render       @aidev/render  — HTML report rendering (session view + onboard view)
-├── cli          @aidev/cli     — Commander CLI `aidev` (review, render, history, init, onboard, analyze, idea)
-├── hook         @aidev/hook    — Claude Code PostToolUse hook handler (<100ms)
-├── daemon       @aidev/daemon  — Background queue processor for async diff + storage
-├── exec         @aidev/exec    — ECL FN-DAG executor (the engine behind /ccedit)
-├── llm          @aidev/llm     — Thin wrapper around the Claude CLI (callClaude, preflight)
-├── idea         @aidev/idea    — Idea backlog store + research runner (behind /idea)
-└── dashboard    @aidev/dashboard — Fastify web UI that scans projects and serves reports
+├── types      @aidev/types     — shared interfaces
+├── ast        @aidev/ast       — tree-sitter WASM parsers (Python + TS); wasm-resolver.ts is the
+│                                  single source for .wasm path lookup; identity.ts hashes functions
+├── core       @aidev/core      — diff/ (parse + annotate), analysis/, modularity/, test-gen/
+├── history    @aidev/history   — JSON file store (.devcompanion/: reviews/, history/, index.json)
+├── render     @aidev/render    — diff2html + annotation panels → HTML reports
+├── cli        @aidev/cli       — Commander CLI `aidev` (main.ts registers the 8 commands above)
+├── hook       @aidev/hook      — Claude/Codex PostToolUse + PreToolUse hook handlers (<100ms)
+├── daemon     @aidev/daemon    — background queue processor (async diff + storage)
+├── exec       @aidev/exec      — ECL FN-DAG executor behind /ccedit (parse, toposort, verify)
+├── llm        @aidev/llm       — thin Claude CLI wrapper
+├── idea       @aidev/idea      — idea backlog + research runner
+└── dashboard  @aidev/dashboard — Fastify web UI
 ```
 
-**Dependency flow**: `types` ← `ast` ← `core` ← `history` ← `render` ← `cli`; `hook` uses core + history; `daemon` wraps hook. `llm` is standalone; `idea` uses `llm`; `exec` depends only on `yaml`; `dashboard` is standalone (fastify). `scripts/lib/*` uses `ast` + `types` + `llm`.
+- **Skills pipeline**: one agent-neutral spec per skill in `skills/<name>/SKILL.md`; Claude Code
+  invokes via `.claude/commands/<name>.md`, Codex via `.agents/skills/<name>/SKILL.md`. A new skill
+  needs all three pieces. Prefer invoking a skill over ad-hoc edits for non-trivial changes.
+- **ECL** (`docs/ecl/*.yaml`, schema in `skills/ccplan/ecl-schema.md`) is the artifact threading the
+  pipeline: /ccplan planning doc → /ccedit execution DAG (`functions:` nodes with
+  `{id, depends_on, output, verify, status}`) → optional `feature_guard` section. Only the /ccedit
+  orchestrator writes `status` (atomic temp-file + rename in `packages/exec/src/status-manager.ts`);
+  subagents never do.
+- **Hook data flow**: Edit/Write → hook appends to `<projectRoot>/.devcompanion/queue/events.jsonl`;
+  unsupported extensions degrade to file-level events (`file_level: true`) instead of being dropped;
+  the daemon later does AST diffing + storage.
+- **Function identity** = `sha256(file_path + class_name + function_name + param_types)[0:16]` —
+  stable across line-number drift.
+- `devcompanion.config.ts` is the module registry (paths, exports, dependencies). Update it when
+  adding a package or changing public exports.
 
-### Core subsystems (`packages/core/`)
+## Conventions
 
-- `diff/` — unified diff parsing, change annotation, git integration
-- `analysis/` — function-level analysis (heuristic + LLM), batch processing
-- `modularity/` — cohesion/coupling metrics, contract generation, refactor recommendations
-- `test-gen/` — test skeleton generation for Python and TypeScript
+- 2-space indentation; kebab-case source filenames (`status-manager.ts`, `wasm-resolver.ts`).
+- ESM everywhere (`"type": "module"`, `NodeNext`); relative imports use explicit `.js` extensions.
+- Tests are NOT colocated: they live in `.devcompanion/tests/` (kept tracked via `.gitignore`
+  exception), named `test_<module>_<functionName>.test.ts` (older ones vary). Vitest only picks up
+  `.devcompanion/tests/**/*.test.ts`.
+- `vitest.config.ts` aliases `@aidev/*` to package **source** (`src/index.ts`), not dist, and sets
+  `fileParallelism: false` (sequential files).
 
-### AST internals (`packages/ast/`)
+## Gotchas
 
-- `wasm-resolver.ts` — single source for tree-sitter WASM path resolution (searches up node_modules)
-- `parser-factory.ts` — parser instantiation
-- `parser.ts` / `ts-parser.ts` — language-specific extraction (Python / TypeScript)
-- `multi-lang.ts` — extension-based dispatch via `parseFileAuto`
-
-### Exec engine (`packages/exec/`) — the `/ccedit` runtime
-
-Exports (`index.ts`): `parseEclDag`, `validateFnFields`, `topologicalSort` (Kahn → `ExecutionLayer[]`), `getExecutionState`/`getReadyNodes`, `buildSubagentContext`/`formatSubagentPrompt`, `updateFnStatus`, `runVerification`, `loadExecConfig`. Driven via `packages/exec/src/cli.ts` subcommands: `parse | state | set-status <id> <status> | verify <id>`.
-
-- **Windows spawn gotcha** (`runVerification`): `execFile(shell:false)` cannot resolve `.cmd` shims (e.g. `npx`→`npx.cmd`) → spawn `ENOENT`; but `shell:true` lets cmd.exe mangle metacharacters (the `>` inside `=>`). The fix tries `shell:false` first and falls back to `shell:true` **only** on a win32 `ENOENT`. Locked by `.devcompanion/tests/test_exec_runVerification.test.ts` — don't revert it to a single shell mode.
-
-### Onboarding pipeline (`scripts/lib/`)
-
-`run-onboarding.ts` → `onboarding-pipeline.ts` orchestrates: project detection → AST scan → LLM function analysis (`enhanced-analyzer.ts`, `opus-ecl-generator.ts` via `@aidev/llm`) → semantic ECL inference → test skeleton generation → overview HTML. This is the engine behind `/cconboard` and `/ccplan` Phase 10.
-
-## Key Concepts
-
-- **Function Identity**: `sha256(file_path + class_name + function_name + param_types)[0:16]` — stable across line-number drift.
-- **Two trigger modes**: hook (auto, captures reason from AI context) + CLI (manual, user-provided reason). The hook records `.py`/`.ts` at function level and degrades **unsupported extensions to file-level** events (e.g. `.yaml`/`.md`) rather than dropping them; events queue at `<projectRoot>/.devcompanion/queue/events.jsonl`.
-- **Storage**: plain JSON in `.devcompanion/` — no database.
-- **Config registry**: `devcompanion.config.ts` declares all modules, exports, dependencies, and paths. Update this file when adding a package or changing public exports.
-
-## Workspace Structure
-
-- npm workspaces with `packages/*`; TypeScript project references (root `tsconfig.json` references each package).
-- ESM throughout (`"type": "module"`, `NodeNext` module resolution).
-- `archive/` holds timestamped snapshots of previous package states (created by `/cconboard`).
-- This repo runs on **Windows / bash**: use Unix paths (`/dev/null`, forward slashes); watch the `.cmd`-shim gotcha above when spawning tools.
-
-## Testing
-
-- Vitest with `fileParallelism: false` (sequential).
-- Tests live in `.devcompanion/tests/` (NOT colocated). Convention: `test_<module>_<functionName>.test.ts` (some older tests use shorter names).
-- Path aliases in `vitest.config.ts` (`@aidev/ast`, `@aidev/core`, `@aidev/history`, `@aidev/render`) resolve to **source**, not dist.
-- WASM tests need the tree-sitter `.wasm` files in `node_modules/` — run `npm install` first.
-
-## CLI Usage
-
-```bash
-node packages/cli/dist/main.js <command> -p <target-project-path>
-```
-Commands: `init`, `review`, `render`, `history`, `onboard`, `analyze`, `idea`.
+- `npm run test` starts vitest in **watch mode and never exits**. Always use `npx vitest run [path]`.
+- `npm run lint` is a dead script: eslint is not installed anywhere in the workspace (zero hits in
+  `package-lock.json`). Don't rely on it; don't "fix" it by adding eslint without being asked.
+- **Windows spawn gotcha** (`runVerification` in `packages/exec/src/status-manager.ts`):
+  `execFile(shell:false)` can't resolve `.cmd` shims (`npx` → `npx.cmd`) → spawn `ENOENT`, but
+  `shell:true` lets cmd.exe mangle metacharacters. The code tries `shell:false` first and falls back
+  to `shell:true` only on win32 `ENOENT`. Locked by
+  `.devcompanion/tests/test_exec_runVerification.test.ts` — don't collapse it to a single mode.
+- ECL `verify.command` is split on whitespace and spawned as one argv — no pipes, `&&`, or
+  redirection. Use `npx vitest run <path>`, not shell one-liners.
+- The Claude hooks run `packages/hook/dist/*.js` — rebuild (`npm run build`) after editing
+  `packages/hook/src` or the live hooks keep executing stale code. Same for the CLI: `aidev` runs
+  from `packages/cli/dist`.
+- Install-registry paths are normalized with filesystem casing (`realpathSync.native`) so
+  `GitHub` vs `Github` matches on Windows.
+- WASM-dependent tests need the tree-sitter `.wasm` files under `node_modules/` — `npm install` first.

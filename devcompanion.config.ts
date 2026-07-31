@@ -191,6 +191,13 @@ const config: DevCompanionConfig = {
         { module: "llm", imports: ["callClaude"] },
       ],
     },
+    dashboard: {
+      path: resolve(ROOT, "packages/dashboard/src"),
+      description: "Fastify web UI that scans projects and serves reports",
+      entryPoint: "cli.ts",
+      exports: [],
+      dependencies: [],
+    },
   },
 
   tests: {

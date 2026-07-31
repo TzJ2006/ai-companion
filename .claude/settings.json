@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run clean:*)",
+      "Bash(npm run dashboard:status:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx tsx:*)",
+      "Bash(node packages/cli/dist/main.js:*)",
+      "Bash(node packages/exec/dist/cli.js:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/index.js\"" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/pre-tool-use.js\"" }
+        ]
+      }
+    ]
+  }
+}
