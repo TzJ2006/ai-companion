@@ -2,22 +2,26 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "^apply_patch$",
         "hooks": [
           {
             "type": "command",
-            "command": "node D:/Github/ai-companion/packages/hook/dist/pre-tool-use.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/packages/hook/dist/pre-tool-use.js\"",
+            "commandWindows": "powershell.exe -NoProfile -Command \"& node (Join-Path (git rev-parse --show-toplevel) 'packages/hook/dist/pre-tool-use.js')\"",
+            "timeout": 10
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "^apply_patch$",
         "hooks": [
           {
             "type": "command",
-            "command": "node D:/Github/ai-companion/packages/hook/dist/index.js"
+            "command": "node \"$(git rev-parse --show-toplevel)/packages/hook/dist/index.js\"",
+            "commandWindows": "powershell.exe -NoProfile -Command \"& node (Join-Path (git rev-parse --show-toplevel) 'packages/hook/dist/index.js')\"",
+            "timeout": 10
           }
         ]
       }

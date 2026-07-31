@@ -1,9 +1,8 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { getChangedFilePaths, isFileWriteTool, type ToolUseInput } from "./tool-event.js";
 
 const MARKER_FILE = ".devcompanion/.ccplan-active";
-
-const WRITE_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 
 const WRITE_BASH_PATTERNS = [
   /\brm\b/,
@@ -17,7 +16,7 @@ const WRITE_BASH_PATTERNS = [
   /\btee\b/,
 ];
 
-export interface PreToolUseEvent {
+export interface PreToolUseEvent extends ToolUseInput {
   tool_name: string;
   tool_input: Record<string, unknown>;
 }
@@ -33,10 +32,12 @@ export function isCcplanActive(projectRoot?: string): boolean {
   return existsSync(markerPath);
 }
 
-function isEclWrite(toolInput: Record<string, unknown>): boolean {
-  const filePath = (toolInput.file_path as string) || "";
-  const normalized = filePath.replace(/\\/g, "/");
-  return normalized.includes("docs/ecl/") && normalized.endsWith(".yaml");
+function isEclWrite(event: PreToolUseEvent, projectRoot?: string): boolean {
+  const paths = getChangedFilePaths(event, projectRoot);
+  return paths.length > 0 && paths.every((filePath) => {
+    const normalized = filePath.replace(/\\/g, "/");
+    return normalized.includes("/docs/ecl/") && normalized.endsWith(".yaml");
+  });
 }
 
 function isWriteBash(toolInput: Record<string, unknown>): boolean {
@@ -54,8 +55,8 @@ export function handlePreToolUse(
 
   const { tool_name, tool_input } = event;
 
-  if (WRITE_TOOLS.has(tool_name)) {
-    if (isEclWrite(tool_input)) {
+  if (isFileWriteTool(tool_name)) {
+    if (isEclWrite(event, projectRoot)) {
       return { blocked: false };
     }
     return {
@@ -74,13 +75,13 @@ export function handlePreToolUse(
   return { blocked: false };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename ?? "")) {
+if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename ?? "") && !process.stdin.isTTY) {
   let data = "";
   process.stdin.setEncoding("utf-8");
   process.stdin.on("data", (chunk) => { data += chunk; });
   process.stdin.on("end", () => {
     try {
-      const event = JSON.parse(data) as PreToolUseEvent;
+      const event = JSON.parse(data.replace(/^\uFEFF/, "")) as PreToolUseEvent;
       const root = process.env.DEVCOMPANION_ROOT || process.cwd();
       const result = handlePreToolUse(event, root);
       if (result.blocked) {

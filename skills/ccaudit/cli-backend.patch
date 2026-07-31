@@ -1,0 +1,98 @@
+diff --git a/src/llmtool/LLM_utils.py b/src/llmtool/LLM_utils.py
+index 843c2db..92657f1 100644
+--- a/src/llmtool/LLM_utils.py
++++ b/src/llmtool/LLM_utils.py
+@@ -52,7 +52,10 @@ class LLM:
+     ) -> Tuple[str, int, int]:
+         self.logger.print_log(self.online_model_name, "is running")
+         output = ""
+-        if "gemini" in self.online_model_name:
++        if self.online_model_name in ("claude-code", "codex-cli"):
++            # Must be checked before the generic "claude" substring branch.
++            output = self.infer_with_cli(message)
++        elif "gemini" in self.online_model_name:
+             output = self.infer_with_gemini(message)
+         elif "gpt" in self.online_model_name:
+             output = self.infer_with_openai_model(message)
+@@ -90,6 +93,81 @@ class LLM:
+                 self.logger.print_log(f"Operation failed: {e}")
+                 return ""
+ 
++    def infer_with_cli(self, message: str) -> str:
++        """Infer via a local coding-agent CLI subprocess (subscription auth, no API key).
++
++        model name "claude-code" -> `claude -p` (stable)
++        model name "codex-cli"   -> `codex exec` (experimental seam)
++        Prompt is passed via stdin (never argv, never shell-interpolated).
++        Override the underlying model with REPOAUDIT_CLI_MODEL (default: sonnet).
++        """
++        import shutil
++        import subprocess
++
++        prompt = f"{self.systemRole}\n\n{message}"
++        if self.online_model_name == "claude-code":
++            exe = shutil.which("claude")
++            if exe is None:
++                raise EnvironmentError("claude CLI not found on PATH")
++            cli_model = os.environ.get("REPOAUDIT_CLI_MODEL", "sonnet")
++            argv = [
++                exe,
++                "-p",
++                "--output-format",
++                "json",
++                "--max-turns",
++                "1",
++                "--model",
++                cli_model,
++            ]
++        else:
++            exe = shutil.which("codex")
++            if exe is None:
++                raise EnvironmentError("codex CLI not found on PATH")
++            argv = [exe, "exec", "--json", "-"]
++        if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
++            # CreateProcess cannot execute .cmd shims directly; argv items are
++            # fixed constants, so the cmd wrapper is injection-safe.
++            argv = ["cmd", "/c"] + argv
++
++        def call_cli():
++            proc = subprocess.run(
++                argv,
++                input=prompt,
++                capture_output=True,
++                text=True,
++                encoding="utf-8",
++                timeout=300,
++                shell=False,
++            )
++            if proc.returncode != 0:
++                raise RuntimeError(
++                    f"CLI exited {proc.returncode}: {proc.stderr[:500]}"
++                )
++            if self.online_model_name == "claude-code":
++                data = json.loads(proc.stdout)
++                if data.get("is_error"):
++                    raise RuntimeError(
++                        f"CLI error result: {str(data.get('result'))[:500]}"
++                    )
++                return data.get("result", "")
++            return proc.stdout
++
++        tryCnt = 0
++        max_retries = 5
++        while tryCnt < max_retries:
++            tryCnt += 1
++            try:
++                output = call_cli()
++                if output:
++                    return output
++            except Exception as e:
++                self.logger.print_log(
++                    f"CLI backend error (attempt {tryCnt}/{max_retries}): {e}"
++                )
++            time.sleep(2 * tryCnt)  # backoff: usage-limit errors need breathing room
++        return ""
++
+     def infer_with_gemini(self, message: str) -> str:
+         """Infer using the Gemini model from Google Generative AI"""
+         gemini_model = genai.GenerativeModel("gemini-pro")
