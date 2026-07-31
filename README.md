@@ -7,20 +7,27 @@ A structured code change tracking tool for Python projects. Records every modifi
 1. **Tracks changes** — Parses git diffs, identifies which functions were modified, and records line-level changes with reasons
 2. **Generates HTML reports** — GitHub-diff-style visualization with annotations (reason, test status, error IDs) in a sidebar
 3. **Maintains history** — JSON-based per-file history indexed by function signature hash, queryable by file/function/time
-4. **Integrates with Claude Code** — Auto-captures changes via PostToolUse hook; reasons come directly from AI context (no post-hoc inference needed)
+4. **Integrates with Claude Code and Codex** — Auto-captures Claude Edit/Write and Codex apply_patch changes via PostToolUse hooks; reasons come directly from AI context
 
 ## Architecture
 
 ```
 packages/
-├── ast/       — Python parser (web-tree-sitter): extracts function signatures, params, types
+├── types/     — Shared interfaces
+├── ast/       — Python/TS parsers (web-tree-sitter): function signatures, identity
 ├── core/      — Diff parser + change annotator + test prompt generator
 ├── history/   — JSON file store: reviews/, history/, index.json
 ├── render/    — diff2html + custom annotation panels → HTML
-├── cli/       — Commands: init, review, render, history
-├── hook/      — Claude Code PostToolUse hook (lightweight, <100ms)
-└── daemon/    — Background queue processor (async diff + storage)
+├── cli/       — Commands: init, review, render, history, install, …
+├── hook/      — Claude Code and Codex PostToolUse hook adapter (lightweight, <100ms)
+├── daemon/    — Background queue processor (async diff + storage)
+├── exec/      — ECL FN-DAG executor (/ccedit)
+├── llm/       — Claude CLI wrapper
+├── idea/      — Idea backlog + research
+└── dashboard/ — Fastify web UI for scanned projects
 ```
+
+**Install into other repos:** `npx tsx scripts/install.ts <target> [--enforce]` (registry-tracked). `aidev install` **delegates** to that script (same registry + hooks). Rebuild the CLI (`npm run build`) after pulling so `packages/cli/dist` picks up the wrapper. Registry paths are normalized with filesystem casing (`realpathSync.native`) so `GitHub` vs `Github` matches on Windows.
 
 ## Quick Start
 

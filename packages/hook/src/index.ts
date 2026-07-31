@@ -1,5 +1,6 @@
 import { readFileSync, appendFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
+import { getChangedFilePaths, isFileWriteTool, type ToolUseInput } from "./tool-event.js";
 
 interface EclContextSlim {
   feature: string;
@@ -34,52 +35,62 @@ export function handlePostToolUse(
   stdin: string,
   supportedExtensions: Set<string> = SUPPORTED_EXTENSIONS
 ): void {
-  let input: { tool_name?: string; tool_input?: Record<string, unknown> };
+  let input: ToolUseInput;
   try {
-    input = JSON.parse(stdin);
+    input = JSON.parse(stdin.replace(/^\uFEFF/, "")) as ToolUseInput;
   } catch {
     return;
   }
 
-  const toolName = input.tool_name;
-  if (toolName !== "Edit" && toolName !== "Write") return;
+  try {
+    const toolName = input.tool_name;
+    if (!isFileWriteTool(toolName)) return;
 
-  const filePath = input.tool_input?.file_path as string | undefined;
-  if (!filePath) return;
+    for (const filePath of getChangedFilePaths(input)) {
+      const ext = extname(filePath).toLowerCase();
+      const isAstSupported = supportedExtensions.has(ext);
+      const isFileLevel = FILE_LEVEL_EXTENSIONS.has(ext);
+      // Drop only truly unsupported extensions; AST-supported and file-level
+      // extensions both get recorded into the same queue.
+      if (!isAstSupported && !isFileLevel) continue;
 
-  const ext = extname(filePath).toLowerCase();
-  const isAstSupported = supportedExtensions.has(ext);
-  const isFileLevel = FILE_LEVEL_EXTENSIONS.has(ext);
-  // Drop only truly unsupported extensions; AST-supported and file-level
-  // extensions both get recorded into the same queue.
-  if (!isAstSupported && !isFileLevel) return;
+      const projectRoot = findProjectRoot(filePath);
+      if (!projectRoot) continue;
 
-  const projectRoot = findProjectRoot(filePath);
-  if (!projectRoot) return;
+      const queueDir = join(projectRoot, QUEUE_DIR);
+      if (!existsSync(queueDir)) {
+        mkdirSync(queueDir, { recursive: true });
+      }
 
-  const queueDir = join(projectRoot, QUEUE_DIR);
-  if (!existsSync(queueDir)) {
-    mkdirSync(queueDir, { recursive: true });
+      const event: HookEvent = {
+        timestamp: new Date().toISOString(),
+        tool: toolName ?? "unknown",
+        file_path: filePath,
+        pre_snapshot_path: null,
+        reason: isAstSupported
+          ? "auto-captured from AI agent session"
+          : "auto-captured from AI agent session (file-level, no AST)",
+        ecl_context: detectActiveEcl(projectRoot),
+        five_questions: null,
+      };
+      // file-level events are flagged so the daemon can skip AST parsing.
+      if (!isAstSupported) event.file_level = true;
+
+      const queueFile = join(queueDir, "events.jsonl");
+      appendFileSync(queueFile, JSON.stringify(event) + "\n");
+
+      emitVerificationReminder(projectRoot, filePath);
+    }
+  } catch (error) {
+    // PostToolUse is observational. A queue failure must never fail the edit
+    // that already completed or make Codex report a hook error.
+    try {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[AI Dev Companion] PostToolUse skipped: ${message}\n`);
+    } catch {
+      // stderr itself is best-effort in hook processes.
+    }
   }
-
-  const event: HookEvent = {
-    timestamp: new Date().toISOString(),
-    tool: toolName,
-    file_path: filePath,
-    pre_snapshot_path: null,
-    reason: isAstSupported
-      ? "auto-captured from Claude Code session"
-      : "auto-captured from Claude Code session (file-level, no AST)",
-    ecl_context: detectActiveEcl(projectRoot),
-    five_questions: null,
-  };
-  // file-level events are flagged so the daemon can skip AST parsing.
-  if (!isAstSupported) event.file_level = true;
-
-  const queueFile = join(queueDir, "events.jsonl");
-  appendFileSync(queueFile, JSON.stringify(event) + "\n");
-
-  emitVerificationReminder(projectRoot, filePath);
 }
 
 export function findProjectRoot(filePath: string): string | null {
@@ -178,7 +189,7 @@ function emitVerificationReminder(projectRoot: string, filePath: string): void {
   }
 }
 
-if (process.stdin.isTTY === false) {
+if (!process.stdin.isTTY) {
   let data = "";
   process.stdin.setEncoding("utf-8");
   process.stdin.on("data", (chunk) => { data += chunk; });

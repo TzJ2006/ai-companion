@@ -1,18 +1,16 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
 import { handlePreToolUse as checkCcplanGuard } from "./pre-tool-use-guard.js";
+import { getChangedFilePaths, isFileWriteTool, type ToolUseInput } from "./tool-event.js";
 
 const SUPPORTED_EXTENSIONS = new Set([".py", ".pyi", ".ts", ".tsx", ".mts", ".cts"]);
 
-interface PreToolInput {
-  tool_name?: string;
-  tool_input?: Record<string, unknown>;
-}
+interface PreToolInput extends ToolUseInput {}
 
 export function handlePreToolUse(stdin: string): void {
   let input: PreToolInput;
   try {
-    input = JSON.parse(stdin);
+    input = JSON.parse(stdin.replace(/^\uFEFF/, ""));
   } catch {
     return;
   }
@@ -21,12 +19,14 @@ export function handlePreToolUse(stdin: string): void {
   if (!toolName) return;
 
   // ccplan read-only guard: check before any other logic
-  const filePath = input.tool_input?.file_path as string | undefined;
-  const projectRoot = filePath ? findProjectRoot(filePath) : findProjectRootFromCwd();
+  const candidatePaths = getChangedFilePaths(input);
+  const projectRoot = candidatePaths.length > 0
+    ? findProjectRoot(candidatePaths[0])
+    : findProjectRootFromCwd();
 
   if (projectRoot) {
     const guardResult = checkCcplanGuard(
-      { tool_name: toolName, tool_input: input.tool_input || {} },
+      { tool_name: toolName, tool_input: input.tool_input || {}, cwd: input.cwd },
       projectRoot
     );
     if (guardResult.blocked) {
@@ -35,7 +35,8 @@ export function handlePreToolUse(stdin: string): void {
     }
   }
 
-  if (toolName !== "Edit" && toolName !== "Write") return;
+  if (!isFileWriteTool(toolName)) return;
+  const filePath = candidatePaths.find((path) => SUPPORTED_EXTENSIONS.has(extname(path).toLowerCase()));
   if (!filePath) return;
 
   const ext = extname(filePath).toLowerCase();
@@ -198,7 +199,7 @@ function findProjectRootFromCwd(): string | null {
   return null;
 }
 
-if (process.stdin.isTTY === false) {
+if (!process.stdin.isTTY) {
   let data = "";
   process.stdin.setEncoding("utf-8");
   process.stdin.on("data", (chunk) => { data += chunk; });
