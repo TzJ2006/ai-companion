@@ -8,8 +8,7 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "test": "vitest",
-    "lint": "eslint packages/*/src/**/*.ts",
+    "test": "vitest run",
     "dashboard": "tsx packages/dashboard/src/server.ts",
     "dashboard:start": "tsx packages/dashboard/src/cli.ts start",
     "dashboard:stop": "tsx packages/dashboard/src/cli.ts stop",

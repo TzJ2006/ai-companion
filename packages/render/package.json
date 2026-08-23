@@ -5,13 +5,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "test": "vitest"
+    "build": "tsc"
   },
   "dependencies": {
     "@aidev/ast": "*",
-    "@aidev/history": "*",
-    "diff2html": "^3.4.0"
+    "@aidev/history": "*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

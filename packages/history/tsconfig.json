@@ -14,8 +14,7 @@
     "rootDir": "./src"
   },
   "references": [
-    { "path": "../types" },
-    { "path": "../ast" }
+    { "path": "../types" }
   ],
   "include": ["src/**/*.ts"]
 }

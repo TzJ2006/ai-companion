@@ -6,8 +6,7 @@
     "aidev": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc",
-    "test": "vitest"
+    "build": "tsc"
   },
   "dependencies": {
     "@aidev/ast": "*",
