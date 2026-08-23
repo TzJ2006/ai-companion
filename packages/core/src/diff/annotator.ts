@@ -100,7 +100,7 @@ export function toChangeRecords(
     test_file: null,
     error_id: null,
     session_id: sessionId,
-    ecl_context: eclContext,
+    ecl_context: eclContext ?? a.ecl_context,
   }));
 }
 

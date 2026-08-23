@@ -2,15 +2,11 @@ import type { ReviewSession, ChangeRecord, EclContext } from "@aidev/history";
 
 export interface RenderOptions {
   title?: string;
-  show_test_status: boolean;
-  show_error_ids: boolean;
-  style: "side-by-side" | "line-by-line";
 }
 
 export function renderSessionToHtml(
   session: ReviewSession,
-  _rawDiffs: string[],
-  options: RenderOptions = { show_test_status: true, show_error_ids: true, style: "side-by-side" }
+  options: RenderOptions = {}
 ): string {
   const title = options.title ?? `Review: ${session.timestamp}`;
   const groups = groupByReason(session.changes);

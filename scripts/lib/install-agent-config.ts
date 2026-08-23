@@ -1,9 +1,23 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { initDevcompanion } from "./init-devcompanion.ts";
+import {
+  applyManagedGitignore,
+  visibilityToGitignoreProfile,
+  type RepoVisibility,
+} from "../../packages/history/src/managed-gitignore.ts";
 
 const MARKER_START = "<!-- AI-DEV-COMPANION:START -->";
 const MARKER_END = "<!-- AI-DEV-COMPANION:END -->";
+const COMMAND_ROOT_MARKER = "<!-- AI-DEV-COMPANION:ROOT -->";
+
+const CLAUDE_HOOK_WRAPPER = ".claude/hooks/aidev-hook.cjs";
+const CODEX_HOOK_WRAPPER = ".codex/aidev-hook.cjs";
+
+const COMPANION_ROOT_PREAMBLE = `${COMMAND_ROOT_MARKER}
+Resolve companion root from \`$AIDEV_ROOT\` or \`aidev_root\` in \`~/.aidev-companion/registry.json\`. Skill specs, packages, and scripts below are under that root — not this repository.
+`;
 
 export interface InstallOptions {
   targetPath: string;
@@ -11,6 +25,8 @@ export interface InstallOptions {
   enforce: boolean;
   includeCommands: boolean;
   agent: "claude" | "codex" | "both";
+  /** 3a: public-safe gitignore if omitted. */
+  visibility?: RepoVisibility;
 }
 
 export interface InstallResult {
@@ -21,10 +37,18 @@ export interface InstallResult {
   pre_tool_hook_installed: boolean;
   codex_hooks_updated: boolean;
   codex_skills_installed: string[];
+  gitignore_updated: boolean;
 }
 
 export function installAgentConfig(options: InstallOptions): InstallResult {
-  const { targetPath, aidevRoot, enforce, includeCommands, agent } = options;
+  const {
+    targetPath,
+    aidevRoot,
+    enforce,
+    includeCommands,
+    agent,
+    visibility = "public",
+  } = options;
   const result: InstallResult = {
     settings_json_updated: false,
     claude_md_updated: false,
@@ -33,29 +57,94 @@ export function installAgentConfig(options: InstallOptions): InstallResult {
     pre_tool_hook_installed: false,
     codex_hooks_updated: false,
     codex_skills_installed: [],
+    gitignore_updated: false,
   };
 
   initDevcompanion(targetPath);
   result.devcompanion_initialized = true;
 
+  // 3a — visibility-aware managed gitignore (replaces any previous managed block)
+  result.gitignore_updated = installManagedGitignore(targetPath, visibility);
+
   if (agent === "claude" || agent === "both") {
-    result.settings_json_updated = installSettingsJson(targetPath, aidevRoot, enforce);
+    installHookWrapper(targetPath, aidevRoot, CLAUDE_HOOK_WRAPPER);
+    result.settings_json_updated = installSettingsJson(targetPath, enforce);
     result.pre_tool_hook_installed = enforce;
-    result.claude_md_updated = installClaudeMd(targetPath, aidevRoot);
+    result.claude_md_updated = installClaudeMd(targetPath);
     if (includeCommands) {
       result.commands_installed = installCommands(targetPath, aidevRoot);
     }
   }
 
   if (agent === "codex" || agent === "both") {
-    result.codex_hooks_updated = installCodexHooks(targetPath, aidevRoot, enforce);
+    result.codex_hooks_updated = installCodexHooks(targetPath, enforce);
+    installHookWrapper(targetPath, aidevRoot, CODEX_HOOK_WRAPPER);
     result.codex_skills_installed = installCodexSkills(targetPath, aidevRoot);
   }
 
   return result;
 }
 
-function installCodexHooks(targetPath: string, aidevRoot: string, enforce: boolean): boolean {
+/** 3a */
+function installManagedGitignore(targetPath: string, visibility: RepoVisibility): boolean {
+  const gitignorePath = join(targetPath, ".gitignore");
+  const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf-8") : "";
+  const next = applyManagedGitignore(existing, visibilityToGitignoreProfile(visibility));
+  if (next === existing) return false;
+  writeFileSync(gitignorePath, next);
+  return true;
+}
+
+/** 3b — copy the path-free hook wrapper (no aidevRoot baked in). */
+function installHookWrapper(targetPath: string, aidevRoot: string, relativePath: string): void {
+  const source = join(aidevRoot, "scripts", "lib", "aidev-hook.cjs");
+  const fallback = join(dirname(fileURLToPath(import.meta.url)), "aidev-hook.cjs");
+  const src = existsSync(source) ? source : fallback;
+  const dest = join(targetPath, relativePath);
+  mkdirSync(dirname(dest), { recursive: true });
+  writeFileSync(dest, readFileSync(src));
+}
+
+function claudeHookCommand(script = "index.js"): string {
+  const extra = script === "index.js" ? "" : ` ${script}`;
+  return `node "${CLAUDE_HOOK_WRAPPER}"${extra}`;
+}
+
+function codexHookCommand(script = "index.js"): string {
+  const extra = script === "index.js" ? "" : ` ${script}`;
+  return `node "${CODEX_HOOK_WRAPPER}"${extra}`;
+}
+
+export function isCompanionHookCommand(command: unknown): boolean {
+  if (typeof command !== "string") return false;
+  const normalized = command.replace(/\\/g, "/");
+  return (
+    normalized.includes("packages/hook/dist/") ||
+    normalized.includes("aidev-hook.cjs") ||
+    normalized.includes("ai-companion")
+  );
+}
+
+function stripCompanionHookGroups(
+  groups: Array<Record<string, unknown>>
+): Array<Record<string, unknown>> {
+  const kept: Array<Record<string, unknown>> = [];
+  for (const group of groups) {
+    if (isCompanionHookCommand(group.command)) continue;
+    if (!Array.isArray(group.hooks)) {
+      kept.push(group);
+      continue;
+    }
+    const hooks = (group.hooks as Array<Record<string, unknown>>).filter(
+      (hook) => !isCompanionHookCommand(hook.command)
+    );
+    if (hooks.length === 0) continue;
+    kept.push({ ...group, hooks });
+  }
+  return kept;
+}
+
+function installCodexHooks(targetPath: string, enforce: boolean): boolean {
   const codexDir = join(targetPath, ".codex");
   // ponytail: mkdirSync throws EEXIST when .codex is a file — surface a clear fix
   if (existsSync(codexDir) && statSync(codexDir).isFile()) {
@@ -77,21 +166,14 @@ function installCodexHooks(targetPath: string, aidevRoot: string, enforce: boole
   const hooks = (existing.hooks ?? {}) as Record<string, Array<Record<string, unknown>>>;
   const installHook = (event: string, fileName: string): void => {
     const groups = hooks[event] ?? [];
-    const needle = `packages/hook/dist/${fileName}`;
-    const retained = groups.map((group) => ({
-      ...group,
-      hooks: Array.isArray(group.hooks)
-        ? (group.hooks as Array<Record<string, unknown>>).filter((hook) =>
-          typeof hook.command !== "string" || !hook.command.replace(/\\/g, "/").includes(needle)
-        )
-        : [],
-    })).filter((group) => Array.isArray(group.hooks) && group.hooks.length > 0);
+    const retained = stripCompanionHookGroups(groups);
+    const command = codexHookCommand(fileName);
     retained.push({
       matcher: "^apply_patch$",
       hooks: [{
         type: "command",
-        command: `node "${aidevRoot.replace(/\\/g, "/")}/packages/hook/dist/${fileName}"`,
-        commandWindows: `node "${aidevRoot.replace(/\\/g, "/")}/packages/hook/dist/${fileName}"`,
+        command,
+        commandWindows: command,
         timeout: 10,
       }],
     });
@@ -104,51 +186,40 @@ function installCodexHooks(targetPath: string, aidevRoot: string, enforce: boole
   return true;
 }
 
+function portableCompanionBody(source: string): string {
+  return source
+    .replaceAll("../../../skills/", "$AIDEV_ROOT/skills/")
+    .replace(/(?<![\w./-])(skills|packages|scripts)\//g, "$$AIDEV_ROOT/$1/");
+}
+
+function withCompanionRootPreamble(source: string): string {
+  return `${COMPANION_ROOT_PREAMBLE}\n${portableCompanionBody(source)}`;
+}
+
 function installCodexSkills(targetPath: string, aidevRoot: string): string[] {
   const sourceDir = join(aidevRoot, ".agents", "skills");
   const targetDir = join(targetPath, ".agents", "skills");
   mkdirSync(targetDir, { recursive: true });
   const installed: string[] = [];
+  if (!existsSync(sourceDir)) return installed;
   for (const name of readdirSync(sourceDir)) {
     const source = join(sourceDir, name, "SKILL.md");
     if (!existsSync(source)) continue;
     const destination = join(targetDir, name);
     mkdirSync(destination, { recursive: true });
-    const content = readFileSync(source, "utf-8")
-      .replaceAll("../../../skills/", `${aidevRoot.replace(/\\/g, "/")}/skills/`);
-    writeFileSync(join(destination, "SKILL.md"), content);
+    writeFileSync(join(destination, "SKILL.md"), withCompanionRootPreamble(readFileSync(source, "utf-8")));
     installed.push(name);
   }
   return installed;
 }
 
-function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boolean): boolean {
-  const claudeDir = join(targetPath, ".claude");
-  if (!existsSync(claudeDir)) {
-    mkdirSync(claudeDir, { recursive: true });
-  }
-
-  const settingsPath = join(claudeDir, "settings.json");
-  let existing: Record<string, unknown> = {};
-
-  if (existsSync(settingsPath)) {
-    try {
-      existing = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    } catch {
-      existing = {};
-    }
-  }
-
-  const parentDir = resolve(targetPath, "..");
-
-  const permissions = {
+function targetRepoPermissions(): { allow: string[]; deny: string[] } {
+  // 3b: no parentDir/** grants — scope to the target repo only.
+  return {
     allow: [
       "Read",
       "Glob",
       "Grep",
-      `Read(${parentDir}/**)`,
-      `Glob(${parentDir}/**)`,
-      `Grep(${parentDir}/**)`,
       "Edit",
       "Write",
       "Bash(git status *)",
@@ -207,23 +278,42 @@ function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boo
       "Bash(format *)",
     ],
   };
+}
+
+function installSettingsJson(targetPath: string, enforce: boolean): boolean {
+  const claudeDir = join(targetPath, ".claude");
+  if (!existsSync(claudeDir)) {
+    mkdirSync(claudeDir, { recursive: true });
+  }
+
+  const settingsPath = join(claudeDir, "settings.json");
+  let existing: Record<string, unknown> = {};
+
+  if (existsSync(settingsPath)) {
+    try {
+      existing = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    } catch {
+      existing = {};
+    }
+  }
+
+  const permissions = targetRepoPermissions();
 
   const hooks = (existing.hooks ?? {}) as Record<string, unknown[]>;
-  let postToolUse = (hooks.PostToolUse ?? []) as Array<Record<string, unknown>>;
-  let preToolUse = (hooks.PreToolUse ?? []) as Array<Record<string, unknown>>;
-
-  const hookCommand = `node "${join(aidevRoot, "packages/hook/dist/index.js")}"`;
-  const preHookCommand = `node "${join(aidevRoot, "packages/hook/dist/pre-tool-use.js")}"`;
-
-  postToolUse = postToolUse.filter(
-    (entry) => !(entry.matcher === "Edit|Write" && typeof entry.command === "string" && (entry.command as string).includes("ai-companion"))
+  let postToolUse = stripCompanionHookGroups(
+    (hooks.PostToolUse ?? []) as Array<Record<string, unknown>>
   );
-  preToolUse = preToolUse.filter(
-    (entry) => !(entry.matcher === "Edit|Write" && typeof entry.command === "string" && (entry.command as string).includes("ai-companion"))
+  let preToolUse = stripCompanionHookGroups(
+    (hooks.PreToolUse ?? []) as Array<Record<string, unknown>>
   );
+
+  const hookCommand = claudeHookCommand("index.js");
+  const preHookCommand = claudeHookCommand("pre-tool-use.js");
 
   const postHookExists = postToolUse.some(
-    (entry) => entry.matcher === "Edit|Write" && Array.isArray(entry.hooks) &&
+    (entry) =>
+      entry.matcher === "Edit|Write" &&
+      Array.isArray(entry.hooks) &&
       (entry.hooks as Array<Record<string, string>>).some((h) => h.command === hookCommand)
   );
 
@@ -236,13 +326,16 @@ function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boo
 
   if (enforce) {
     const preHookExists = preToolUse.some(
-      (entry) => entry.matcher === "Edit|Write" && Array.isArray(entry.hooks) &&
+      (entry) =>
+        entry.matcher === "Edit|Write|Bash" &&
+        Array.isArray(entry.hooks) &&
         (entry.hooks as Array<Record<string, string>>).some((h) => h.command === preHookCommand)
     );
 
     if (!preHookExists) {
       preToolUse.push({
-        matcher: "Edit|Write",
+        // Bash included so the guard's destructive-command patterns can fire
+        matcher: "Edit|Write|Bash",
         hooks: [{ type: "command", command: preHookCommand }],
       });
     }
@@ -258,7 +351,7 @@ function installSettingsJson(targetPath: string, aidevRoot: string, enforce: boo
   return true;
 }
 
-function installClaudeMd(targetPath: string, aidevRoot: string): boolean {
+function installClaudeMd(targetPath: string): boolean {
   const claudeMdPath = join(targetPath, "CLAUDE.md");
   let existing = "";
 
@@ -266,7 +359,7 @@ function installClaudeMd(targetPath: string, aidevRoot: string): boolean {
     existing = readFileSync(claudeMdPath, "utf-8");
   }
 
-  const constraintBlock = generateConstraintBlock(aidevRoot);
+  const constraintBlock = generateConstraintBlock();
 
   if (existing.includes(MARKER_START)) {
     const before = existing.substring(0, existing.indexOf(MARKER_START));
@@ -281,7 +374,7 @@ function installClaudeMd(targetPath: string, aidevRoot: string): boolean {
   return true;
 }
 
-function generateConstraintBlock(aidevRoot: string): string {
+function generateConstraintBlock(): string {
   return `${MARKER_START}
 ## AI Dev Companion — Constraints
 
@@ -316,9 +409,7 @@ When \`docs/ecl/*.yaml\` files contain \`feature_guard\` sections:
 
 ### AI Dev Companion Location
 
-- Install root: \`${aidevRoot}\`
-- Hook: \`${aidevRoot}/packages/hook/dist/index.js\`
-- Skills: \`${aidevRoot}/skills/\`
+Companion root is resolved at runtime from \`$AIDEV_ROOT\` or from \`aidev_root\` in \`~/.aidev-companion/registry.json\`. Do not put machine-local install paths in committed files.
 ${MARKER_END}`;
 }
 
@@ -327,12 +418,10 @@ function installCommands(targetPath: string, aidevRoot: string): string[] {
   const commandsDir = join(targetPath, ".claude", "commands");
   mkdirSync(commandsDir, { recursive: true });
   const installed: string[] = [];
+  if (!existsSync(sourceDir)) return installed;
 
   for (const file of readdirSync(sourceDir).filter((name) => name.endsWith(".md"))) {
-    const content = readFileSync(join(sourceDir, file), "utf-8").replace(
-      /(?<![\w./-])(skills|packages|scripts)\//g,
-      `${aidevRoot.replace(/\\/g, "/")}/$1/`
-    );
+    const content = withCompanionRootPreamble(readFileSync(join(sourceDir, file), "utf-8"));
     writeFileSync(join(commandsDir, file), content);
     installed.push(file.replace(/\.md$/, ""));
   }

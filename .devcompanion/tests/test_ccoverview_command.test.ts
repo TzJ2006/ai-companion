@@ -42,4 +42,11 @@ describe("ccoverview command registration", () => {
     const content = readCommand();
     expect(content).toContain("skills/ccoverview/SKILL.md");
   });
+
+  it("allows --target instead of forbidding it", () => {
+    const content = readCommand();
+    expect(content).toContain("--target");
+    expect(content).not.toMatch(/no `--target`/);
+    expect(content).not.toMatch(/always omit `--target`/i);
+  });
 });

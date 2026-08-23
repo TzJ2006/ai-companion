@@ -2,6 +2,7 @@ import { Node as SyntaxNode } from "web-tree-sitter";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { createLanguageParser } from "./parser-factory.js";
+import { PYTHON_EXTENSIONS, TS_EXTENSIONS } from "./multi-lang.js";
 
 export interface CallGraphEntry {
   function_name: string;
@@ -17,31 +18,24 @@ export interface CallGraph {
   reverse_index: Record<string, string[]>;
 }
 
-const PYTHON_EXTENSIONS = new Set([".py", ".pyi"]);
-const TS_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
+// parseModule is never used here — analyzeFileCalls only calls init() + parseSource().
+const emptyModule = (_rootNode: unknown, filePath: string) => ({
+  file_path: filePath,
+  functions: [],
+  classes: [],
+  imports: [],
+});
 
 const tsCallParser = createLanguageParser({
   packageName: "tree-sitter-typescript",
   wasmFileName: "tree-sitter-typescript.wasm",
-  parseModule: (rootNode, filePath) => ({
-    file_path: filePath,
-    functions: [],
-    classes: [],
-    imports: [],
-    _rootNode: rootNode,
-  }),
+  parseModule: emptyModule,
 });
 
 const pyCallParser = createLanguageParser({
   packageName: "tree-sitter-python",
   wasmFileName: "tree-sitter-python.wasm",
-  parseModule: (rootNode, filePath) => ({
-    file_path: filePath,
-    functions: [],
-    classes: [],
-    imports: [],
-    _rootNode: rootNode,
-  }),
+  parseModule: emptyModule,
 });
 
 export async function analyzeFileCalls(filePath: string): Promise<CallGraphEntry[]> {

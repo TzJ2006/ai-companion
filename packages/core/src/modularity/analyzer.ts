@@ -47,8 +47,11 @@ export async function analyzeModularityWithLlm(
       analyzed_at: new Date().toISOString(),
       analysis_source: "llm",
     };
-  } catch {
+  } catch (error: unknown) {
     if (opts.fallbackToHeuristic) {
+      console.warn(
+        `[aidev] LLM modularity analysis failed for ${input.function_name}, falling back to heuristic: ${error instanceof Error ? error.message : String(error)}`
+      );
       return analyzeModularityHeuristic(input);
     }
     throw new Error(`LLM analysis failed for ${input.function_name}`);

@@ -25,20 +25,11 @@ import type { ConfirmationState } from "./lib/confirmation-manager.ts";
 import type { CallGraph } from "../packages/ast/src/call-graph.ts";
 import { translateOverviewData, getUiLabels, getStatusLabel, formatLineRange } from "./lib/overview-translator.ts";
 import type { Locale } from "./lib/overview-translator.ts";
-
-const SCRIPT_ROOT = resolve(import.meta.dirname, "..");
-
-function resolveTargetProject(): string {
-  const targetIndex = process.argv.indexOf("--target");
-  if (targetIndex !== -1 && process.argv[targetIndex + 1]) {
-    return resolve(process.argv[targetIndex + 1]);
-  }
-  return SCRIPT_ROOT;
-}
+import { resolveTargetProject, resolveReportsDir } from "./lib/resolve-target.ts";
 
 const PROJECT_ROOT = resolveTargetProject();
 const ECL_DIRECTORY = join(PROJECT_ROOT, "docs", "ecl");
-const REPORTS_DIRECTORY = join(PROJECT_ROOT, ".devcompanion", "reports");
+const REPORTS_DIRECTORY = resolveReportsDir(PROJECT_ROOT);
 const ARCHIVE_DIRECTORY = join(REPORTS_DIRECTORY, "archive");
 const CONFIRMATION_PATH = join(PROJECT_ROOT, ".devcompanion", "confirmations", "overview-confirmation.json");
 const CONFIRMATION_ARCHIVE_DIRECTORY = join(PROJECT_ROOT, ".devcompanion", "confirmations", "archive");
@@ -367,7 +358,7 @@ async function main(): Promise<void> {
   const skipTranslation = process.argv.includes("--skip-translation");
 
   if (skipTranslation) {
-    const html = renderOverviewHtml(overviewData, "zh");
+    const html = renderOverviewHtml(overviewData, "en");
     writeFileSync(OUTPUT_PATH, html);
     console.log(`\n  Report written to: ${OUTPUT_PATH}`);
   } else {

@@ -2,9 +2,6 @@ import type { FunctionSignature } from "@aidev/ast";
 import type { ChangeRecord } from "@aidev/history";
 
 export interface TestGenerationConfig {
-  llm_provider: "claude" | "openai" | "local";
-  api_key?: string;
-  model?: string;
   test_framework: "pytest";
   output_dir: string;
 }

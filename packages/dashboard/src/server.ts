@@ -1,7 +1,15 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import open from "open";
-import { resolve, join, normalize, basename } from "node:path";
+import { resolve, join, normalize, sep } from "node:path";
+
+// Prefix check with trailing separator (so /repo does not match /repo2) and
+// case-insensitive on win32's case-insensitive filesystems.
+function isInsideDir(candidate: string, root: string): boolean {
+  const cased = (s: string): string => (process.platform === "win32" ? s.toLowerCase() : s);
+  const rootWithSep = normalize(root).endsWith(sep) ? normalize(root) : normalize(root) + sep;
+  return cased(normalize(candidate)).startsWith(cased(rootWithSep));
+}
 import { existsSync, statSync, createReadStream, mkdirSync, copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -128,7 +136,7 @@ async function start(): Promise<void> {
       const absolutePath = normalize(join(projectRoot, filePath));
       const normalizedRoot = normalize(projectRoot);
 
-      if (!absolutePath.startsWith(normalizedRoot)) {
+      if (!isInsideDir(absolutePath, normalizedRoot)) {
         return reply.status(403).send({ error: "Path traversal denied" });
       }
 
@@ -178,8 +186,8 @@ async function start(): Promise<void> {
       }
 
       const allowed = config.projects.some((p) =>
-        resolved.startsWith(normalize(p.path))
-      ) || (config.sshReposDir && resolved.startsWith(normalize(config.sshReposDir)));
+        isInsideDir(resolved, p.path)
+      ) || (config.sshReposDir && isInsideDir(resolved, config.sshReposDir));
       if (!allowed) {
         return reply.status(403).send({ error: "File not in a registered project" });
       }

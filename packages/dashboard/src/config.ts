@@ -21,24 +21,26 @@ const DEFAULT_CONFIG: DashboardConfig = {
   port: 4200,
 };
 
-export function loadConfig(): DashboardConfig {
-  if (!existsSync(CONFIG_PATH)) {
+export function loadConfig(configPath: string = CONFIG_PATH): DashboardConfig {
+  if (!existsSync(configPath)) {
     return { ...DEFAULT_CONFIG, projects: [] };
   }
   try {
-    const raw = readFileSync(CONFIG_PATH, "utf-8");
+    const raw = readFileSync(configPath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<DashboardConfig>;
     return {
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
       port: typeof parsed.port === "number" ? parsed.port : DEFAULT_CONFIG.port,
+      sshReposDir: typeof parsed.sshReposDir === "string" ? parsed.sshReposDir : undefined,
+      exportDir: typeof parsed.exportDir === "string" ? parsed.exportDir : undefined,
     };
   } catch {
     return { ...DEFAULT_CONFIG, projects: [] };
   }
 }
 
-export function saveConfig(config: DashboardConfig): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+export function saveConfig(config: DashboardConfig, configPath: string = CONFIG_PATH): void {
+  writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
 }
 
 export function addProject(

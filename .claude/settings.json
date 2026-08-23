@@ -28,13 +28,13 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/index.js\"" }
+          { "type": "command", "command": "node packages/hook/dist/index.js" }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|Bash",
         "hooks": [
           { "type": "command", "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/pre-tool-use.js\"" }
         ]

@@ -74,7 +74,6 @@ async function start(): Promise<void> {
   removePid();
 
   const serverPath = join(import.meta.dirname, "server.ts");
-  const tsxPath = join(import.meta.dirname, "..", "..", "..", "node_modules", ".bin", "tsx");
   const child = spawn(process.execPath, ["--import", "tsx", serverPath], {
     cwd: join(import.meta.dirname, "..", "..", ".."),
     detached: true,

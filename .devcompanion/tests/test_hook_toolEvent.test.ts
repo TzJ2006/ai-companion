@@ -49,15 +49,18 @@ describe("Codex apply_patch hook adapter", () => {
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as Record<string, unknown>);
-      expect(events).toHaveLength(4);
+      // degrade-all: notes.txt is now recorded as a file-level event too
+      expect(events).toHaveLength(5);
       expect(events.map((event) => event.file_path)).toEqual([
         join(root, "packages/core/src/app.ts"),
         join(root, "docs/ecl/change.yaml"),
+        join(root, "notes.txt"),
         join(root, "packages/core/src/old-name.ts"),
         join(root, "packages/core/src/new-name.ts"),
       ]);
       expect(events.every((event) => event.tool === "apply_patch")).toBe(true);
       expect(events[1].file_level).toBe(true);
+      expect(events[2].file_level).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -141,6 +141,6 @@ const session: ReviewSession = {
   ],
 };
 
-const html = renderSessionToHtml(session, []);
+const html = renderSessionToHtml(session);
 writeFileSync("demo-ecl-report.html", html);
 console.log("Written: demo-ecl-report.html");

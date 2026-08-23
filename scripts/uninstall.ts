@@ -64,12 +64,31 @@ for (const targetPath of targets) {
 
   removeHooksFromSettings(targetPath);
   removeCodexHooks(targetPath);
+  removeHookWrappers(targetPath);
   removeConstraintBlockFromClaudeMd(targetPath);
   removeCommandFiles(targetPath);
   removeCodexSkills(targetPath);
   saveRegistry(removeTarget(registry, targetPath));
 
   console.log("  Done.");
+}
+
+function isCompanionHookEntry(entry: Record<string, unknown>): boolean {
+  const blob = JSON.stringify(entry).replace(/\\/g, "/");
+  return (
+    blob.includes("aidev-hook.cjs") ||
+    blob.includes("packages/hook/dist/") ||
+    blob.includes("ai-companion")
+  );
+}
+
+function removeHookWrappers(targetPath: string): void {
+  for (const relative of [".claude/hooks/aidev-hook.cjs", ".codex/aidev-hook.cjs"]) {
+    const filePath = join(targetPath, relative);
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
+  }
 }
 
 function removeCodexHooks(targetPath: string): void {
@@ -83,7 +102,7 @@ function removeCodexHooks(targetPath: string): void {
     for (const event of ["PostToolUse", "PreToolUse"]) {
       if (!Array.isArray(hooks[event])) continue;
       hooks[event] = hooks[event].filter(
-        (entry: Record<string, unknown>) => !JSON.stringify(entry).includes("ai-companion")
+        (entry: Record<string, unknown>) => !isCompanionHookEntry(entry)
       );
       if (hooks[event].length === 0) delete hooks[event];
     }
@@ -109,16 +128,14 @@ function removeHooksFromSettings(targetPath: string): void {
 
     if (Array.isArray(hooks.PostToolUse)) {
       hooks.PostToolUse = hooks.PostToolUse.filter(
-        (entry: Record<string, unknown>) =>
-          !(JSON.stringify(entry).includes("ai-companion"))
+        (entry: Record<string, unknown>) => !isCompanionHookEntry(entry)
       );
       if (hooks.PostToolUse.length === 0) delete hooks.PostToolUse;
     }
 
     if (Array.isArray(hooks.PreToolUse)) {
       hooks.PreToolUse = hooks.PreToolUse.filter(
-        (entry: Record<string, unknown>) =>
-          !(JSON.stringify(entry).includes("ai-companion"))
+        (entry: Record<string, unknown>) => !isCompanionHookEntry(entry)
       );
       if (hooks.PreToolUse.length === 0) delete hooks.PreToolUse;
     }
@@ -167,7 +184,11 @@ function removeCommandFiles(targetPath: string): void {
     if (existsSync(filePath)) {
       try {
         const content = readFileSync(filePath, "utf-8");
-        if (content.includes("skills/") || content.includes("AI Dev Companion")) {
+        if (
+          content.includes("skills/") ||
+          content.includes("AI Dev Companion") ||
+          content.includes("AI-DEV-COMPANION:ROOT")
+        ) {
           unlinkSync(filePath);
           removed++;
         }

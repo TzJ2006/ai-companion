@@ -1,0 +1,1700 @@
+ecl_version: "2.0"
+feature: "tracker-reliability-foundation"
+status: "completed"
+created: "2026-08-17"
+updated: "2026-08-17"
+related_features:
+  - "ccedit-skill"
+owner: "user"
+
+pending_input: null
+
+prompt_calibration:
+  raw_input: "那么，你准备怎么做？"
+  status: completed
+  intent_decomposition:
+    total_intents: 1
+    total_tracks: 1
+    tracks:
+      - track_id: T1
+        name: "可靠性加固版本"
+        priority: 1
+        intents:
+          - raw: "根据八代理审计决定下一步并形成可执行计划"
+            type: refactor
+  tracks:
+    T1:
+      calibrated_scenario: |
+        先修复 AI Dev Companion 最核心的追踪数据链：每次写操作必须留下
+        与稍后 Git 状态无关的证据；队列必须自动消费、崩溃可恢复；历史
+        会话必须不会因并发、时间戳冲突或路径解析而丢失。第一批不增加
+        dashboard、installer、overview 或新分析功能。
+      intent_dimensions:
+        task: { status: present, value: "制定并执行可靠性加固的第一批变更" }
+        input: { status: enriched, value: "八代理审计、现有 hook/daemon/history 实现与测试" }
+        output: { status: resolved, value: "可由 /ccedit 执行的函数级 DAG" }
+        constraints: { status: present, value: "无新依赖、跨 Windows/Linux、保留 hook 低延迟" }
+        context:
+          {
+            status: enriched,
+            value: "TypeScript monorepo；当前追踪依赖 PostToolUse + 后读 Git diff"
+          }
+        audience: { status: implicit, value: "AI Dev Companion 维护者及被安装项目" }
+        memory: { status: present, value: "2026-08-17 八代理审计结果" }
+        success_criteria: { status: resolved, value: "事件不静默丢失；崩溃可重放；并发保存不损坏历史" }
+        examples:
+          {
+            status: present,
+            value: "Windows 嵌套路径、编辑后立即 commit、并发 saveSession、损坏 event file"
+          }
+  anti_patterns_found:
+    - category: scope
+      raw: "修复整个审计清单"
+      fix: "拆成多个加固批次；本 ECL 只处理追踪数据链"
+  context_enrichment:
+    codebase: "packages/hook、packages/daemon、packages/history 已有可复用实现；无需新存储框架"
+    git: "当前 main 最新提交为 2026-07-31 的审计修复合并"
+    conversation: "用户要求说明下一步；此前确认想法成立但核心追踪链不可靠"
+  questions_asked: 0
+  questions_skipped: "优先级可从已复现的数据丢失问题直接推导"
+
+user_scenario: |
+  那么，你准备怎么做？
+
+requirements:
+  - id: REQ-001
+    text: "每个受支持的写操作都保存与稍后 Git 状态无关的变更证据"
+    status: verified
+    confidence: 0.92
+    source: inferred
+    priority: must
+    acceptance_criteria:
+      - text: "Windows 与 POSIX 路径均转换为仓库相对的正斜杠路径"
+        kind: hard
+      - text: "事件携带编辑前后快照引用；后续 stage、commit、revert 不改变事件内容"
+        kind: hard
+      - text: "新增、修改、删除均可由快照重建 FileDiff；无法完整快照时生成明确的 file-level 降级事件"
+        kind: hard
+      - text: "同一工具调用修改多个文件时共享 correlation_id，但每个文件拥有独立快照"
+        kind: hard
+      - text: "缺少稳定 tool_use_id 且出现多个可匹配 pre manifest 时必须降级并告警，不得猜测配对"
+        kind: hard
+      - text: "多文件工具调用按每个目标独立发现 canonical projectRoot 并分区入队；不得复用第一个路径的 root"
+        kind: hard
+    challenges:
+      - "Claude/Codex hook 输入未保证总有稳定 tool_use_id"
+      - "大文件快照必须保持 hook 低延迟"
+    decomposition:
+      features: [ FEAT-001 ]
+    tags: [ hook, snapshot, data-integrity ]
+    history:
+      - phase: 2
+        action: "由已复现的 staged/committed/reverted/untracked 丢失问题推导"
+        date: "2026-08-17"
+
+  - id: REQ-002
+    text: "队列无需用户维护常驻服务即可自动消费，并在并发或崩溃后恢复"
+    status: verified
+    confidence: 0.90
+    source: inferred
+    priority: must
+    acceptance_criteria:
+      - text: "PostToolUse 入队后尝试启动短生命周期 worker；启动失败必须写 health marker、输出警告并保留 durable
+          event"
+        kind: hard
+      - text: "每个事件以 temp+rename 写成独立 inbox 文件；worker 通过原子 rename 逐个 claim"
+        kind: hard
+      - text: "worker 启动时先恢复遗留 claimed 事件，再处理 inbox；损坏事件文件独立进入 rejected"
+        kind: hard
+      - text: "正常和恢复路径都必须原子 rename 到 working/<owner-token>/；所有 sidecar/ack 前再次验证 owner
+          token"
+        kind: hard
+      - text: "处理失败的批次及快照保留；下一次 worker 可重试且不会重复提交已完成 session"
+        kind: hard
+      - text: "成功 spawn 时自动 drain；spawn 失败由下一次 hook 或显式 worker 命令重试，不承诺无调度器时的固定延迟"
+        kind: hard
+      - text: "无新事件时 worker 自动退出，不安装系统服务"
+        kind: hard
+      - text: "首次启动把旧 events.jsonl 的合法行迁移为 evidence_quality: degraded spool
+          events，隔离坏行并保留 .migrated 原文件"
+        kind: hard
+    challenges:
+      - "并发 PostToolUse 可能同时尝试启动 worker"
+      - "worker 崩溃点可能位于 session 写入与队列确认之间"
+    decomposition:
+      features: [ FEAT-003 ]
+    tags: [ daemon, queue, recovery ]
+    history:
+      - phase: 2
+        action: "由未安装 daemon、启动不 drain、processing 文件不可恢复问题推导"
+        date: "2026-08-17"
+
+  - id: REQ-003
+    text: "历史存储以不可变 session 为事实来源，并能安全重建派生索引"
+    status: verified
+    confidence: 0.94
+    source: inferred
+    priority: must
+    acceptance_criteria:
+      - text: "session 文件名包含 session.id；相同时间戳不能覆盖"
+        kind: hard
+      - text: "同项目写入使用无第三方依赖的跨进程 lockfile，并具有可验证的 stale-lock 恢复"
+        kind: hard
+      - text: "session 文件通过临时文件加 rename 原子提交；重复 session.id 为幂等操作"
+        kind: hard
+      - text: "worker 在 journal commit 前原子保存 finalized session sidecar；重试复用完全相同的
+          timestamp 与 record IDs"
+        kind: hard
+      - text: "index 与 file history 是派生数据；缺失、损坏或部分更新时可从 sessions 重建"
+        kind: hard
+      - text: "派生 manifest 记录 journal 计数与 dirty 状态，使语义上部分但合法的 JSON 可被检测"
+        kind: hard
+      - text: "派生 manifest 保存 index digest 与排序后的 history path→digest inventory；缺失或合法
+          JSON 篡改在 init/read 时触发 repair"
+        kind: hard
+      - text: "file_path 必须相对 projectRoot 解析并拒绝逃逸 history 根目录"
+        kind: hard
+      - text: "session.id 必须通过固定安全字符验证；同 ID 不同内容抛出 SessionConflict"
+        kind: hard
+    challenges:
+      - "多文件 JSON 无法提供真正的文件系统事务"
+      - "锁必须处理进程异常退出"
+    decomposition:
+      features: [ FEAT-004 ]
+    tags: [ history, locking, recovery ]
+    history:
+      - phase: 2
+        action: "由并发 JSON 损坏、时间戳覆盖和 cwd 路径错误问题推导"
+        date: "2026-08-17"
+
+  - id: REQ-004
+    text: "集成测试证明真实 hook→queue→history 链路，而不是只验证 mock"
+    status: verified
+    confidence: 0.96
+    source: critic-proposed
+    priority: must
+    acceptance_criteria:
+      - text: "Windows 分隔符、nested path、add/modify/delete、stage/commit/revert 均有回归测试"
+        kind: hard
+      - text: "并发 worker、并发 saveSession、损坏 event file、遗留 claimed event 均有回归测试"
+        kind: hard
+      - text: "hook、spool/worker、journal/projector 各有先于实现节点创建的组件测试；测试节点用 vitest list
+          验证可收集"
+        kind: hard
+      - text: "测试使用真实临时 Git 仓库和真实 HistoryStore；不永久 mock getGitDiff"
+        kind: hard
+      - text: "npm run build 与 npx vitest run 全量通过"
+        kind: hard
+      - text: "Windows 本地与 Linux CI/人工 runner 均执行 subprocess 集成矩阵后才可合并"
+        kind: soft
+        signed_off_by: null
+      - text: "fault injection 覆盖 stale worker 抢占、symlink swap、spawn-then-exit、spool
+          temp rename、PID reuse/EPERM 与 multi-repo patch"
+        kind: hard
+    challenges: []
+    decomposition:
+      features: [ FEAT-005 ]
+    tags: [ tests, integration ]
+    history:
+      - phase: 4
+        action: "补齐当前被 skip 的 daemon relevant-diff 集成覆盖"
+        date: "2026-08-17"
+
+  - id: REQ-005
+    text: "快照必须限制在仓库边界内，并具有明确的大小、权限与清理生命周期"
+    status: verified
+    confidence: 0.90
+    source: critic-proposed
+    priority: must
+    acceptance_criteria:
+      - text: "existing path 使用 realpath containment；new path 验证最近存在父目录，不跟随仓库外
+          symlink/junction"
+        kind: hard
+      - text: "projectRoot/.devcompanion 及 queue/reviews/history 根必须 lstat+realpath 位于
+          canonical projectRoot，拒绝 root symlink/junction 重定向"
+        kind: hard
+      - text: "只捕获声明支持的文本扩展；binary 或超过 2 MiB 的文件产生 evidence_quality: degraded 事件"
+        kind: hard
+      - text: "validation 与 read 使用同一 fd：lstat→open/no-follow where
+          available→fstat→bounded read→identity recheck；变化时降级且不持久化内容"
+        kind: hard
+      - text: "当前平台允许时快照以 owner-only 权限创建；内容不写日志或错误消息"
+        kind: hard
+      - text: "成功 ack 后删除事件快照与 sidecar；失败证据保留最多 7 天并由 worker 清理"
+        kind: hard
+      - text: "queue 具有低/高/硬水位（默认 128/256/512 MiB 与 5k/10k/20k 文件）；高水位降级，硬水位合并 overflow
+          marker 并告警但不阻断源码编辑"
+        kind: hard
+      - text: "2 MiB 以内文件的 Pre/Post capture 在本地基准 p95 小于 100ms"
+        kind: hard
+    challenges:
+      - "Windows ACL 只能使用继承权限，mode 0600 是 best-effort"
+    decomposition:
+      features: [ FEAT-001, FEAT-003 ]
+    tags: [ snapshot, security, lifecycle ]
+    history:
+      - phase: 5
+        action: "由 critic 从 REQ-001 拆出，补齐信任边界和磁盘生命周期"
+        date: "2026-08-17"
+
+features:
+  - id: FEAT-001
+    name: "Snapshot-backed hook event"
+    parent: REQ-001
+    modules: [ MOD-001, MOD-007 ]
+    dependencies: []
+    complexity: medium
+    status: pending
+  - id: FEAT-003
+    name: "Recoverable one-shot spool worker"
+    parent: REQ-002
+    modules: [ MOD-002, MOD-005 ]
+    dependencies: [ FEAT-001, FEAT-004, FEAT-006 ]
+    complexity: medium
+    status: pending
+  - id: FEAT-004
+    name: "Immutable session journal"
+    parent: REQ-003
+    modules: [ MOD-003 ]
+    dependencies: []
+    complexity: medium
+    status: pending
+  - id: FEAT-005
+    name: "End-to-end reliability regression suite"
+    parent: REQ-004
+    modules: [ MOD-004 ]
+    dependencies: [ FEAT-001, FEAT-003, FEAT-004, FEAT-006 ]
+    complexity: medium
+    status: pending
+  - id: FEAT-006
+    name: "Derived history projector and repair"
+    parent: REQ-003
+    modules: [ MOD-006 ]
+    dependencies: [ FEAT-004 ]
+    complexity: medium
+    status: pending
+
+modules:
+  - id: MOD-001
+    name: "Hook event capture"
+    parent: FEAT-001
+    config_slot: "modules.hook"
+    functions: [ FN-001, FN-002, FN-003, FN-016 ]
+    file_path: "packages/hook/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "capturePreEditSnapshots"
+        signature: "(input: ToolUseInput, projectRoot: string) => SnapshotManifest"
+        description: "在编辑发生前保存受支持文件内容"
+      - name: "enqueueCapturedEvents"
+        signature: "(input: ToolUseInput, manifest: SnapshotManifest) => HookEvent[]"
+        description: "编辑完成后保存 post snapshot 并原子追加事件"
+    dependencies:
+      - module: node-fs
+        imports: [ "readFileSync", "writeFileSync", "renameSync" ]
+        why: "hook 路径需保持短小、同步、无新依赖"
+    internal_only:
+      [
+        "deriveCorrelationId",
+        "normalizeRepoPath",
+        "snapshotPathFor",
+        "readSnapshotTargetSafely"
+      ]
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-002
+    name: "Recoverable queue worker"
+    parent: FEAT-003
+    config_slot: "modules.daemon"
+    functions: [ FN-005, FN-006, FN-007, FN-017, FN-019 ]
+    file_path: "packages/daemon/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "runQueueWorker"
+        signature: "(projectRoot: string) => Promise<WorkerSummary>"
+        description: "获取单项目 lease，恢复 claimed events 并处理至 inbox 为空"
+      - name: "buildSnapshotDiffs"
+        signature: "(events: QueueEvent[]) => Promise<FileDiff[]>"
+        description: "只根据事件快照构建 diff，不读取稍后的工作树状态"
+    dependencies:
+      - module: MOD-001
+        imports: [ "HookEvent", "SnapshotManifest" ]
+        why: "消费 hook 写入的事件格式"
+      - module: MOD-003
+        imports: [ "HistoryStore.saveSession" ]
+        why: "持久化处理结果"
+      - module: core
+        imports: [ "parseUnifiedDiff", "annotateChanges", "toChangeRecords" ]
+        why: "复用现有 diff 与函数归因逻辑"
+    internal_only:
+      [
+        "claimSpoolEvent",
+        "quarantineMalformedEvent",
+        "acknowledgeEvent",
+        "cleanupExpiredSnapshots"
+      ]
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-003
+    name: "Durable history store"
+    parent: FEAT-004
+    config_slot: "modules.history"
+    functions: [ FN-008, FN-009, FN-011 ]
+    file_path: "packages/history/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "HistoryStore.saveSession"
+        signature: "(session: ReviewSession) => Promise<string>"
+        description: "幂等提交不可变 session，并更新或重建派生数据"
+    dependencies:
+      - module: node-fs
+        imports: [ "open", "rename", "stat", "unlink" ]
+        why: "原子文件提交与 lockfile，无需新依赖"
+    internal_only:
+      [
+        "withProjectLock",
+        "writeJsonAtomic",
+        "fileHistoryPath",
+        "validateSessionId"
+      ]
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: false
+      config_at_boundary: true
+
+  - id: MOD-004
+    name: "Reliability integration tests"
+    parent: FEAT-005
+    config_slot: "tests"
+    functions: [ FN-012, FN-013, FN-014, FN-015 ]
+    file_path: ".devcompanion/tests/"
+    entry_point: "test_reliability_foundation.test.ts"
+    source: new
+    public_interface: []
+    dependencies:
+      - module: MOD-001
+        imports: [ "handlePreToolUse", "handlePostToolUse" ]
+        why: "驱动真实 hook"
+      - module: MOD-002
+        imports: [ "runQueueWorker" ]
+        why: "驱动真实 worker"
+      - module: MOD-003
+        imports: [ "HistoryStore" ]
+        why: "验证最终持久化状态"
+    internal_only: []
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-005
+    name: "Hook worker launcher"
+    parent: FEAT-003
+    config_slot: "modules.hook"
+    functions: [ FN-004 ]
+    file_path: "packages/hook/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "spawnQueueWorker"
+        signature: "(projectRoot: string) => void"
+        description: "入队后 best-effort 启动 detached one-shot worker"
+    dependencies:
+      - module: node-child-process
+        imports: [ "spawn" ]
+        why: "不阻塞 PostToolUse 的 AST/history 工作"
+    internal_only: [ "writeWorkerHealthMarker" ]
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+  - id: MOD-006
+    name: "Derived history projector"
+    parent: FEAT-006
+    config_slot: "modules.history"
+    functions: [ FN-010, FN-018 ]
+    file_path: "packages/history/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "projectSession"
+        signature: "(session: ReviewSession, storage: ProjectionStorage) =>
+          Promise<ProjectionManifest>"
+        description: "增量投影一个 session"
+      - name: "rebuildDerivedHistory"
+        signature: "(sessions: ReviewSession[], storage: ProjectionStorage) =>
+          Promise<void>"
+        description: "从不可变 session journal 修复 index 与 per-file projections"
+    dependencies:
+      - module: node-fs
+        imports: [ "readFile", "rename", "readdir" ]
+        why: "通过注入的 ProjectionStorage 操作派生数据"
+    internal_only: [ "projectSession", "readProjectionManifest", "writeProjectionManifest" ]
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: false
+      config_at_boundary: true
+
+  - id: MOD-007
+    name: "Change evidence metadata"
+    parent: FEAT-001
+    config_slot: "modules.types"
+    functions: [ FN-020 ]
+    file_path: "packages/types/src/"
+    entry_point: "index.ts"
+    source: extend
+    public_interface:
+      - name: "ChangeRecord"
+        kind: type
+        description: "增加 event_id、operation、evidence_quality 与 degradation_reason 的向后兼容可选字段"
+    dependencies: []
+    internal_only: []
+    modularity_check:
+      single_responsibility: true
+      testable_in_isolation: true
+      no_shared_state: true
+      config_at_boundary: true
+
+functions:
+  - id: FN-001
+    name: "deriveCorrelationId"
+    parent: MOD-001
+    visibility: internal
+    description: "优先使用 hook tool_use_id，否则对规范化 tool input 计算稳定哈希"
+    input_interface:
+      - { name: "input", type: "ToolUseInput", source: parameter }
+    output_interface: { type: "string", error_cases: [] }
+    side_effects: []
+    dependencies: [ "node:crypto.createHash" ]
+    constraints:
+      - "同一 Pre/Post 输入产生相同 ID"
+      - "缺失 tool_use_id 时 correlation 只用于查找候选；多个候选不得猜测配对"
+    test_cases:
+      - {
+          input: "相同 Claude Edit pre/post input",
+          expected: "相同 correlation id",
+          mocks: []
+        }
+      - { input: "不同 apply_patch command", expected: "不同 correlation id", mocks: [] }
+    depends_on: [ FN-013 ]
+    enables: [ FN-002, FN-003 ]
+    output: { file: "packages/hook/src/tool-event.ts", symbol: "deriveCorrelationId" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_captureSnapshots.test.ts
+        -t=FN-001"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-002
+    name: "capturePreEditSnapshots"
+    parent: MOD-001
+    visibility: public
+    description: "PreToolUse 为每个目标保存 before snapshot manifest"
+    input_interface:
+      - { name: "input", type: "ToolUseInput", source: parameter }
+    output_interface:
+      type: "SnapshotManifest[]"
+      error_cases:
+        - { type: "SnapshotDegraded", when: "文件过大、不可读或不存在" }
+    side_effects: [ "file-read", "file-write" ]
+    dependencies: [ "deriveCorrelationId", "getChangedFilePaths", "readSnapshotTargetSafely" ]
+    constraints:
+      - "snapshot 仅写入 .devcompanion/queue/snapshots"
+      - "changed paths 按各自 canonical projectRoot 分区；无 root 的路径单独 warning"
+      - "新增文件使用显式 missing-before 状态"
+      - "manifest 使用 Pre 生成 nonce 并写入 per-path FIFO；大文件降级必须记录原因"
+    test_cases:
+      - {
+          input: "existing nested Windows path",
+          expected: "repo-relative path + before snapshot",
+          mocks: []
+        }
+      - { input: "new file", expected: "missing-before manifest", mocks: [] }
+    depends_on: [ FN-001, FN-013, FN-016 ]
+    enables: [ FN-003 ]
+    output: { file: "packages/hook/src/snapshot.ts", symbol: "capturePreEditSnapshots" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_captureSnapshots.test.ts
+        -t=FN-002"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-003
+    name: "enqueueCapturedEvents"
+    parent: MOD-001
+    visibility: public
+    description: "PostToolUse 保存 after snapshot，并以 one-event-one-file 原子入队"
+    input_interface:
+      - { name: "input", type: "ToolUseInput", source: parameter }
+      - { name: "manifests", type: "SnapshotManifest[]", source: parameter }
+    output_interface:
+      type: "HookEvent[]"
+      error_cases:
+        - { type: "HookWarning", when: "pre manifest 不存在或碰撞" }
+    side_effects: [ "file-read", "file-write" ]
+    dependencies: [ "deriveCorrelationId", "capturePreEditSnapshots" ]
+    constraints:
+      - "事件路径为仓库相对正斜杠路径，event_id 为安全随机 ID"
+      - "先写 inbox/.tmp-<id>，fsync/close 后 rename 为 inbox/<id>.json"
+      - "每个 root partition 使用自己的 queue、ECL context、worker spawn 与 health marker"
+      - "pre 缺失或多个 FIFO 候选时写 evidence_quality: degraded event，而非 drop 或猜测"
+    test_cases:
+      - {
+          input: "edit then commit before worker",
+          expected: "event snapshots unchanged",
+          mocks: []
+        }
+      - {
+          input: "multi-file apply_patch",
+          expected: "one event per file with shared correlation",
+          mocks: []
+        }
+    depends_on: [ FN-001, FN-002, FN-013, FN-016, FN-020 ]
+    enables: [ FN-004, FN-006 ]
+    output: { file: "packages/hook/src/index.ts", symbol: "enqueueCapturedEvents" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_captureSnapshots.test.ts
+        -t=FN-003"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-004
+    name: "spawnQueueWorker"
+    parent: MOD-005
+    visibility: internal
+    description: "PostToolUse 入队后 best-effort 启动 detached one-shot worker"
+    input_interface:
+      - { name: "projectRoot", type: "string", source: parameter }
+    output_interface: { type: "void", error_cases: [] }
+    side_effects: [ "process-spawn" ]
+    dependencies: [ "node:child_process.spawn" ]
+    constraints:
+      - "不得让 worker 启动失败导致原编辑失败"
+      - "不得使用 shell:true"
+      - "atomic launch gate/cooldown 抑制 burst spawn storm"
+      - "使用 process.execPath + absolute compiled worker JS + shell:false +
+        windowsHide + ignored stdio + detached/unref"
+      - "spawn error 写 worker-health；child 自己写
+        started/heartbeat/progress/final，父进程不得把 spawn success 当 healthy"
+      - "worker 自己负责单项目 lease；事件文件本身提供 correctness 互斥"
+    test_cases:
+      - {
+          input: "queue appended",
+          expected: "worker argv receives exact projectRoot",
+          mocks: [ "spawn" ]
+        }
+    depends_on: [ FN-003, FN-014 ]
+    enables: [ FN-005 ]
+    output: { file: "packages/hook/src/index.ts", symbol: "spawnQueueWorker" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-004"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-005
+    name: "runQueueWorker"
+    parent: MOD-002
+    visibility: public
+    description: "获取项目 lease、恢复 claimed event、逐个 claim inbox 文件直至为空"
+    input_interface:
+      - { name: "projectRoot", type: "string", source: parameter }
+    output_interface:
+      type: "Promise<WorkerSummary>"
+      error_cases:
+        - { type: "WorkerBusy", when: "另一个健康 worker 已持锁" }
+    side_effects: [ "file-read", "file-write", "process-lock" ]
+    dependencies: [ "processSpoolEvent" ]
+    constraints:
+      - "lease directory 使用 atomic mkdir 并记录 owner token/pid/heartbeat"
+      - "lease 超过 5 分钟无 heartbeat 可回收；release 必须核对 owner token"
+      - "恢复事件必须原子 rename 到 working/<owner-token>；只有 rename 成功者可处理"
+      - "旧 worker 在 sidecar write、journal call、ack 前读取 lease/working owner
+        token；失去 fencing token 立即中止"
+      - "启动时恢复 stale working owners；新鲜 owner 目录不可触碰"
+      - "扫描 aged .tmp events：完整则 promote，损坏/重复则 quarantine；支持目录 fsync 时在 rename
+        后 fsync inbox"
+      - "检测旧 events.jsonl 时逐行迁移为 degraded immutable events；完成后原子改名为
+        .migrated，不重复迁移"
+    test_cases:
+      - {
+          input: "two concurrent workers",
+          expected: "one processes; one exits busy",
+          mocks: []
+        }
+      - {
+          input: "stale claimed event",
+          expected: "processed before new inbox event",
+          mocks: []
+        }
+    depends_on: [ FN-004, FN-014, FN-017, FN-019 ]
+    enables: [ FN-007 ]
+    output: { file: "packages/daemon/src/worker.ts", symbol: "runQueueWorker" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-005"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-006
+    name: "buildSnapshotDiffs"
+    parent: MOD-002
+    visibility: public
+    description: "从 before/after snapshot 构建 FileDiff 并覆盖为真实仓库路径"
+    input_interface:
+      - { name: "events", type: "QueueEvent[]", source: parameter }
+    output_interface:
+      type: "Promise<FileDiff[]>"
+      error_cases:
+        - { type: "SnapshotMissing", when: "事件声明完整快照但文件缺失" }
+    side_effects: [ "file-read", "process-spawn" ]
+    dependencies: [ "parseUnifiedDiff", "git diff --no-index" ]
+    constraints:
+      - "不得调用 getGitDiff(projectRoot)"
+      - "git 通过 execFile argv 调用，不使用 shell"
+      - "接受 git diff --no-index 的 exit 1 为有差异，重写 snapshot header 为真实 repo path"
+      - "degraded event 交给 processSpoolEvent 生成独立 file-level record"
+      - "snapshot 路径只能由 validated event_id/file token 派生，不接受事件中的任意绝对路径"
+    test_cases:
+      - {
+          input: "snapshots followed by git commit",
+          expected: "same FileDiff as before commit",
+          mocks: []
+        }
+      - {
+          input: "add/delete snapshots",
+          expected: "correct status and repository path",
+          mocks: []
+        }
+    depends_on: [ FN-003, FN-014, FN-019 ]
+    enables: [ FN-007 ]
+    output: { file: "packages/daemon/src/processor.ts", symbol: "buildSnapshotDiffs" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-006"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-007
+    name: "processSpoolEvent"
+    parent: MOD-002
+    visibility: public
+    description: "处理一个 immutable event；先固化 session sidecar，再 durable commit，最后 ack"
+    input_interface:
+      - { name: "eventPath", type: "string", source: parameter }
+      - { name: "projectRoot", type: "string", source: parameter }
+      - { name: "store", type: "HistoryStore", source: injected-dependency }
+    output_interface:
+      type: "Promise<EventSummary>"
+      error_cases:
+        - { type: "RetryableEventError", when: "snapshot diff 或 session commit 失败" }
+    side_effects: [ "file-read", "file-write" ]
+    dependencies: [ "buildSnapshotDiffs", "HistoryStore.saveSession" ]
+    constraints:
+      - "malformed event 文件单独 quarantine，不影响其他 inbox 文件"
+      - "annotation 完成后先原子写 finalized session sidecar；重试直接复用，不重新生成
+        UUID/timestamp"
+      - "evidence_quality: degraded 直接产生含 reason/operation/path 的 file-level
+        ChangeRecord"
+      - "event/sidecar 先经 bounded schema validator；最大 256 KiB，字段/数组数量有上限"
+      - "sidecar create-if-absent；已存在时验证 content digest；不一致 quarantine 为
+        SessionConflict"
+      - "sidecar/save/ack 前校验 working owner fencing token"
+      - "saveSession 成功前不得删除 event/snapshots/sidecar"
+      - "重试相同 event_id/session id 必须幂等"
+    test_cases:
+      - {
+          input: "one malformed file among valid inbox files",
+          expected: "valid processed, malformed quarantined",
+          mocks: []
+        }
+      - {
+          input: "crash after session commit before ack",
+          expected: "retry does not duplicate history",
+          mocks: []
+        }
+    depends_on: [ FN-005, FN-006, FN-009, FN-014, FN-018, FN-019, FN-020 ]
+    enables: [ FN-012 ]
+    output: { file: "packages/daemon/src/processor.ts", symbol: "processSpoolEvent" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-007"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-008
+    name: "withProjectLock"
+    parent: MOD-003
+    visibility: internal
+    description: "使用 exclusive lockfile 串行化跨进程 HistoryStore 写入"
+    input_interface:
+      - { name: "operation", type: "() => Promise<T>", source: parameter }
+    output_interface:
+      type: "Promise<T>"
+      error_cases:
+        - { type: "LockTimeout", when: "健康写入者长期持锁" }
+    side_effects: [ "file-write", "file-delete" ]
+    dependencies: [ "node:fs/promises.open", "process.kill(pid, 0)" ]
+    constraints:
+      - "release 只删除当前 owner token 的锁"
+      - "异常路径必须 finally release"
+      - "PID 仅用于诊断；heartbeat 超过 TTL 后无论 PID reuse/EPERM 均允许新 owner 抢占"
+      - "每次 journal/projection rename 与 release 前重读 owner token；失去 fencing token
+        必须中止"
+      - "超时与 backoff 有固定上限"
+      - "不增加锁依赖包"
+    test_cases:
+      - {
+          input: "two processes save concurrently",
+          expected: "serialized, no lost session",
+          mocks: []
+        }
+      - { input: "stale owner pid", expected: "lock recovered", mocks: [] }
+    depends_on: [ FN-015 ]
+    enables: [ FN-009, FN-010 ]
+    output: { file: "packages/history/src/store.ts", symbol: "withProjectLock" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_history_durableSession.test.ts
+        -t=FN-008"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-009
+    name: "saveSession"
+    parent: MOD-003
+    visibility: public
+    description: "在项目锁内验证 ID、幂等写入不可变 session，再增量投影"
+    input_interface:
+      - { name: "session", type: "ReviewSession", source: parameter }
+    output_interface:
+      type: "Promise<string>"
+      error_cases:
+        - { type: "HistoryWriteError", when: "session journal 无法原子提交" }
+    side_effects: [ "file-write" ]
+    dependencies: [ "withProjectLock", "projectSession", "fileHistoryPath" ]
+    constraints:
+      - "文件名为 timestamp + session.id"
+      - "session.id 只接受安全字符和长度；同 ID 不同 payload 抛 SessionConflict"
+      - "session.id 已存在时校验内容并幂等返回"
+      - "session journal 是事实来源；投影前置 dirty=true，成功后更新 manifest 并清 dirty"
+      - "派生更新失败不回滚 journal，init/read 检测 dirty 后触发显式 repair"
+    test_cases:
+      - {
+          input: "same timestamp, different ids",
+          expected: "two session files",
+          mocks: []
+        }
+      - {
+          input: "same id retried",
+          expected: "one session and one set of counts",
+          mocks: []
+        }
+    depends_on: [ FN-008, FN-011, FN-015, FN-018 ]
+    enables: [ FN-007 ]
+    output: { file: "packages/history/src/store.ts", symbol: "HistoryStore.saveSession" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_history_durableSession.test.ts
+        -t=FN-009"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-010
+    name: "rebuildDerivedHistory"
+    parent: MOD-006
+    visibility: public
+    description: "按 session id 去重扫描 journal，重建 index 与 per-file histories"
+    input_interface: []
+    output_interface:
+      type: "Promise<void>"
+      error_cases:
+        - { type: "CorruptSessionError", when: "不可变 session 本身损坏" }
+    side_effects: [ "file-read", "file-write" ]
+    dependencies: [ "projectSession", "ProjectionStorage" ]
+    constraints:
+      - "只在 manifest dirty/count mismatch 或显式 repair 时执行全量扫描"
+      - "每个 JSON 原子替换；manifest 最后提交，失败保持 dirty"
+      - "manifest 保存 journal digest/count、index digest、sorted history
+        path→digest inventory"
+      - "init 与 getIndex/getFileHistory 验证目标存在、schema 与 digest；不一致标 dirty 并
+        repair"
+      - "同一 session id 只计数一次"
+      - "repair 枚举 expected history paths 并清理不再存在的 stale projection files"
+    test_cases:
+      - {
+          input: "corrupt index + valid sessions",
+          expected: "exact totals and histories rebuilt",
+          mocks: []
+        }
+    depends_on: [ FN-015, FN-018 ]
+    enables: [ FN-007, FN-012 ]
+    output:
+      {
+        file: "packages/history/src/store.ts",
+        symbol: "HistoryStore.rebuildDerivedHistory"
+      }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_history_durableSession.test.ts
+        -t=FN-010"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-011
+    name: "fileHistoryPath"
+    parent: MOD-003
+    visibility: internal
+    description: "以 projectRoot 为基准验证并生成 history 路径"
+    input_interface:
+      - { name: "filePath", type: "string", source: parameter }
+    output_interface:
+      type: "string"
+      error_cases:
+        - { type: "PathEscapeError", when: "路径不在 projectRoot 内" }
+    side_effects: []
+    dependencies: [ "node:path.relative", "node:path.resolve" ]
+    constraints:
+      - "只接受规范化 repository-relative logical path；旧绝对路径先显式迁移"
+      - "HistoryStore init 先 canonicalize projectRoot，并拒绝
+        .devcompanion/reviews/history root symlink/junction 重定向"
+      - "输出必须位于 .devcompanion/history 内"
+      - "拒绝绝对路径、..、空段、drive prefix 和 history 内 symlink/junction 逃逸"
+    test_cases:
+      - {
+          input: "src/app.ts from unrelated cwd",
+          expected: "project/.devcompanion/history/src/app.ts.json",
+          mocks: []
+        }
+      - { input: "../outside.ts", expected: "throws PathEscapeError", mocks: [] }
+    depends_on: [ FN-015 ]
+    enables: [ FN-009, FN-010 ]
+    output:
+      {
+        file: "packages/history/src/store.ts",
+        symbol: "HistoryStore.fileHistoryPath"
+      }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_history_durableSession.test.ts
+        -t=FN-011"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-012
+    name: "trackerReliabilityIntegration"
+    parent: MOD-004
+    visibility: internal
+    description: "真实临时 Git 仓库中的 hook→worker→history 端到端回归"
+    input_interface: []
+    output_interface: { type: "VitestSuite", error_cases: [] }
+    side_effects: [ "temp-files", "git-processes" ]
+    dependencies: [ "handlePreToolUse", "handlePostToolUse", "runQueueWorker", "HistoryStore" ]
+    constraints:
+      - "覆盖 Windows 路径、add/modify/delete、stage/commit/revert"
+      - "使用真实 subprocess 覆盖并发 worker/saveSession、malformed event、commit/ack
+        fault injection"
+      - "覆盖 path escape、symlink、binary/large file、权限失败和 cleanup"
+      - "测试结束清理临时仓库"
+    test_cases:
+      - {
+          input: "edit then stage/commit before drain",
+          expected: "one correct history session",
+          mocks: []
+        }
+      - {
+          input: "two concurrent saves with same timestamp",
+          expected: "two sessions and valid index",
+          mocks: []
+        }
+    depends_on:
+      [
+        FN-003,
+        FN-004,
+        FN-005,
+        FN-006,
+        FN-007,
+        FN-008,
+        FN-009,
+        FN-010,
+        FN-011,
+        FN-013,
+        FN-014,
+        FN-015,
+        FN-016,
+        FN-017,
+        FN-018,
+        FN-019,
+        FN-020
+      ]
+    enables: []
+    output:
+      {
+        file: ".devcompanion/tests/test_reliability_foundation.test.ts",
+        symbol: "trackerReliabilityIntegration"
+      }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_reliability_foundation.test.ts"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-013
+    name: "hookCaptureContractTests"
+    parent: MOD-004
+    visibility: internal
+    description: "先创建 hook correlation、containment、snapshot lifecycle 的失败测试"
+    input_interface: []
+    output_interface: { type: "VitestSuite", error_cases: [] }
+    side_effects: [ "test-file-write" ]
+    dependencies: []
+    constraints:
+      - "测试通过 namespace import 引用尚未实现的符号，使 vitest list 可先收集"
+      - "包含 ambiguous FIFO、repo escape、large/binary degradation 与 atomic spool
+        assertions"
+      - "包含两个 repo 的一次 apply_patch、storage-root junction 与 symlink-swap fault
+        injection"
+    test_cases:
+      - {
+          input: "npx vitest list focused file",
+          expected: "collects without executing implementation assertions",
+          mocks: []
+        }
+    depends_on: []
+    enables: [ FN-001, FN-002, FN-003, FN-016 ]
+    output:
+      {
+        file: ".devcompanion/tests/test_hook_captureSnapshots.test.ts",
+        symbol: "hookCaptureContractTests"
+      }
+    verify:
+      command: "npx vitest list .devcompanion/tests/test_hook_captureSnapshots.test.ts"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-014
+    name: "spoolWorkerContractTests"
+    parent: MOD-004
+    visibility: internal
+    description: "先创建 immutable spool、worker lease、retry/ack 的失败测试"
+    input_interface: []
+    output_interface: { type: "VitestSuite", error_cases: [] }
+    side_effects: [ "test-file-write" ]
+    dependencies: []
+    constraints:
+      - "使用真实 event files 与 subprocess；不永久 mock queue/diff/store"
+      - "包含 spawn failure health、atomic claim、malformed quarantine、session
+        sidecar retry"
+      - "包含 50 个并发 launch、spawn-then-exit、forced stale lease 双 worker、aged temp
+        promotion 与 quota"
+    test_cases:
+      - {
+          input: "npx vitest list focused file",
+          expected: "collects successfully",
+          mocks: []
+        }
+    depends_on: []
+    enables: [ FN-004, FN-005, FN-006, FN-007, FN-017 ]
+    output:
+      {
+        file: ".devcompanion/tests/test_daemon_recoverableQueue.test.ts",
+        symbol: "spoolWorkerContractTests"
+      }
+    verify:
+      command: "npx vitest list
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-015
+    name: "historyJournalContractTests"
+    parent: MOD-004
+    visibility: internal
+    description: "先创建跨进程 lock、journal idempotency、projection repair 的失败测试"
+    input_interface: []
+    output_interface: { type: "VitestSuite", error_cases: [] }
+    side_effects: [ "test-file-write" ]
+    dependencies: []
+    constraints:
+      - "包含相同 timestamp、same-ID conflict、dirty manifest、cwd/path escape"
+      - "并发写入使用真实 child processes"
+      - "包含 PID reuse/EPERM fencing、valid-JSON digest mutation、missing history
+        file 与 storage-root junction"
+    test_cases:
+      - {
+          input: "npx vitest list focused file",
+          expected: "collects successfully",
+          mocks: []
+        }
+    depends_on: []
+    enables: [ FN-008, FN-009, FN-010, FN-011, FN-018 ]
+    output:
+      {
+        file: ".devcompanion/tests/test_history_durableSession.test.ts",
+        symbol: "historyJournalContractTests"
+      }
+    verify:
+      command: "npx vitest list .devcompanion/tests/test_history_durableSession.test.ts"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-016
+    name: "readSnapshotTargetSafely"
+    parent: MOD-001
+    visibility: internal
+    description: "在同一 fd 上完成 storage/source containment、identity validation 与
+      bounded snapshot read"
+    input_interface:
+      - { name: "projectRoot", type: "string", source: parameter }
+      - { name: "filePath", type: "string", source: parameter }
+    output_interface:
+      type: "SnapshotReadResult"
+      error_cases:
+        - { type: "PathEscapeError", when: "realpath 或 existing parent 逃逸 repo" }
+    side_effects: [ "file-stat", "file-realpath" ]
+    dependencies: [ "node:fs.realpath", "node:fs.lstat", "node:fs.open", "node:fs.fstat" ]
+    constraints:
+      - "symlink/junction 指向 repo 外时拒绝 full snapshot"
+      - "canonical .devcompanion/queue root 必须位于 canonical projectRoot 且本身不是重定向
+        link"
+      - "binary/unsupported/>2MiB 返回 degraded policy，不静默 drop"
+      - "lstat→open(O_NOFOLLOW where supported)→fstat→bounded read→identity
+        recheck；任一变化则丢弃内容并降级"
+    test_cases:
+      - {
+          input: "repo symlink to outside",
+          expected: "PathEscapeError/degraded event",
+          mocks: []
+        }
+      - {
+          input: "3 MiB text file",
+          expected: "degraded size-limit policy",
+          mocks: []
+        }
+    depends_on: [ FN-013 ]
+    enables: [ FN-002, FN-003 ]
+    output: { file: "packages/hook/src/snapshot.ts", symbol: "readSnapshotTargetSafely" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_hook_captureSnapshots.test.ts
+        -t=FN-016"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-017
+    name: "cleanupExpiredSnapshots"
+    parent: MOD-002
+    visibility: internal
+    description: "ack 后立即清理证据；按 7 天上限清理失败/孤儿快照和 sidecars"
+    input_interface:
+      - { name: "queueRoot", type: "string", source: parameter }
+      - { name: "now", type: "Date", source: parameter }
+    output_interface: { type: "Promise<CleanupSummary>", error_cases: [] }
+    side_effects: [ "file-delete" ]
+    dependencies: [ "node:fs/promises" ]
+    constraints:
+      - "绝不删除仍由 inbox/claimed event 引用的证据"
+      - "删除目标 realpath 必须位于 queueRoot"
+      - "维护 aggregate bytes/file-count watermarks；高水位切 degraded，低水位恢复 full
+        capture"
+      - "扫描 aged temp/sidecar/orphan 必须有每次运行的时间/文件数预算，避免 O(N) 阻塞"
+    test_cases:
+      - {
+          input: "acked + active + 8-day orphan",
+          expected: "acked/orphan removed, active kept",
+          mocks: []
+        }
+    depends_on: [ FN-014 ]
+    enables: [ FN-005, FN-012 ]
+    output: { file: "packages/daemon/src/worker.ts", symbol: "cleanupExpiredSnapshots" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-017"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-018
+    name: "projectSession"
+    parent: MOD-006
+    visibility: internal
+    description: "在项目锁内把一个 journal session 增量投影到 index 与 file histories"
+    input_interface:
+      - { name: "session", type: "ReviewSession", source: parameter }
+      - { name: "storage", type: "ProjectionStorage", source: injected-dependency }
+    output_interface:
+      type: "Promise<ProjectionManifest>"
+      error_cases:
+        - { type: "ProjectionError", when: "任何 derived JSON 无法原子更新" }
+    side_effects: [ "file-read", "file-write" ]
+    dependencies: [ "ProjectionStorage" ]
+    constraints:
+      - "处理前 manifest dirty=true；所有输出完成后提交 journal count/hash 并清 dirty"
+      - "已投影 session.id 不重复累计"
+      - "失败不影响已提交 journal"
+    test_cases:
+      - {
+          input: "same session projected twice",
+          expected: "counts increment once",
+          mocks: []
+        }
+      - {
+          input: "fault after index before history",
+          expected: "manifest remains dirty",
+          mocks: []
+        }
+    depends_on: [ FN-015 ]
+    enables: [ FN-009, FN-010, FN-012 ]
+    output: { file: "packages/history/src/projector.ts", symbol: "projectSession" }
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_history_durableSession.test.ts
+        -t=FN-018"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-019
+    name: "readValidatedQueueArtifact"
+    parent: MOD-002
+    visibility: internal
+    description: "在解析前对 event/session sidecar/snapshot 做 bounded schema 与 queue-root
+      trust validation"
+    input_interface:
+      - { name: "queueRoot", type: "string", source: parameter }
+      - { name: "artifactPath", type: "string", source: parameter }
+      - { name: "kind", type: "event | sidecar | snapshot", source: parameter }
+    output_interface:
+      type: "Promise<ValidatedQueueArtifact>"
+      error_cases:
+        - {
+            type: "QueueArtifactRejected",
+            when: "root/path/type/size/schema/project binding 无效"
+          }
+    side_effects: [ "file-read", "file-realpath" ]
+    dependencies: [ "node:fs.open", "node:fs.fstat", "JSON.parse" ]
+    constraints:
+      - "canonical queueRoot 必须位于 canonical projectRoot，且 queueRoot 自身不得是
+        redirect link"
+      - "basename/event_id 使用安全固定字符；artifact path 由 ID 推导，不信任 JSON 内绝对路径"
+      - "event/sidecar 最大 256 KiB，snapshot 最大 2 MiB；先 fstat 再 bounded read/parse"
+      - "只接受 regular non-symlink file；字段类型、数组数量、repo-relative path 与 project
+        binding 必须验证"
+      - "拒绝内容 quarantine，不在错误消息中输出 snapshot 内容"
+    test_cases:
+      - {
+          input: "valid JSON naming outside snapshot",
+          expected: "QueueArtifactRejected",
+          mocks: []
+        }
+      - { input: "300 KiB event", expected: "rejected before JSON.parse", mocks: [] }
+    depends_on: [ FN-014 ]
+    enables: [ FN-005, FN-006, FN-007, FN-012 ]
+    output: { file: "packages/daemon/src/worker.ts", symbol: "readValidatedQueueArtifact" }
+    verify:
+      command: "npx vitest run
+        .devcompanion/tests/test_daemon_recoverableQueue.test.ts -t=FN-019"
+      pass_condition: "exit 0"
+    status: done
+
+  - id: FN-020
+    name: "extendChangeEvidenceMetadata"
+    parent: MOD-007
+    visibility: public
+    description: "为 full/degraded 与 file-level tracking 增加向后兼容的结构化证据字段"
+    input_interface: []
+    output_interface: { type: "ChangeRecord type extension", error_cases: [] }
+    side_effects: [ "type-definition-change" ]
+    dependencies: []
+    constraints:
+      - "现有 ChangeRecord JSON 保持可读；新增字段必须 optional"
+      - "evidence_quality 仅为 full|degraded；degradation_reason 使用封闭 union"
+      - "file-level record 使用稳定 synthetic function_hash，不伪装成 AST function"
+    test_cases:
+      - {
+          input: "legacy ChangeRecord fixture",
+          expected: "仍通过 TypeScript build",
+          mocks: []
+        }
+      - {
+          input: "degraded file-level fixture",
+          expected: "包含 event_id/operation/reason",
+          mocks: []
+        }
+    depends_on: [ FN-013, FN-014 ]
+    enables: [ FN-003, FN-007, FN-012 ]
+    output: { file: "packages/types/src/history.ts", symbol: "ChangeRecord" }
+    verify:
+      command: "npm run build"
+      pass_condition: "exit 0"
+    status: done
+
+reuse_discovery:
+  scanned_ecls:
+    - "ccedit-skill.yaml"
+    - "ecl-schema-upgrade.yaml"
+    - "onboarding-parallel-workflow.yaml"
+  matches:
+    - intent: "atomic YAML/JSON write"
+      existing: { path: "packages/exec/src/status-manager.ts", symbol: "updateFnStatus" }
+      classification: reuse-adapt
+      action: "复用 temp + rename 模式，但补充跨进程锁和 owner token"
+    - intent: "diff parsing and annotation"
+      existing: { path: "packages/core/src/diff/parser.ts", symbol: "parseUnifiedDiff" }
+      classification: reuse-direct
+      action: "worker 只负责从 snapshots 产生 unified diff，然后复用 parser/annotator"
+    - intent: "history persistence"
+      existing: { path: "packages/history/src/store.ts", symbol: "HistoryStore" }
+      classification: reuse-extend
+      action: "保留 JSON 文件模型，将 session 改为 journal source of truth"
+
+data_flows:
+  FEAT-001:
+    input: "PreToolUse/PostToolUse JSON + target file contents"
+    transform: "normalize path → correlate → before/after snapshots → HookEvent"
+    store: ".devcompanion/queue/snapshots + inbox/<event-id>.json"
+    output: "self-contained queued event"
+  FEAT-003:
+    input: "immutable event files and snapshots"
+    transform: "atomic claim → validate → unified diff/degraded record → finalized
+      session sidecar → journal"
+    store: "HistoryStore immutable session journal"
+    output: "acked event or retryable claimed event"
+  FEAT-004:
+    input: "ReviewSession"
+    transform: "idempotency check → atomic journal commit → derived rebuild/update"
+    store: ".devcompanion/reviews, history, index.json"
+    output: "durable session path"
+
+interface_contracts:
+  - caller: MOD-001
+    callee: MOD-002
+    contract: "HookEvent paths are repo-relative '/' paths; snapshots exist before
+      inbox temp+rename"
+    errors: "degraded events carry explicit reason and do not pretend to have full
+      diff"
+    mode: async-file-queue
+  - caller: MOD-002
+    callee: MOD-003
+    contract: "saveSession is idempotent by session.id and returns only after
+      journal commit"
+    errors: "failure leaves claimed event/snapshots/sidecar available for retry"
+    mode: async-call
+
+dependency_graph:
+  FEAT-001: []
+  FEAT-004: []
+  FEAT-006: [ FEAT-004 ]
+  FEAT-003: [ FEAT-001, FEAT-004, FEAT-006 ]
+  FEAT-005: [ FEAT-001, FEAT-003, FEAT-004, FEAT-006 ]
+
+coverage_report:
+  chain_coverage: "5/5 requirements → 5 features → 7 modules → 20 executable FN nodes"
+  cross_cutting:
+    error_handling: "degraded evidence, quarantine, retryable claimed events, dirty
+      projection repair"
+    observability: "worker-health state, overflow marker, stderr warnings, cleanup summaries"
+    input_validation: "fd-backed source validation + bounded worker-side artifact
+      schema validation"
+    configuration: "fixed conservative limits in first release; no speculative config surface"
+    migration: "legacy events.jsonl → degraded immutable events; existing sessions
+      remain journal inputs"
+    authentication: "not applicable; local filesystem tool"
+  data_flow_gaps: 0
+  interface_mismatches: 0
+  parallel_tracks: 3
+  serial_bottlenecks: [ FN-007, FN-012 ]
+  circular_dependencies: 0
+
+probe_assessment:
+  - {
+      target: FEAT-001,
+      novelty: 1,
+      integration: 3,
+      performance: 3,
+      integrity: 3,
+      external: 0,
+      score: 10
+    }
+  - {
+      target: FEAT-003,
+      novelty: 1,
+      integration: 3,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 8
+    }
+  - {
+      target: FEAT-004,
+      novelty: 1,
+      integration: 2,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 7
+    }
+  - {
+      target: FEAT-005,
+      novelty: 0,
+      integration: 3,
+      performance: 0,
+      integrity: 1,
+      external: 0,
+      score: 4
+    }
+  - {
+      target: FEAT-006,
+      novelty: 1,
+      integration: 2,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 7
+    }
+  - {
+      target: MOD-001,
+      novelty: 1,
+      integration: 2,
+      performance: 3,
+      integrity: 3,
+      external: 0,
+      score: 9
+    }
+  - {
+      target: MOD-002,
+      novelty: 1,
+      integration: 3,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 8
+    }
+  - {
+      target: MOD-003,
+      novelty: 0,
+      integration: 2,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 6
+    }
+  - {
+      target: MOD-004,
+      novelty: 0,
+      integration: 3,
+      performance: 0,
+      integrity: 0,
+      external: 0,
+      score: 3
+    }
+  - {
+      target: MOD-005,
+      novelty: 1,
+      integration: 2,
+      performance: 2,
+      integrity: 1,
+      external: 0,
+      score: 6
+    }
+  - {
+      target: MOD-006,
+      novelty: 1,
+      integration: 2,
+      performance: 1,
+      integrity: 3,
+      external: 0,
+      score: 7
+    }
+  - {
+      target: MOD-007,
+      novelty: 0,
+      integration: 1,
+      performance: 0,
+      integrity: 1,
+      external: 0,
+      score: 2
+    }
+
+probes:
+  - id: PROBE-001
+    target: FEAT-001
+    question: "Pre/Post hook 输入是否总有稳定 tool_use_id？"
+    method: code-inspection
+    code_path: null
+    result: "当前 ToolUseInput 与测试只保证 tool_name/tool_input/cwd；不能依赖 tool_use_id。设计改为优先
+      tool_use_id，缺失时哈希规范化 tool input；碰撞降级并告警。"
+    verdict: needs-modification
+    date: "2026-08-17"
+    impact_if_infeasible:
+      invalidates: []
+      alternatives: [ "同步 PostToolUse 处理", "持久 daemon IPC" ]
+  - id: PROBE-002
+    target: FEAT-003
+    question: "现有 git 依赖能否跨平台从两个 snapshot 生成 unified diff？"
+    method: integration-test
+    code_path: null
+    result: "Windows Git 的 diff --no-index 对修改、新增（/dev/null → file）和删除（file →
+      /dev/null）均输出 parseUnifiedDiff 可消费的 unified diff；exit 1 表示存在差异，命令不使用
+      shell。"
+    verdict: feasible
+    date: "2026-08-17"
+    impact_if_infeasible:
+      invalidates: [ FEAT-003 ]
+      alternatives: [ "实现最小 line diff", "使用现有 transitive diff 包但提升为直接依赖" ]
+
+confrontation:
+  red_team:
+    - {
+        id: ATK-001,
+        scenario: "stale lease 抢占时旧 worker 恢复，两个 worker 同时处理同一 claimed event",
+        severity: critical,
+        targets: [ FEAT-003 ]
+      }
+    - {
+        id: ATK-002,
+        scenario: ".devcompanion/queue/reviews/history 本身是指向仓库外的 symlink/junction",
+        severity: critical,
+        targets: [ FEAT-001, FEAT-003, FEAT-004 ]
+      }
+    - {
+        id: ATK-003,
+        scenario: "realpath validation 后、read 前交换 source symlink/junction，泄露仓库外内容",
+        severity: critical,
+        targets: [ FEAT-001 ]
+      }
+    - {
+        id: ATK-004,
+        scenario: "clean manifest 下删除/合法篡改某个 projection JSON，journal count 不变",
+        severity: high,
+        targets: [ FEAT-006 ]
+      }
+    - {
+        id: ATK-005,
+        scenario: "预植 semantic-valid 恶意 event/sidecar，引用仓库外或超大 artifact",
+        severity: critical,
+        targets: [ FEAT-003 ]
+      }
+    - {
+        id: ATK-006,
+        scenario: "大量小事件或 worker 不可用导致磁盘/inode 耗尽",
+        severity: high,
+        targets: [ FEAT-001, FEAT-003 ]
+      }
+    - {
+        id: ATK-007,
+        scenario: "Windows burst hooks 产生 spawn storm，child spawn 成功后立即退出造成 false health",
+        severity: high,
+        targets: [ FEAT-003 ]
+      }
+    - {
+        id: ATK-008,
+        scenario: "event temp fsync 后 rename/掉电失败，留下既非 inbox 又非 claimed 的 orphan",
+        severity: high,
+        targets: [ FEAT-003 ]
+      }
+    - {
+        id: ATK-009,
+        scenario: "HistoryStore owner PID reuse 或 EPERM 导致永久锁，旧 owner 恢复后继续写",
+        severity: high,
+        targets: [ FEAT-004 ]
+      }
+    - {
+        id: ATK-010,
+        scenario: "一次 apply_patch 跨两个 repo，Pre 阶段错误复用第一个 projectRoot",
+        severity: high,
+        targets: [ FEAT-001 ]
+      }
+  blue_team:
+    - attack: ATK-001
+      verdict: mitigated
+      mitigation: "所有 normal/recovery claim 原子进入
+        working/<owner-token>；sidecar/save/ack 使用 fencing token"
+      new_requirements: []
+    - attack: ATK-002
+      verdict: mitigated
+      mitigation: "hook、worker、HistoryStore 独立 canonicalize storage roots 并拒绝 root
+        redirect links"
+      new_requirements: [ REQ-005 ]
+    - attack: ATK-003
+      verdict: mitigated
+      mitigation: "fd-backed lstat/open/fstat/bounded-read/identity-recheck；变化时不持久化内容"
+      new_requirements: [ REQ-005 ]
+    - attack: ATK-004
+      verdict: mitigated
+      mitigation: "projection manifest 加 index/history digests 与 inventory，init/read
+        验证并 repair"
+      new_requirements: []
+    - attack: ATK-005
+      verdict: mitigated
+      mitigation: "worker-side bounded artifact reader、derived
+        paths、schema/count/project binding validation"
+      new_requirements: []
+    - attack: ATK-006
+      verdict: mitigated
+      mitigation: "aggregate byte/file watermarks；高/硬水位降级与 overflow health，fail-open
+        保留源码编辑"
+      new_requirements: [ REQ-005 ]
+    - attack: ATK-007
+      verdict: mitigated
+      mitigation: "atomic launch gate/cooldown；明确 Windows spawn flags；child-owned
+        started/heartbeat/final health"
+      new_requirements: []
+    - attack: ATK-008
+      verdict: mitigated
+      mitigation: "directory fsync where supported；startup bounded-recover aged temp files"
+      new_requirements: []
+    - attack: ATK-009
+      verdict: mitigated
+      mitigation: "heartbeat TTL 而非 PID 决定 stale；每次 rename/release 前 owner-token fencing"
+      new_requirements: []
+    - attack: ATK-010
+      verdict: mitigated
+      mitigation: "每个 changed path 独立 root discovery 并按 canonical root 分区
+        manifest/spool/worker"
+      new_requirements: []
+
+risks:
+  - id: RISK-001
+    description: "缺失 tool_use_id 时相同并发工具输入发生 correlation collision"
+    probability: medium
+    impact: high
+    mitigation: "per-path FIFO manifest + Pre nonce；多个候选时不猜测，生成 degraded 独立事件并保留
+      post evidence"
+    status: mitigated
+    related: []
+  - id: RISK-002
+    description: "大文件 snapshot 超过 hook 100ms 目标"
+    probability: medium
+    impact: medium
+    mitigation: "设置可测试的大小阈值；超过阈值生成 file-level event，不静默跳过"
+    status: mitigated
+    related: []
+  - id: RISK-003
+    description: "worker 在 journal commit 后、event ack 前崩溃"
+    probability: low
+    impact: medium
+    mitigation: "session id 由 correlation/event 内容稳定派生，saveSession 幂等"
+    status: mitigated
+    related: []
+  - id: RISK-004
+    description: "best-effort worker spawn 失败后，在没有下一次 hook/手工 drain 时事件延迟无限"
+    probability: low
+    impact: medium
+    mitigation: "durable inbox + health marker + stderr warning + next-hook/manual
+      retry；不虚假承诺固定 drain SLA"
+    status: accepted
+    related: []
+  - id: RISK-005
+    description: "Linux 行为尚未在当前 Windows 审计环境执行"
+    probability: medium
+    impact: high
+    mitigation: "合并前由 Linux runner 执行相同 subprocess integration suite 并人工签署 REQ-004"
+    status: open
+    related: []
+  - id: RISK-006
+    description: "实施文件与当前非本规划产生的未提交修改重叠，错误基线可能覆盖并行工作"
+    probability: high
+    impact: high
+    mitigation: "用户已批准以当前 worktree 为基线；/ccedit 每个 FN 先读取现有 diff，禁止
+      reset/checkout，按当前内容增量修改"
+    status: mitigated
+    related: []
+
+decisions:
+  - id: DEC-001
+    date: "2026-08-17"
+    phase: 0
+    decision: "先交付追踪可靠性基础，其他审计项拆成后续 ECL"
+    rationale: "可追踪性是产品核心；数据链不可信时扩展功能没有价值"
+    alternatives_considered: [ "一次性修完全部审计项", "继续新增功能" ]
+    reversible: false
+  - id: DEC-002
+    date: "2026-08-17"
+    phase: 3
+    decision: "采用 snapshots + one-shot worker + immutable session journal"
+    rationale: "不增加依赖或系统服务，同时消除对稍后 Git 状态的依赖并支持崩溃重放"
+    alternatives_considered:
+      - "继续读取稍后的 git diff — 已证实丢数据"
+      - "在 PostToolUse 同步完成 AST/历史处理 — 增加代理编辑延迟"
+      - "SQLite event store — 当前规模下增加依赖和迁移成本"
+      - "常驻 OS service — 安装与跨平台生命周期过重"
+      - "退回手动 aidev review — 破坏自动追踪产品承诺"
+    reversible: true
+  - id: DEC-003
+    date: "2026-08-17"
+    phase: 4
+    decision: "session journal 是唯一事实来源；index/file history 都可重建"
+    rationale: "文件系统无法对多个 JSON 文件提供事务；不可变主记录 + 可重建派生数据更简单可靠"
+    alternatives_considered: [ "多文件伪事务与回滚", "引入数据库" ]
+    reversible: true
+  - id: DEC-004
+    date: "2026-08-17"
+    phase: 5
+    decision: "用 immutable one-event spool files 取代共享 events.jsonl"
+    rationale: "消除 append/rename 跨平台竞态、行级交错和单个坏行拖垮整批的问题"
+    alternatives_considered: [ "继续 JSONL 加锁", "数据库队列" ]
+    reversible: true
+  - id: DEC-005
+    date: "2026-08-17"
+    phase: 5
+    decision: "组件 contract tests 先于实现节点创建，最终 E2E 留到所有实现完成后"
+    rationale: "使 /ccedit 的每个实现节点都有已存在、可运行的 focused verification"
+    alternatives_considered: [ "一个后置 mega-suite", "实现后再补测试" ]
+    reversible: true
+  - id: DEC-006
+    date: "2026-08-17"
+    phase: 5
+    decision: "finalized session sidecar 固化非确定性 record IDs/timestamps"
+    rationale: "重试必须复用完全相同 payload；强行把所有下游 ID 改成确定性会扩大 core 改动"
+    alternatives_considered: [ "修改 toChangeRecords 全部 ID 生成", "同 ID 忽略 payload 差异" ]
+    reversible: true
+  - id: DEC-007
+    date: "2026-08-17"
+    phase: 8
+    decision: "queue 达到硬水位时 fail-open：源码编辑继续，追踪降级并明确告警"
+    rationale: "追踪系统故障不应扣留用户源码变更；产品承诺改为不静默失败，而非牺牲源码可用性"
+    alternatives_considered: [ "PreToolUse 阻断所有受支持写操作", "静默丢弃新事件" ]
+    reversible: true
+  - id: DEC-008
+    date: "2026-08-17"
+    phase: 8
+    decision: "第一版 limits 使用保守常量，不新增配置 schema"
+    rationale: "当前没有证据需要用户调节；先用测试锁定安全上限，出现真实需求再开放配置"
+    alternatives_considered: [ "新增 queue-config.json", "无限制" ]
+    reversible: true
+  - id: DEC-009
+    date: "2026-08-17"
+    phase: 9
+    decision: "批准以当前未提交 worktree 为实施基线，并保留所有既有修改"
+    rationale: "用户在审计复核后明确要求继续；现有修改包含已实现但待验证的 installer、overview 与 dashboard 修复"
+    alternatives_considered: [ "等待工作区清理后再实施" ]
+    reversible: false
+
+iterations:
+  - iteration: 1
+    date: "2026-08-17"
+    trigger: "ccedit execution"
+    changes:
+      - "完成全部 20 个 FN 节点并保留当前 worktree 基线"
+      - "以 tagged contract tests 消除组件 RED 契约的跨节点自锁"
+      - "修复 hook snapshot descriptor 与 worker schema 的集成不一致"
+      - "修复 Windows projection rename 的 transient EPERM/EACCES 竞态"
+      - "把旧 HistoryStore 全 fs mock 测试迁移为真实临时目录合同"
+    verification:
+      - "npm run build"
+      - "npx vitest run — 95 files, 1783 passed, 15 skipped"
+      - "FN-009 six-process writer contract repeated 5/5 passes"
+    open_follow_up:
+      - "RISK-005: Linux runner 仍需执行同一 subprocess integration matrix"
+
+feature_guard:
+  generated: null
+  guards: []

@@ -24,8 +24,8 @@ export class ClaudeNotAvailableError extends Error {
 }
 
 export class ClaudeTimeoutError extends Error {
-  constructor(public readonly slug?: string) {
-    super(`Claude process timed out${slug ? ` for idea: ${slug}` : ""}`);
+  constructor() {
+    super("Claude process timed out");
     this.name = "ClaudeTimeoutError";
   }
 }

@@ -1,172 +1,138 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { ReviewSession, FileHistory, ProjectIndex } from "../../packages/history/src/types.js";
+import { basename, join } from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { HistoryStore } from "../../packages/history/src/store.js";
+import type { ProjectIndex, ReviewSession } from "../../packages/history/src/types.js";
 
-const mockReadFile = vi.fn();
-const mockWriteFile = vi.fn();
-const mockMkdir = vi.fn();
-const mockExistsSync = vi.fn();
+const FIXED_TIME = "2026-08-17T12:00:00.000Z";
 
-vi.mock("node:fs/promises", () => ({
-  readFile: (...args: any[]) => mockReadFile(...args),
-  writeFile: (...args: any[]) => mockWriteFile(...args),
-  mkdir: (...args: any[]) => mockMkdir(...args),
-}));
-
-vi.mock("node:fs", () => ({
-  existsSync: (...args: any[]) => mockExistsSync(...args),
-}));
-
-const { HistoryStore } = await import("../../packages/history/src/store.js");
+function makeSession(id: string, filePath = "src/test.ts"): ReviewSession {
+  return {
+    id,
+    timestamp: FIXED_TIME,
+    trigger: "cli",
+    summary: `session ${id}`,
+    total_changes: 1,
+    files_changed: [filePath],
+    changes: [{
+      id: `${id}-record`,
+      timestamp: FIXED_TIME,
+      file_path: filePath,
+      function_hash: `hash-${id}`,
+      function_name: `fn_${id}`,
+      class_name: null,
+      change_type: "modify",
+      reason: "HistoryStore API smoke",
+      reason_source: "user-provided",
+      old_content: "before",
+      new_content: "after",
+      start_line: 1,
+      end_line: 1,
+      test_status: "pending",
+      test_file: null,
+      error_id: null,
+      session_id: id,
+    }],
+  };
+}
 
 describe("HistoryStore", () => {
-  let instance: InstanceType<typeof HistoryStore>;
-  const projectRoot = "test-project";
+  let projectRoot: string;
+  let store: HistoryStore;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    instance = new HistoryStore(projectRoot);
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(join(tmpdir(), "history-store-api-"));
+    store = new HistoryStore(projectRoot);
   });
 
-  describe("init", () => {
-    it("should create directories", async () => {
-      mockExistsSync.mockReturnValue(false);
-      mockMkdir.mockResolvedValue(undefined);
-      mockWriteFile.mockResolvedValue(undefined);
-      await instance.init();
-      expect(mockMkdir).toHaveBeenCalled();
-    });
-
-    it("should create index.json", async () => {
-      mockExistsSync.mockReturnValue(false);
-      mockMkdir.mockResolvedValue(undefined);
-      mockWriteFile.mockResolvedValue(undefined);
-      await instance.init();
-      const call = mockWriteFile.mock.calls.find((c: any[]) => c[0].includes("index.json"));
-      expect(call).toBeDefined();
-    });
-
-    it("should not overwrite existing index", async () => {
-      mockExistsSync.mockReturnValue(true);
-      mockMkdir.mockResolvedValue(undefined);
-      mockReadFile.mockResolvedValue("*.json\n");
-      await instance.init();
-      const calls = mockWriteFile.mock.calls.filter((c: any[]) => c[0].includes("index.json"));
-      expect(calls.length).toBe(0);
-    });
+  afterEach(async () => {
+    await rm(projectRoot, { recursive: true, force: true });
   });
 
-  describe("getFileHistory", () => {
-    it("should return null if not found", async () => {
-      mockExistsSync.mockReturnValue(false);
-      const result = await instance.getFileHistory("src/test.ts");
-      expect(result).toBeNull();
-    });
-
-    it("should return history if exists", async () => {
-      mockExistsSync.mockReturnValue(true);
-      const history: FileHistory = {
-        file_path: "src/test.ts",
-        last_updated: new Date().toISOString(),
-        total_records: 0,
-        functions: {},
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(history));
-      const result = await instance.getFileHistory("src/test.ts");
-      expect(result).toEqual(history);
-    });
+  it("initializes trusted storage directories", async () => {
+    await store.init();
+    await expect(readFile(join(projectRoot, ".devcompanion", "index.json"), "utf8"))
+      .resolves.toContain('"total_sessions": 0');
+    await expect(readFile(join(projectRoot, ".devcompanion", "projection-manifest.json"), "utf8"))
+      .resolves.toContain('"dirty": false');
   });
 
-  describe("getFunctionHistory", () => {
-    it("should return empty array if not indexed", async () => {
-      mockExistsSync.mockReturnValue(true);
-      const index: ProjectIndex = {
-        project_root: projectRoot,
-        last_updated: new Date().toISOString(),
-        total_sessions: 0,
-        total_changes: 0,
-        function_index: {},
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(index));
-      const result = await instance.getFunctionHistory("unknown");
-      expect(result).toEqual([]);
+  it("is idempotent across repeated init", async () => {
+    await store.init();
+    const first = await store.getIndex();
+    await store.init();
+    expect(await store.getIndex()).toEqual(first);
+  });
+
+  it("returns null for missing file history", async () => {
+    await store.init();
+    await expect(store.getFileHistory("src/missing.ts")).resolves.toBeNull();
+  });
+
+  it("reads file history after saving a session", async () => {
+    await store.init();
+    await store.saveSession(makeSession("file-history"));
+    const history = await store.getFileHistory("src/test.ts");
+    expect(history?.total_records).toBe(1);
+    expect(history?.functions["hash-file-history"].records).toHaveLength(1);
+  });
+
+  it("returns an empty function history for an unknown hash", async () => {
+    await store.init();
+    await expect(store.getFunctionHistory("unknown")).resolves.toEqual([]);
+  });
+
+  it("returns the projected index", async () => {
+    await store.init();
+    await store.saveSession(makeSession("index"));
+    await expect(store.getIndex()).resolves.toMatchObject({
+      project_root: projectRoot,
+      total_sessions: 1,
+      total_changes: 1,
     });
   });
 
-  describe("getIndex", () => {
-    it("should return index", async () => {
-      const index: ProjectIndex = {
-        project_root: projectRoot,
-        last_updated: new Date().toISOString(),
-        total_sessions: 5,
-        total_changes: 20,
-        function_index: {},
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(index));
-      const result = await instance.getIndex();
-      expect(result).toEqual(index);
-    });
-
-    it("should be idempotent", async () => {
-      const index: ProjectIndex = {
-        project_root: projectRoot,
-        last_updated: new Date().toISOString(),
-        total_sessions: 5,
-        total_changes: 20,
-        function_index: {},
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(index));
-      const r1 = await instance.getIndex();
-      const r2 = await instance.getIndex();
-      expect(r1).toEqual(r2);
-    });
+  it("returns the same healthy index on repeated reads", async () => {
+    await store.init();
+    const first = await store.getIndex();
+    expect(await store.getIndex()).toEqual(first);
   });
 
-  describe("writeIndex", () => {
-    it("should write to file", async () => {
-      mockWriteFile.mockResolvedValue(undefined);
-      const index: ProjectIndex = {
-        project_root: projectRoot,
-        last_updated: new Date().toISOString(),
-        total_sessions: 1,
-        total_changes: 5,
-        function_index: {},
-      };
-      await instance.writeIndex(index);
-      expect(mockWriteFile).toHaveBeenCalled();
-    });
+  it("writeIndex writes the requested JSON", async () => {
+    await store.init();
+    const index: ProjectIndex = {
+      project_root: projectRoot,
+      last_updated: FIXED_TIME,
+      total_sessions: 3,
+      total_changes: 4,
+      function_index: {},
+    };
+    await store.writeIndex(index);
+    expect(JSON.parse(await readFile(join(projectRoot, ".devcompanion", "index.json"), "utf8")))
+      .toEqual(index);
   });
 
-  describe("getSession", () => {
-    it("should return session data", async () => {
-      const session: ReviewSession = {
-        id: "s1",
-        timestamp: "2024-05-15T10:00:00Z",
-        trigger: "cli",
-        summary: "test",
-        total_changes: 1,
-        files_changed: ["f1.ts"],
-        changes: [],
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(session));
-      const result = await instance.getSession("file.json");
-      expect(result).toEqual(session);
-    });
+  it("reads an immutable session by filename", async () => {
+    await store.init();
+    const session = makeSession("read-session");
+    const path = await store.saveSession(session);
+    await expect(store.getSession(basename(path))).resolves.toEqual(session);
   });
 
-  describe("edge cases", () => {
-    it("handles concurrent operations", async () => {
-      mockExistsSync.mockReturnValue(true);
-      const index: ProjectIndex = {
-        project_root: projectRoot,
-        last_updated: new Date().toISOString(),
-        total_sessions: 1,
-        total_changes: 1,
-        function_index: {},
-      };
-      mockReadFile.mockResolvedValue(JSON.stringify(index));
-      const results = await Promise.all([instance.getIndex(), instance.getIndex(), instance.getIndex()]);
-      expect(results).toHaveLength(3);
-      expect(results[0]).toEqual(results[1]);
-    });
+  it("handles concurrent healthy reads", async () => {
+    await store.init();
+    const results = await Promise.all([store.getIndex(), store.getIndex(), store.getIndex()]);
+    expect(results).toHaveLength(3);
+    expect(results[0]).toEqual(results[1]);
+  });
+
+  it("repairs a valid-JSON index that disagrees with the journal", async () => {
+    await store.init();
+    await store.saveSession(makeSession("repair"));
+    const indexPath = join(projectRoot, ".devcompanion", "index.json");
+    const index = JSON.parse(await readFile(indexPath, "utf8"));
+    await writeFile(indexPath, JSON.stringify({ ...index, total_sessions: 99 }));
+    expect((await store.getIndex()).total_sessions).toBe(1);
   });
 });

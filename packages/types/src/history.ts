@@ -1,3 +1,23 @@
+export type EvidenceQuality = "full" | "degraded";
+
+export type EvidenceDegradationReason =
+  | "ambiguous-pre-manifest"
+  | "binary-or-unsupported"
+  | "identity-changed"
+  | "legacy-event"
+  | "path-escape"
+  | "queue-overflow"
+  | "read-error"
+  | "repo-escape"
+  | "size-limit"
+  | "snapshot-unavailable"
+  | "storage-root-redirect"
+  | "symlink-target"
+  | "unsupported-extension"
+  | "unsupported-file-type";
+
+export type ChangeOperation = "add" | "modify" | "delete";
+
 export interface ChangeRecord {
   id: string;
   timestamp: string;
@@ -17,6 +37,14 @@ export interface ChangeRecord {
   error_id: string | null;
   session_id: string;
   ecl_context?: EclContext;
+  event_id?: string;
+  correlation_id?: string;
+  operation?: ChangeOperation;
+  evidence_quality?: EvidenceQuality;
+  degradation_reason?: EvidenceDegradationReason;
+  /** Degraded file-level records use a stable synthetic function_hash, not an AST identity. */
+  file_level?: boolean;
+  synthetic?: boolean;
 }
 
 export interface EclContext {
