@@ -34,4 +34,23 @@ describe("ccoverview SKILL.md", () => {
     expect(content).toContain("overview-en.html");
     expect(content).toContain("overview-zh.html");
   });
+
+  it("allows --target and defaults to the current project when omitted", () => {
+    const content = readSkill();
+    expect(content).toContain("--target");
+    expect(content).not.toMatch(/no `--target`/);
+    expect(content).not.toMatch(/NO `--target`/);
+    expect(content.toLowerCase()).toMatch(/cwd|git root/);
+    expect(content.toLowerCase()).toMatch(/current project/);
+  });
+});
+
+describe("ccoverview Codex adapter", () => {
+  const adapterPath = resolve(repoRoot, ".agents", "skills", "ccoverview", "SKILL.md");
+
+  it("allows --target and defaults to the current project", () => {
+    const content = readFileSync(adapterPath, "utf8");
+    expect(content).toContain("--target");
+    expect(content.toLowerCase()).toMatch(/cwd|git root/);
+  });
 });

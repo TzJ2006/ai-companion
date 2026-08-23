@@ -1,4 +1,15 @@
 export { HistoryStore } from "./store.js";
+export { projectSession, ProjectionError } from "./projector.js";
+export type { ProjectionManifest, ProjectionStorage } from "./projector.js";
+export {
+  applyManagedGitignore,
+  hasManagedGitignoreBlock,
+  managedGitignoreBlock,
+  visibilityToGitignoreProfile,
+  GITIGNORE_MANAGED_START,
+  GITIGNORE_MANAGED_END,
+} from "./managed-gitignore.js";
+export type { RepoVisibility, GitignoreProfile } from "./managed-gitignore.js";
 export type {
   ChangeRecord,
   ReviewSession,

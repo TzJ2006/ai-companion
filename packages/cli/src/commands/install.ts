@@ -26,16 +26,25 @@ export const installCommand = new Command("install")
   .option("-p, --project <path>", "Target project root path", ".")
   .option("--agent <agent>", "Install for claude, codex, or both", "both")
   .option("--enforce", "Also inject the PreToolUse enforcement hook", false)
-  .option("--no-commands", "Skip installing .claude/commands/", false)
+  .option("--no-commands", "Skip installing .claude/commands/")
+  .option("--public", "Treat the target as a public repo (strict gitignore)", false)
+  .option("--private", "Treat the target as a private repo (looser gitignore)", false)
   .action(
     (opts: {
       project: string;
       agent: AgentTarget;
       enforce: boolean;
-      noCommands?: boolean;
+      commands?: boolean;
+      public?: boolean;
+      private?: boolean;
     }) => {
       if (opts.agent !== "claude" && opts.agent !== "codex" && opts.agent !== "both") {
         console.error("--agent must be one of: claude, codex, both");
+        process.exitCode = 1;
+        return;
+      }
+      if (opts.public && opts.private) {
+        console.error("--public and --private are mutually exclusive");
         process.exitCode = 1;
         return;
       }
@@ -57,7 +66,9 @@ export const installCommand = new Command("install")
       const installScript = join(COMPANION_ROOT, "scripts", "install.ts");
       const args = ["tsx", installScript, targetRoot, "--agent", opts.agent];
       if (opts.enforce) args.push("--enforce");
-      if (opts.noCommands) args.push("--no-commands");
+      if (opts.commands === false) args.push("--no-commands");
+      if (opts.public) args.push("--public");
+      if (opts.private) args.push("--private");
 
       // Windows: npx is a .cmd shim — shell:true required for spawn.
       const result = spawnSync("npx", args, {

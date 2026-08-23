@@ -290,6 +290,23 @@ describe("extractFunction", () => {
     expect(fn.decorators).toContain("cache");
   });
 
+  it("should mark a decorated async function as async", async () => {
+    const filePath = await writeTmpPython(
+      "decorated_async.py",
+      [
+        "@retry",
+        "async def fetch():",
+        "    pass",
+      ].join("\n") + "\n"
+    );
+    const result = await parseFile(filePath);
+
+    const fn = result.functions[0];
+    expect(fn.name).toBe("fetch");
+    expect(fn.is_async).toBe(true);
+    expect(fn.decorators).toContain("retry");
+  });
+
   it("should handle decorator with arguments", async () => {
     const filePath = await writeTmpPython(
       "decorator_args.py",

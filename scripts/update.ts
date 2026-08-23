@@ -11,6 +11,7 @@ import {
   normalizeTargetPath,
   pathKey,
 } from "./lib/registry.ts";
+import { detectRepoVisibility } from "./lib/detect-visibility.ts";
 
 const args = process.argv.slice(2);
 
@@ -104,15 +105,26 @@ for (const target of targets) {
   }
 
   try {
+    // 3c: re-running installAgentConfig migrates gitignore, hooks, settings
+    // (no parentDir grants, no abs CLAUDE.md root, wrapper hooks).
+    const visibility = target.visibility ?? detectRepoVisibility(targetPath);
     installAgentConfig({
       targetPath,
       aidevRoot,
       enforce: target.enforce,
       includeCommands: target.commands,
       agent: target.agent ?? "both",
+      visibility,
     });
     saveRegistry(
-      addTarget(registry, targetPath, target.enforce, target.commands, target.agent ?? "both")
+      addTarget(
+        registry,
+        targetPath,
+        target.enforce,
+        target.commands,
+        target.agent ?? "both",
+        visibility
+      )
     );
     console.log(`  OK: ${targetPath}`);
     successCount++;

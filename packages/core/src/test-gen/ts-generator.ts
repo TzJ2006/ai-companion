@@ -4,8 +4,6 @@ import { readFile } from "node:fs/promises";
 export interface TsTestGenConfig {
   test_framework: "vitest" | "jest";
   output_dir: string;
-  include_source_body: boolean;
-  llm_enhance: boolean;
 }
 
 export interface GeneratedTsTest {

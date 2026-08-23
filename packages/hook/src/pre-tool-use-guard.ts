@@ -85,8 +85,8 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
       const root = process.env.DEVCOMPANION_ROOT || process.cwd();
       const result = handlePreToolUse(event, root);
       if (result.blocked) {
-        process.stdout.write(JSON.stringify(result));
-        process.exit(1);
+        process.stderr.write((result.message ?? "Blocked by ccplan read-only guard.") + "\n");
+        process.exit(2);
       }
     } catch {
       // Parse failure = don't block

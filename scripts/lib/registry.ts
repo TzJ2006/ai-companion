@@ -2,6 +2,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, realpathSync } from
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
+export type RepoVisibility = "public" | "private";
+
 export interface RegistryEntry {
   path: string;
   installed_at: string;
@@ -9,6 +11,8 @@ export interface RegistryEntry {
   enforce: boolean;
   commands: boolean;
   agent?: "claude" | "codex" | "both";
+  /** 3a: public-safe vs private gitignore. Missing on old entries → treat as public. */
+  visibility?: RepoVisibility;
 }
 
 export interface Registry {
@@ -59,27 +63,30 @@ export function addTarget(
   targetPath: string,
   enforce: boolean,
   commands: boolean,
-  agent: "claude" | "codex" | "both" = "both"
+  agent: "claude" | "codex" | "both" = "both",
+  visibility: RepoVisibility = "public"
 ): Registry {
   const resolved = normalizeTargetPath(targetPath);
   const key = pathKey(resolved);
-  const existing = registry.targets.findIndex((t) => pathKey(t.path) === key);
+  const matches = registry.targets.filter((t) => pathKey(t.path) === key);
+  const installedAt =
+    matches.length > 0
+      ? matches.map((t) => t.installed_at).sort()[0]
+      : new Date().toISOString();
 
   const entry: RegistryEntry = {
     path: resolved,
-    installed_at: existing >= 0 ? registry.targets[existing].installed_at : new Date().toISOString(),
+    installed_at: installedAt,
     updated_at: new Date().toISOString(),
     enforce,
     commands,
     agent,
+    visibility,
   };
 
-  if (existing >= 0) {
-    registry.targets[existing] = entry;
-  } else {
-    registry.targets.push(entry);
-  }
-
+  // Optional leftover: collapse GitHub vs Github casing duplicates to one entry.
+  registry.targets = registry.targets.filter((t) => pathKey(t.path) !== key);
+  registry.targets.push(entry);
   return registry;
 }
 

@@ -46,9 +46,6 @@ const changeRecord: ChangeRecord = {
 } as unknown as ChangeRecord;
 
 const baseConfig: TestGenerationConfig = {
-  llm_provider: "claude",
-  api_key: "sk-test-key",
-  model: "claude-sonnet-4-6-20250514",
   test_framework: "pytest",
   output_dir: "tests/generated",
 };

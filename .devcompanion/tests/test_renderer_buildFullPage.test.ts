@@ -34,12 +34,12 @@ const validSession: ReviewSession = {
 
 describe("renderSessionToHtml", () => {
   it("should execute without throwing", () => {
-    const result = renderSessionToHtml(validSession, []);
+    const result = renderSessionToHtml(validSession);
     expect(result).toBeDefined();
   });
 
   it("should return correct type (string)", () => {
-    const result = renderSessionToHtml(validSession, []);
+    const result = renderSessionToHtml(validSession);
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
   });

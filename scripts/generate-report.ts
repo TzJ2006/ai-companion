@@ -4,16 +4,17 @@
  * Reads .devcompanion/report-data.json (from collect-report-data.ts) and renders HTML.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve, relative, extname } from "node:path";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { resolve, relative, extname, join } from "node:path";
 import { readdir } from "node:fs/promises";
 import { parseFileAuto, getSupportedExtensions, computeFunctionIdentity } from "../packages/ast/src/index.ts";
 import { renderOnboardHtml } from "../packages/render/src/onboard/index.ts";
 import type { ParsedModule } from "../packages/ast/src/types.ts";
 import type { ProjectIndex, FunctionIndexEntry } from "../packages/history/src/types.ts";
 import type { ReportData } from "../packages/render/src/onboard/types.ts";
+import { resolveTargetProject, resolveReportsDir } from "./lib/resolve-target.ts";
 
-const PROJECT_ROOT = resolve(import.meta.dirname, "..");
+const PROJECT_ROOT = resolveTargetProject();
 
 const IGNORED_DIRS = new Set([
   "node_modules", ".git", ".devcompanion", "dist", "build",
@@ -113,7 +114,9 @@ export async function main() {
     reportData,
   });
 
-  const outPath = resolve(PROJECT_ROOT, "onboard-report.html");
+  const reportsDir = resolveReportsDir(PROJECT_ROOT);
+  await mkdir(reportsDir, { recursive: true });
+  const outPath = join(reportsDir, "onboard-report.html");
   await writeFile(outPath, html);
   console.log(`\nReport written to: ${outPath}`);
 }

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve, extname } from "node:path";
+import { findMatchingGuards, isInactiveEclStatus, type GuardInfo } from "./feature-guard.js";
 import { handlePreToolUse as checkCcplanGuard } from "./pre-tool-use-guard.js";
 import { getChangedFilePaths, isFileWriteTool, type ToolUseInput } from "./tool-event.js";
 
@@ -30,8 +31,8 @@ export function handlePreToolUse(stdin: string): void {
       projectRoot
     );
     if (guardResult.blocked) {
-      process.stdout.write(JSON.stringify(guardResult));
-      process.exit(1);
+      process.stderr.write((guardResult.message ?? "Blocked by ccplan read-only guard.") + "\n");
+      process.exit(2);
     }
   }
 
@@ -76,74 +77,20 @@ export function handlePreToolUse(stdin: string): void {
   }
 }
 
-interface GuardInfo {
-  feature: string;
-  description: string;
-  invariants: string[];
-  verifications: string[];
-}
-
 function findGuardsForFile(eclDir: string, filePath: string): GuardInfo[] {
   const results: GuardInfo[] = [];
   const files = readdirSync(eclDir).filter((f) => f.endsWith(".yaml"));
-  const normalizedPath = filePath.replace(/\\/g, "/");
 
   for (const file of files) {
     try {
       const content = readFileSync(join(eclDir, file), "utf-8");
-
-      const featureBlocks = content.split(/^\s*- feature:\s*/m);
-      for (const block of featureBlocks.slice(1)) {
-        const keyFiles = extractListItems(block, "key_files");
-        if (keyFiles.length === 0) continue;
-
-        const matched = keyFiles.some((keyFile) => {
-          const normalizedKey = keyFile.replace(/\\/g, "/");
-          return normalizedPath.endsWith(normalizedKey) || normalizedPath.includes(normalizedKey);
-        });
-        if (!matched) continue;
-
-        const featureName = block.match(/^["']?(.+?)["']?\s*$/m)?.[1] ?? "unknown";
-        const description = extractField(block, "description");
-        const constraints = extractListItems(block, "constraints");
-        const verifications = extractVerificationCommands(block);
-
-        results.push({
-          feature: featureName,
-          description,
-          invariants: constraints,
-          verifications,
-        });
-      }
+      results.push(...findMatchingGuards(content, filePath));
     } catch {
       continue;
     }
   }
 
   return results;
-}
-
-function extractField(block: string, field: string): string {
-  const match = block.match(new RegExp(`^\\s*${field}:\\s*["']?(.+?)["']?\\s*$`, "m"));
-  return match?.[1] ?? "";
-}
-
-function extractListItems(block: string, field: string): string[] {
-  const match = block.match(new RegExp(`${field}:\\s*\\n((?:\\s+-\\s*.+\\n?)+)`));
-  if (!match) return [];
-  const items: string[] = [];
-  for (const line of match[1].matchAll(/-\s*["']?(.+?)["']?\s*$/gm)) {
-    items.push(line[1]);
-  }
-  return items;
-}
-
-function extractVerificationCommands(block: string): string[] {
-  const commands: string[] = [];
-  for (const match of block.matchAll(/command:\s*["']?(.+?)["']?\s*$/gm)) {
-    commands.push(match[1]);
-  }
-  return commands;
 }
 
 function findActiveFeatures(eclDir: string): string[] {
@@ -153,11 +100,11 @@ function findActiveFeatures(eclDir: string): string[] {
   for (const file of files) {
     try {
       const content = readFileSync(join(eclDir, file), "utf-8");
-      const statusMatch = content.match(/^status:\s*["']?(.+?)["']?$/m);
+      const statusMatch = content.match(/^status:\s*["']?([^\s"']+)/m);
       if (!statusMatch) continue;
 
       const status = statusMatch[1];
-      if (status !== "completed" && status !== "retired") {
+      if (!isInactiveEclStatus(status)) {
         const featureMatch = content.match(/^feature:\s*["']?(.+?)["']?$/m);
         if (featureMatch) {
           active.push(featureMatch[1]);

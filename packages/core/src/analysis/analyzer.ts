@@ -52,6 +52,9 @@ export async function analyzeFunctionWithLlm(
     if (!opts.fallbackToHeuristic) {
       throw error;
     }
+    console.warn(
+      `[aidev] LLM analysis failed for ${input.function_name}, falling back to heuristic: ${error instanceof Error ? error.message : String(error)}`
+    );
     return analyzeHeuristic(input);
   }
 }

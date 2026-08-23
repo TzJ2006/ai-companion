@@ -64,10 +64,9 @@ export function extractFunction(
   const name = nameNode?.text ?? "";
   const params = paramsNode ? extractParams(paramsNode) : [];
   const return_type = returnTypeNode?.text ?? null;
-  const is_async = node.type === "function_definition" &&
-    node.parent?.type === "decorated_definition"
-    ? node.previousNamedSibling?.type === "async"
-    : node.text.startsWith("async ");
+  // Works for decorated functions too: the function_definition node's own
+  // text starts with "async def" even inside a decorated_definition.
+  const is_async = node.text.startsWith("async ");
   const docstring = extractDocstring(bodyNode);
 
   return {

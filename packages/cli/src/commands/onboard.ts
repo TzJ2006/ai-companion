@@ -136,8 +136,6 @@ export const onboardCommand = new Command("onboard")
       const testConfig: TsTestGenConfig = {
         test_framework: "vitest",
         output_dir: testDir,
-        include_source_body: opts.llmEnhance ?? false,
-        llm_enhance: opts.llmEnhance ?? false,
       };
 
       for (const { module: mod } of fileResults) {

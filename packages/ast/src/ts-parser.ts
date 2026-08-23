@@ -133,9 +133,6 @@ export function handleExportStatement(
       case "class_declaration":
         classes.push(extractTsClass(child));
         break;
-      case "import_statement":
-        imports.push(extractTsImport(child));
-        break;
     }
   }
 }

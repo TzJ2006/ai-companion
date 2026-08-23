@@ -1,5 +1,5 @@
 import { readdirSync, statSync } from "node:fs";
-import { join, relative, basename } from "node:path";
+import { join, relative } from "node:path";
 
 export interface ReportFile {
   name: string;
@@ -25,10 +25,18 @@ const EXCLUDED_DIRS = new Set([
   ".venv",
   "venv",
   "public",
+  "archive",
 ]);
 
-const MAX_DEPTH = 0;
+/** Root (0) → `.devcompanion` (1) → `reports` (2). */
+export const MAX_DEPTH = 2;
 const MAX_REPORTS_PER_PROJECT = 50;
+
+function shouldDescend(name: string): boolean {
+  if (EXCLUDED_DIRS.has(name)) return false;
+  if (name.startsWith(".") && name !== ".devcompanion") return false;
+  return true;
+}
 
 function scanDirectory(
   dirPath: string,
@@ -51,7 +59,7 @@ function scanDirectory(
     if (results.length >= MAX_REPORTS_PER_PROJECT) break;
 
     if (entry.isDirectory()) {
-      if (!EXCLUDED_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
+      if (shouldDescend(entry.name)) {
         scanDirectory(join(dirPath, entry.name), rootPath, depth + 1, results);
       }
     } else if (entry.isFile() && entry.name.endsWith(".html")) {

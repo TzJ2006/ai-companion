@@ -1,13 +1,35 @@
+import { createHash } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 
 export interface ToolUseInput {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   cwd?: string;
+  tool_use_id?: string;
 }
 
 const CLAUDE_FILE_WRITE_TOOLS = new Set(["Edit", "Write"]);
 const CODEX_APPLY_PATCH = "apply_patch";
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+      .map(([key, entry]) => [key, canonicalize(entry)])
+  );
+}
+
+export function deriveCorrelationId(input: ToolUseInput): string {
+  const toolUseId = input.tool_use_id?.trim();
+  if (toolUseId) return toolUseId;
+  return createHash("sha256").update(JSON.stringify(canonicalize({
+    tool_name: input.tool_name,
+    tool_input: input.tool_input,
+    cwd: input.cwd,
+  }))).digest("hex");
+}
 
 /** Return true for tool calls that can change one or more files. */
 export function isFileWriteTool(toolName: string | undefined): boolean {

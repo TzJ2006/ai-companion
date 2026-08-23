@@ -86,8 +86,16 @@ describe("mvp_hook_recording (FN MVP-HOOK-REC)", () => {
     expect(events[0].five_questions).toBeNull();
   });
 
-  it("still drops a truly unsupported extension (.txt)", () => {
+  it("records any non-AST text extension (.txt, .json) as file-level events", () => {
     fire("Edit", "notes.txt");
+    fire("Write", "data.json");
+    const events = readEvents();
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.file_level === true)).toBe(true);
+  });
+
+  it("still drops binary extensions (.png)", () => {
+    fire("Write", "logo.png");
     expect(readEvents()).toHaveLength(0);
   });
 });

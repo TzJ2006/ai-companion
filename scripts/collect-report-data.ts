@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseFileAuto, getSupportedExtensions } from "../packages/ast/src/index.ts";
 import type { FunctionSignature, ParsedModule } from "../packages/ast/src/types.ts";
 
@@ -284,4 +285,8 @@ export async function main() {
   console.log(`  Tests passed: ${report.tests_passed}/${report.total_tests}`);
 }
 
-main().catch(console.error);
+// Only run when executed directly — importing (e.g. from a test) must not
+// trigger a recursive vitest run + report write.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(console.error);
+}

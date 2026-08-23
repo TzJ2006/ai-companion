@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync, writeFileSync, unlinkSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import type { IdeaEntry, IdeaIndexEntry, IdeaFilter, IdeaStatus } from "./types.js";
