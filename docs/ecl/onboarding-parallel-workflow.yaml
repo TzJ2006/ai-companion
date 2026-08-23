@@ -1,7 +1,8 @@
 # ─── Header ────────────────────────────────────────────────────
 ecl_version: "1.0"
 feature: "onboarding-parallel-workflow"
-status: "phase-10-ready-for-execution"
+status: abandoned
+# approved 2026-05-31 but never executed; superseded by the actual onboarding evolution (marked 2026-08-23)
 created: "2026-05-31"
 updated: "2026-05-31"
 related_features:

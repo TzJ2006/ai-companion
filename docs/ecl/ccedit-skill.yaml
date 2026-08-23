@@ -1,7 +1,7 @@
 # ─── Header ────────────────────────────────────────────────────
 ecl_version: "2.0"
 feature: "ccedit-skill"
-status: "phase-10-implementation"
+status: completed  # engine shipped and tested; statuses flipped 2026-08-23
 created: "2026-05-27"
 updated: "2026-05-27"
 related_features: []
@@ -207,7 +207,7 @@ features:
     modules: [MOD-001]
     dependencies: []
     complexity: small
-    status: pending
+    status: done
 
   - id: FEAT-002
     name: "Topological Sort Engine"
@@ -215,7 +215,7 @@ features:
     modules: [MOD-002]
     dependencies: [FEAT-001]
     complexity: small
-    status: pending
+    status: done
 
   - id: FEAT-003
     name: "Subagent Context Builder + Executor"
@@ -223,7 +223,7 @@ features:
     modules: [MOD-003]
     dependencies: [FEAT-001, FEAT-002]
     complexity: medium
-    status: pending
+    status: done
 
   - id: FEAT-004
     name: "Verification and Status Management"
@@ -231,7 +231,7 @@ features:
     modules: [MOD-004]
     dependencies: [FEAT-001]
     complexity: small
-    status: pending
+    status: done
 
   - id: FEAT-005
     name: "Session Recovery"
@@ -239,7 +239,7 @@ features:
     modules: [MOD-005]
     dependencies: [FEAT-001, FEAT-002, FEAT-004]
     complexity: small
-    status: pending
+    status: done
 
   - id: FEAT-007
     name: "ccplan Read-Only Hook Guard"
@@ -247,7 +247,7 @@ features:
     modules: [MOD-007]
     dependencies: []
     complexity: small
-    status: pending
+    status: done
 
   - id: FEAT-006
     name: "Execution Configuration"
@@ -255,7 +255,7 @@ features:
     modules: [MOD-006]
     dependencies: []
     complexity: trivial
-    status: pending
+    status: done
 
 # ─── Modules ──────────────────────────────────────────────────
 modules:
@@ -496,7 +496,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_parseEclDag.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-002
     name: "validateFnFields"
@@ -531,7 +531,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_validateFnFields.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-003
     name: "topologicalSort"
@@ -574,7 +574,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_topologicalSort.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-004
     name: "getReadyNodes"
@@ -605,7 +605,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_getReadyNodes.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-005
     name: "buildSubagentContext"
@@ -648,7 +648,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_buildSubagentContext.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-006
     name: "formatSubagentPrompt"
@@ -680,7 +680,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_formatSubagentPrompt.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-007
     name: "updateFnStatus"
@@ -724,7 +724,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_updateFnStatus.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-008
     name: "runVerification"
@@ -762,7 +762,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_runVerification.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-009
     name: "getExecutionState"
@@ -799,7 +799,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_getExecutionState.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-011
     name: "handlePreToolUse"
@@ -843,7 +843,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_hook_handlePreToolUse.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-012
     name: "isCcplanActive"
@@ -875,7 +875,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_hook_isCcplanActive.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
   - id: FN-010
     name: "loadExecConfig"
@@ -906,7 +906,7 @@ functions:
     verify:
       command: "npx vitest run .devcompanion/tests/test_exec_loadExecConfig.test.ts"
       pass_condition: "exit 0"
-    status: pending
+    status: done
 
 # ─── Probes ────────────────────────────────────────────────────
 probes:

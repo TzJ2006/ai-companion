@@ -3,9 +3,10 @@
 
 ecl_version: "1.0"
 feature: "onboarding-llm-analysis"
-status: phase-5-adversarial-filtering
+status: abandoned
+# never completed; superseded by onboarding-parallel-workflow (also unfinished)
 created: "2026-05-18"
-updated: "2026-05-18"
+updated: "2026-08-17"
 
 prompt_calibration:
   raw_input: "在 onboarding 过程中，使用 Claude Code CLI 根据函数的作用推测出整个项目的 overview（包括 ECL），并为每个函数和 ECL 写测试"

@@ -25,7 +25,8 @@ AI Dev Companion 是一个函数级别的代码变更追踪系统。当开发者
 ┌─────────────────────────────────────────────────────────────┐
 │  @aidev/hook                                                │
 │  handlePostToolUse(stdin)                                   │
-│  - filter by extension (.py .ts .tsx .mts .cts .pyi)       │
+│  - non-AST extensions degrade to file-level events         │
+│    (file_level: true); only binary artifacts are dropped   │
 │  - detect active ECL (docs/ecl/*.yaml)                     │
 │  - append HookEvent → .devcompanion/queue/events.jsonl     │
 │  Latency budget: <100ms                                    │
@@ -75,7 +76,7 @@ AI Dev Companion 是一个函数级别的代码变更追踪系统。当开发者
 ```
 stdin (JSON from Claude Code)
   → parse tool_name + tool_input.file_path
-  → filter: only Edit/Write on supported extensions
+  → filter: Edit/Write; non-AST extensions degrade to file_level events
   → findProjectRoot(): walk up to find .devcompanion/ or .git/
   → detectActiveEcl(): scan docs/ecl/*.yaml for non-completed features
   → append to .devcompanion/queue/events.jsonl:
@@ -244,7 +245,7 @@ HTML 报告渲染（两种模式）:
 
 ### @aidev/cli
 
-Commander.js CLI，6 个命令:
+Commander.js CLI，8 个命令:
 
 | 命令 | 功能 |
 |------|------|
@@ -254,6 +255,8 @@ Commander.js CLI，6 个命令:
 | `history` | 查询变更历史（按文件/函数/session） |
 | `analyze` | 扫描所有函数 → LLM/heuristic 分析 → 存储结果 |
 | `onboard` | 全项目扫描 → 建索引 → 生成测试骨架 |
+| `idea` | 想法清单管理 + 研究运行器 |
+| `install` | 把 companion 装进目标仓库（委托给 scripts/install.ts） |
 
 ### @aidev/hook
 
@@ -358,7 +361,7 @@ interface EclContext {
 
 ## LLM Integration
 
-本工具在两处使用 LLM（通过调用 `claude` CLI）:
+本工具在三处使用 LLM（通过调用 `claude` CLI）:
 
 ### 1. Function Analysis (`core/analysis/`)
 
@@ -407,13 +410,18 @@ analyzeModularityWithLlm(input) → FunctionModularity
 ECL 文件 (`docs/ecl/*.yaml`) 记录架构约束:
 
 ```yaml
-feature_guards:
-  - name: "wasm-resolver"
-    key_files:
-      - "packages/ast/src/wasm-resolver.ts"
-    invariants:
-      - "resolveWasmPath is the single source of WASM path resolution"
-    verification: "npx vitest run .devcompanion/tests/test_wasm-resolver.test.ts"
+feature_guard:
+  generated: "2026-06-01"
+  guards:
+    - id: GUARD-001
+      feature: FEAT-001
+      description: "WASM path resolution single source"
+      key_files:
+        - "packages/ast/src/wasm-resolver.ts"
+      invariants:
+        - "resolveWasmPath is the single source of WASM path resolution"
+      verification:
+        command: "npx vitest run .devcompanion/tests/test_ast_findWasmPath.test.ts"
 ```
 
 **集成点**:
@@ -526,5 +534,5 @@ npx tsx scripts/generate-report.ts
 aidev analyze -p . --model haiku
 
 # 模块化分析 + 生成接口契约
-aidev analyze -p . --modularity --emit-contracts
+aidev analyze -p . --modularity --emit-contracts contracts/
 ```

@@ -184,6 +184,17 @@ functions:
     parent: MOD-001
     visibility: public              # public (exported via entry_point) | internal
     description: "What this function does"
+    # ── Execution fields — the /ccedit executor (packages/exec parseEclDag)
+    # HARD-REQUIRES depends_on, output, verify, and status on every FN node. ──
+    depends_on: []                  # FN ids that must be done before this node starts
+    enables: [FN-002]               # Optional: FN ids unblocked by this node
+    output:
+      file: "src/auth/login.ts"    # File the node produces/modifies
+      symbol: "functionName"       # Symbol implemented in that file
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_auth_login.test.ts"  # single argv — no pipes/&&
+      pass_condition: "exit 0"
+    status: pending                 # pending | in-progress | done | blocked — only the /ccedit orchestrator writes this
     input_interface:                 # Explicit typed inputs — the function's contract
       - name: "credentials"
         type: "AuthInput"

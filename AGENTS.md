@@ -22,7 +22,7 @@ npx vitest run .devcompanion/tests/test_exec_parseEclDag.test.ts   # single test
 node packages/cli/dist/main.js <command> -p <target-project-path>
 
 # Install/manage the companion in other repos (idempotent, registry-tracked)
-npx tsx scripts/install.ts <target-path> [--enforce] [--no-commands]
+npx tsx scripts/install.ts <target-path> [--enforce] [--no-commands] [--agent claude|codex|both] [--public|--private]
 npx tsx scripts/update.ts | scripts/status.ts | scripts/uninstall.ts <target-path>
 
 # Onboarding pipeline (LLM analysis → ECL → tests → overview HTML)
@@ -45,7 +45,7 @@ packages/
 │                                  single source for .wasm path lookup; identity.ts hashes functions
 ├── core       @aidev/core      — diff/ (parse + annotate), analysis/, modularity/, test-gen/
 ├── history    @aidev/history   — JSON file store (.devcompanion/: reviews/, history/, index.json)
-├── render     @aidev/render    — diff2html + annotation panels → HTML reports
+├── render     @aidev/render    — self-contained inline diff rendering + annotation panels → HTML reports
 ├── cli        @aidev/cli       — Commander CLI `aidev` (main.ts registers the 8 commands above)
 ├── hook       @aidev/hook      — Claude/Codex PostToolUse + PreToolUse hook handlers (<100ms)
 ├── daemon     @aidev/daemon    — background queue processor (async diff + storage)
@@ -64,9 +64,11 @@ packages/
   orchestrator writes `status` (atomic temp-file + rename in `packages/exec/src/status-manager.ts`);
   subagents never do.
 - **Hook data flow**: Edit/Write → hook appends to `<projectRoot>/.devcompanion/queue/events.jsonl`;
-  unsupported extensions degrade to file-level events (`file_level: true`) instead of being dropped;
-  the daemon later does AST diffing + storage.
-- **Function identity** = `sha256(file_path + class_name + function_name + param_types)[0:16]` —
+  every non-AST extension degrades to a file-level event (`file_level: true`) instead of being
+  dropped — only a small binary blacklist (images, archives, executables, ...) is skipped; the hook
+  then spawns a short-lived queue worker (`packages/daemon/src/worker.ts`, launch-gated) that does
+  the AST diffing + storage asynchronously.
+- **Function identity** = `sha256(file_path + class_name + function_name + param name:type pairs)[0:16]` —
   stable across line-number drift.
 - `devcompanion.config.ts` is the module registry (paths, exports, dependencies). Update it when
   adding a package or changing public exports.

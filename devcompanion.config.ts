@@ -62,9 +62,26 @@ const config: DevCompanionConfig = {
         { name: "parseFileAuto", kind: "function", signature: "(filePath: string) => Promise<ParsedModule>" },
         { name: "computeFunctionIdentity", kind: "function", signature: "(filePath: string, fn: FunctionSignature) => FunctionIdentity" },
         { name: "getSupportedExtensions", kind: "function", signature: "() => string[]" },
+        { name: "analyzeFileCalls", kind: "function", signature: "(filePath: string) => Promise<CallGraphEntry[]>" },
+        { name: "buildCallGraph", kind: "function", signature: "(entries: CallGraphEntry[]) => CallGraph" },
+        { name: "formatFunctionId", kind: "function", signature: "(filePath: string, functionName: string) => string" },
         { name: "ParsedModule", kind: "type" },
         { name: "FunctionSignature", kind: "type" },
         { name: "FunctionIdentity", kind: "type" },
+        { name: "CallGraphEntry", kind: "type" },
+        { name: "CallGraph", kind: "type" },
+      ],
+      dependencies: [],
+    },
+    types: {
+      path: resolve(ROOT, "packages/types/src"),
+      description: "Shared interfaces used across packages (history, analysis, modularity)",
+      entryPoint: "index.ts",
+      exports: [
+        { name: "ChangeRecord", kind: "type" },
+        { name: "ReviewSession", kind: "type" },
+        { name: "FunctionAnalysis", kind: "type" },
+        { name: "FunctionModularity", kind: "type" },
       ],
       dependencies: [],
     },
@@ -74,12 +91,13 @@ const config: DevCompanionConfig = {
       entryPoint: "index.ts",
       exports: [
         { name: "parseUnifiedDiff", kind: "function", signature: "(raw: string) => FileDiff[]" },
-        { name: "annotateChanges", kind: "function", signature: "(diffs: FileDiff[], functionMap: Map, ctx: AnnotationContext) => ChangeAnnotation[]" },
-        { name: "toChangeRecords", kind: "function", signature: "(annotations: ChangeAnnotation[], sessionId: string) => ChangeRecord[]" },
-        { name: "generateTestSkeleton", kind: "function", signature: "(module: ParsedModule, outputDir: string) => Promise<string[]>" },
+        { name: "annotateChanges", kind: "function", signature: "(diffs: FileDiff[], functionMap: Map, ctx: AnnotationContext) => AnnotatedChange[]" },
+        { name: "toChangeRecords", kind: "function", signature: "(annotations: AnnotatedChange[], sessionId: string, eclContext?: EclContext) => ChangeRecord[]" },
+        { name: "generateTestSkeleton", kind: "function", signature: "(mod: ParsedModule, config: TsTestGenConfig) => GeneratedTsTest[]" },
+        { name: "analyzeBatch", kind: "function", signature: "(inputs: AnalysisInput[], options?: Partial<AnalyzerOptions>) => Promise<FunctionAnalysis[]>" },
+        { name: "analyzeModularityBatch", kind: "function", signature: "(inputs: ModularityInput[], options?: Partial<ModularityAnalyzerOptions>) => Promise<FunctionModularity[]>" },
         { name: "FileDiff", kind: "type" },
-        { name: "ChangeAnnotation", kind: "type" },
-        { name: "ChangeRecord", kind: "type" },
+        { name: "AnnotatedChange", kind: "type" },
       ],
       dependencies: [
         { module: "ast", imports: ["ParsedModule", "FunctionSignature", "computeFunctionIdentity"] },
@@ -91,7 +109,7 @@ const config: DevCompanionConfig = {
       entryPoint: "index.ts",
       exports: [
         { name: "renderOnboardHtml", kind: "function", signature: "(index: ProjectIndex, options: OnboardRenderOptions) => string" },
-        { name: "renderSessionToHtml", kind: "function", signature: "(session: SessionData) => string" },
+        { name: "renderSessionToHtml", kind: "function", signature: "(session: ReviewSession, options?: RenderOptions) => string" },
         { name: "ReportData", kind: "type" },
         { name: "OnboardRenderOptions", kind: "type" },
       ],
@@ -106,14 +124,20 @@ const config: DevCompanionConfig = {
       entryPoint: "index.ts",
       exports: [
         { name: "HistoryStore", kind: "class" },
+        { name: "AnalysisStore", kind: "class" },
+        { name: "ModularityStore", kind: "class" },
+        { name: "projectSession", kind: "function" },
+        { name: "applyManagedGitignore", kind: "function" },
+        { name: "visibilityToGitignoreProfile", kind: "function" },
         { name: "ProjectIndex", kind: "type" },
         { name: "FunctionIndexEntry", kind: "type" },
+        { name: "RepoVisibility", kind: "type" },
       ],
       dependencies: [],
     },
     cli: {
       path: resolve(ROOT, "packages/cli/src"),
-      description: "CLI commands (onboard, render)",
+      description: "CLI `aidev` — 8 commands: init, review, render, history, onboard, analyze, idea, install",
       entryPoint: "commands/",
       exports: [],
       dependencies: [
@@ -125,10 +149,12 @@ const config: DevCompanionConfig = {
     },
     hook: {
       path: resolve(ROOT, "packages/hook/src"),
-      description: "Claude Code PostToolUse hook handler",
+      description: "Claude Code + Codex PostToolUse capture and PreToolUse guard handlers",
       entryPoint: "index.ts",
       exports: [
-        { name: "handlePostToolUse", kind: "function", signature: "(event: ToolUseEvent) => Promise<void>" },
+        { name: "handlePostToolUse", kind: "function", signature: "(stdin: string, supportedExtensions?: Set<string>) => void" },
+        { name: "handlePreToolUse", kind: "function", signature: "(event: PreToolUseEvent, projectRoot?: string) => PreToolUseResult" },
+        { name: "spawnQueueWorker", kind: "function", signature: "(projectRoot: string) => void" },
       ],
       dependencies: [
         { module: "core", imports: ["parseUnifiedDiff", "annotateChanges"] },
@@ -137,10 +163,10 @@ const config: DevCompanionConfig = {
     },
     daemon: {
       path: resolve(ROOT, "packages/daemon/src"),
-      description: "Background watcher process",
+      description: "Queue processor — long-running daemon plus the hook-spawned short-lived worker (worker.ts)",
       entryPoint: "index.ts",
       exports: [
-        { name: "startDaemon", kind: "function", signature: "(config: DaemonConfig) => Promise<void>" },
+        { name: "startDaemon", kind: "function", signature: "(projectRoot: string) => Promise<void>" },
       ],
       dependencies: [
         { module: "hook", imports: ["handlePostToolUse"] },
@@ -209,7 +235,7 @@ const config: DevCompanionConfig = {
 
   reports: {
     dataFile: resolve(ROOT, ".devcompanion/report-data.json"),
-    htmlFile: resolve(ROOT, "onboard-report.html"),
+    htmlFile: resolve(ROOT, ".devcompanion/reports/onboard-report.html"),
     collectScript: resolve(ROOT, "scripts/collect-report-data.ts"),
     renderScript: resolve(ROOT, "scripts/generate-report.ts"),
   },

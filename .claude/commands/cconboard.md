@@ -14,7 +14,7 @@ If `--resume` is provided, resume from the last recorded OL status.
 
 ## Execution
 
-Follow the 8-phase protocol defined in `skills/cconboard/SKILL.md` exactly:
+Follow the 9-phase protocol defined in `skills/cconboard/SKILL.md` exactly:
 
 1. Read the SKILL.md file for the complete technical specification
 2. Check if an OL document already exists for this scope (resume if so)

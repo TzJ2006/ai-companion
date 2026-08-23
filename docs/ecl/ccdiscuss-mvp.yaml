@@ -1,8 +1,9 @@
 ecl_version: "1.0"
 feature: "ccdiscuss-mvp"
-status: "approved" # Phase 9 approved; ready for /ccedit
+status: completed
+# MVP FNs all done; /ccdiscuss hard-gate (FEAT-aic-23) is blocked, not in this DAG
 created: "2026-06-01"
-updated: "2026-06-01"
+updated: "2026-08-17"
 related_features: [ "five-question-alignment-protocol" ] # design, decisions, findings live there
 note: |
   Execution DAG for the /ccdiscuss MVP. Rationale, decisions (DEC-001..017) and the two
@@ -10,7 +11,8 @@ note: |
   mvp_fn_dag). This file is formatted in the @aidev/exec FN schema so /ccedit can run it.
   Each verify is a `vitest run` (exit 0 = pass); each FN's subagent writes BOTH the artifact
   and its asserting test. The enforcement layer (gate / value-verification / parser changes)
-  is DEFERRED and is NOT in this DAG.
+  is BLOCKED / deferred (FEAT-aic-23) and is NOT in this DAG. /ccdiscuss remains best-effort,
+  not a hard gate (skills/ccdiscuss/SKILL.md).
 
 functions:
   - id: MVP-SCHEMA

@@ -106,15 +106,12 @@ Open in browser:
 open /tmp/my-project/review.html
 ```
 
-The HTML report shows:
-- **Left panel**: GitHub-style diff with syntax highlighting (side-by-side or line-by-line)
-- **Right sidebar**: Change annotations with:
-  - Change number (#1, #2, ...)
-  - Function name affected
-  - Change type (add/modify/delete)
-  - Reason for the change
-  - Test status badge (pending/pass/fail)
-  - Error ID (if test failed)
+The HTML report groups changes **by reason** into collapsible sections. Each
+section shows:
+- The reason for the change (and its source: context, user-provided, ...)
+- The affected files, each with its function-level changes
+- Per-function badges for the change type (add/modify/delete)
+- Inline diffs of the old and new content
 
 ## Step 5: Query History
 
@@ -133,7 +130,7 @@ node /path/to/ai-dev-companion/packages/cli/dist/main.js history \
 
 ## Step 6: Claude Code Hook Integration (Optional)
 
-To auto-capture changes when Claude Code edits your Python files, add this to your `.claude/settings.json`:
+To auto-capture changes when Claude Code edits your Python or TypeScript files, add this to your `.claude/settings.json`:
 
 ```json
 {
@@ -141,12 +138,18 @@ To auto-capture changes when Claude Code edits your Python files, add this to yo
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "node /path/to/ai-dev-companion/packages/hook/dist/index.js"
+        "hooks": [
+          { "type": "command", "command": "node /path/to/ai-dev-companion/packages/hook/dist/index.js" }
+        ]
       }
     ]
   }
 }
 ```
+
+(There is also an optional PreToolUse guard hook, `packages/hook/dist/pre-tool-use.js`
+with matcher `Edit|Write|Bash`, that enforces read-only mode while /ccplan is active.
+`scripts/install.ts` sets both up for you.)
 
 The hook writes events to `.devcompanion/queue/events.jsonl`. The daemon processes them asynchronously:
 
@@ -242,7 +245,7 @@ This means renaming a parameter type creates a new identity (intentional — the
 ## Tips
 
 - Use `--reason` every time you run `review` — future you will thank you
-- The HTML report is self-contained (CSS inline, diff2html from CDN) — share it via email/Slack
+- The HTML report is fully self-contained (all CSS inline, no external dependencies) — share it via email/Slack
 - `index.json` gives you a bird's-eye view of all tracked functions and their test status
 - History files are plain JSON — you can `cat` or `jq` them directly
 - If you move/rename a file, the history follows the file path (function hash changes for renames)
