@@ -4,9 +4,10 @@ description: >-
   Thin wrapper that generates the project's bilingual overview HTML report by
   invoking the existing scripts/generate-overview.ts. Default mode produces two
   independent files (English overview-en.html + Chinese overview-zh.html) and
-  calls the Claude CLI for translation. A fast single-language mode maps to the
-  existing --skip-translation flag and emits a single overview.html with no LLM
-  call. Always scoped to the CURRENT PROJECT (no --target argument).
+  calls the Claude CLI for translation. A fast English single-language mode maps to the
+  existing --skip-translation flag and emits a single English overview.html with no LLM
+  call. Optional --target selects a project; when omitted, defaults to the current
+  project (cwd / git root), not the companion checkout.
   TRIGGER when: user says "ccoverview", "generate the overview", "regenerate the
   overview report", "build overview.html", or invokes /ccoverview.
   DO NOT TRIGGER when: user wants to plan (use /ccplan), execute (use /ccedit),
@@ -42,10 +43,14 @@ implementation.
 
 ## Scope
 
-`/ccoverview` always operates on the **CURRENT PROJECT only**. It runs
-`scripts/generate-overview.ts` with **NO `--target` argument**. With no
-`--target`, the script targets the ai-companion repo where it lives — i.e. this
-repository itself. There is no cross-project / external-target mode here.
+`/ccoverview` overviews **the current project** by default. `--target` is
+**allowed**. When it is omitted, `scripts/generate-overview.ts` resolves the
+project from the process cwd (git root if the cwd is inside a repo). That is
+the repo the user is in — not the AI Dev Companion checkout — even when an
+installed command stub invokes the companion script by absolute path.
+
+Pass `--target <path>` only when you need to overview a tree other than cwd.
+Forward any `--target` / `--skip-translation` values from `$ARGUMENTS`.
 
 ## Prerequisites
 
@@ -58,7 +63,7 @@ repository itself. There is no cross-project / external-target mode here.
 
 ### Default mode — bilingual (English + Chinese)
 
-Run the existing script with no extra flags and no `--target`:
+Run the existing script (add `--target <path>` only when not overviewing cwd):
 
 ```bash
 npx tsx scripts/generate-overview.ts
@@ -82,8 +87,8 @@ When you want speed, or when the Claude CLI is unavailable, map to the existing
 npx tsx scripts/generate-overview.ts --skip-translation
 ```
 
-The `--skip-translation` flag is the **fast single-language mode**: it produces a
-single `.devcompanion/reports/overview.html` and makes **no LLM call** (no
+The `--skip-translation` flag is the **fast single-language (English) mode**: it produces a
+single English `.devcompanion/reports/overview.html` and makes **no LLM call** (no
 Claude CLI dependency, no translation step).
 
 ## Output
@@ -91,10 +96,10 @@ Claude CLI dependency, no translation step).
 | Mode | Command | Files produced | LLM call |
 |------|---------|----------------|----------|
 | Default (bilingual) | `npx tsx scripts/generate-overview.ts` | `.devcompanion/reports/overview-en.html` + `.devcompanion/reports/overview-zh.html` | Yes (Claude CLI, for the Chinese translation) |
-| Fast (single-language) | `npx tsx scripts/generate-overview.ts --skip-translation` | `.devcompanion/reports/overview.html` | No |
+| Fast (single-language, English) | `npx tsx scripts/generate-overview.ts --skip-translation` | `.devcompanion/reports/overview.html` | No |
 
-All output paths are relative to the current project's `.devcompanion/reports/`
-directory.
+All output paths are relative to the **target project's** `.devcompanion/reports/`
+directory (cwd / git root, or `--target`).
 
 ## Notes
 
@@ -107,5 +112,6 @@ directory.
 - Default (bilingual) mode depends on the Claude CLI for translation; prefer the
   `--skip-translation` fast mode when the CLI is unavailable or when you only
   need a quick English report.
-- Always omit `--target` so the run stays scoped to the current project (the
-  ai-companion repo).
+- **`--target` is allowed.** Omit it to stay on the current project. Installed
+  stubs may rewrite `scripts/` to the companion absolute path; still omit
+  `--target` unless overviewing a different tree — the generator defaults to cwd.

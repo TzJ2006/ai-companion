@@ -2,7 +2,8 @@
 ecl_version: "1.0"
 feature: "five-question-alignment-protocol"
 type: cross-cutting-standard   # NOT a siloed feature — a protocol onboarding & all change-making obey
-status: "mvp-ready-for-execution"
+status: "mvp-completed"  # MVP-1/2/3 shipped; enforcement layer tracked as FEAT-aic-23
+# FEAT-aic-23 / FEAT-004 hard-gate: blocked (deferred). Skill is best-effort, not a gate.
 created: "2026-05-31"
 updated: "2026-05-31"
 related_features:

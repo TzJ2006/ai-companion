@@ -294,7 +294,7 @@ Set OL status: `phase-5-complete` (or `phase-5-waiting-confirmation` if paused)
    - <N> functions analyzed and documented
    - <M> modifications applied (archived originals in archive/<timestamp>/)
    - <T> tests written (100% function coverage)
-   - Report: onboard-report.html
+   - Report: .devcompanion/reports/onboard-report.html
    - Guards: docs/ecl/onboard-<scope>.yaml
    
    Next: use /ccplan to add new features, /ccdebug if tests break.

@@ -6,8 +6,10 @@ dependency graph plus a "where I left off / why I wrote this" document, so you c
 re-enter any repo cold and know exactly what is done, what is next, and why each
 piece exists.
 
-> **You are here.** If you only read one file, read [`overview.md`](overview.md) —
-> it links all three repos and tells you the single next action on each critical path.
+> **Note (2026-08-23):** the generated DAG artifacts (`overview.md`, the
+> `*.ecl.yaml` / `*.md` pairs) live in the **private benchmark repositories**, not
+> here — per the artifact-commit policy, companion output for private projects is
+> committed to those repositories. This README documents only the reusable recipe.
 
 ## The repos (the raw input)
 
@@ -61,15 +63,11 @@ This is the "why I was writing all these functions" record.
 | 4 | 为什么这样做 | `why_this_way` | Rationale for *this* design over alternatives |
 | 5 | 期望结果 | `expected` | The observable result that means it's done (the acceptance criteria) |
 
-## Files in this folder
+## Where the generated files live
 
-| File | Level | Contents |
-|------|-------|----------|
-| `overview.md` | milestone (all 3 repos) | Cross-repo Mermaid, endpoints, where-you-left-off, next actions |
-| `benchmark-code.ecl.yaml` | milestone + task | Executable ECL DAG for `ErrorRecoveryBenchmark` |
-| `benchmark-code.md` | milestone + task | Mermaid + readable 5-question docs + status for the code repo |
-| `bench-data.ecl.yaml` / `.md` | milestone + task | Same, for `ErrorRecoveryBenchData` |
-| `paper.ecl.yaml` / `.md` | milestone + task | Same, for `NIPS_2026_Error_Recovery` |
+The per-repo DAG artifacts (`overview.md`, `benchmark-code.ecl.yaml`/`.md`,
+`bench-data.ecl.yaml`/`.md`, `paper.ecl.yaml`/`.md`) are committed inside the
+three private benchmark repositories themselves.
 
 ## Conventions
 

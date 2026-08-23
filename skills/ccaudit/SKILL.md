@@ -1,3 +1,8 @@
+---
+name: ccaudit
+description: Repo-level dataflow bug audit (NPD/MLK/UAF) of a target C/C++/Java/Python/Go project via patched RepoAudit. Not for TypeScript targets.
+---
+
 # ccaudit — Repo-Level Bug Audit via RepoAudit
 
 Run [PurCL/RepoAudit](https://github.com/PurCL/RepoAudit) — an LLM-agent

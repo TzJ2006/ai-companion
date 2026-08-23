@@ -1,11 +1,11 @@
 # AI Dev Companion
 
-A structured code change tracking tool for Python projects. Records every modification at function-level granularity with reasons, generates tests, and renders annotated HTML reports.
+A structured code change tracking tool for Python and TypeScript projects. Records every modification at function-level granularity with reasons, generates tests, and renders annotated HTML reports.
 
 ## What It Does
 
 1. **Tracks changes** — Parses git diffs, identifies which functions were modified, and records line-level changes with reasons
-2. **Generates HTML reports** — GitHub-diff-style visualization with annotations (reason, test status, error IDs) in a sidebar
+2. **Generates HTML reports** — reason-grouped collapsible diff visualization with per-function annotations
 3. **Maintains history** — JSON-based per-file history indexed by function signature hash, queryable by file/function/time
 4. **Integrates with Claude Code and Codex** — Auto-captures Claude Edit/Write and Codex apply_patch changes via PostToolUse hooks; reasons come directly from AI context
 
@@ -17,7 +17,7 @@ packages/
 ├── ast/       — Python/TS parsers (web-tree-sitter): function signatures, identity
 ├── core/      — Diff parser + change annotator + test prompt generator
 ├── history/   — JSON file store: reviews/, history/, index.json
-├── render/    — diff2html + custom annotation panels → HTML
+├── render/    — self-contained inline diff rendering + annotation panels → HTML
 ├── cli/       — Commands: init, review, render, history, install, …
 ├── hook/      — Claude Code and Codex PostToolUse hook adapter (lightweight, <100ms)
 ├── daemon/    — Background queue processor (async diff + storage)
@@ -36,7 +36,7 @@ cd ai-dev-companion
 npm install
 npm run build
 
-# Initialize in your Python project
+# Initialize in your Python or TypeScript project
 node packages/cli/dist/main.js init -p /path/to/your/project
 
 # After making changes, record them
@@ -54,14 +54,14 @@ node packages/cli/dist/main.js history -p /path/to/your/project src/utils.py
 - **Function identity** = `sha256(file_path + class_name + function_name + param_types)` — survives line-number drift
 - **Two trigger modes**: hook (auto, captures reason from AI context) + CLI (manual, user-provided or LLM-inferred reason)
 - **Storage**: plain JSON files organized by source file path — human/AI readable, no database dependency
-- **v1 scope**: Python projects only; language adapter interface designed for future extension
+- **v1 scope**: Python and TypeScript projects; language adapter interface designed for future extension
 - **Security**: `.devcompanion/` auto-added to `.gitignore`; sensitive files excluded from recording
 
 ## Requirements
 
 - Node.js 18+
 - Git (project must be a git repository)
-- Python source files to analyze
+- Python or TypeScript source files to analyze
 
 ## Output Format
 
@@ -90,12 +90,11 @@ Each review session produces a JSON file:
 ## Project Status
 
 Core functionality implemented and verified:
-- [x] Python AST parsing (functions, classes, methods, decorators, type annotations)
+- [x] Python and TypeScript AST parsing (functions, classes, methods, decorators, type annotations)
 - [x] Git diff parsing and function-level change attribution
 - [x] JSON history storage with index
-- [x] HTML report rendering (diff2html + annotation sidebar)
-- [x] CLI commands (init, review, render, history)
-- [x] Claude Code hook skeleton
-- [ ] LLM-powered test generation (prompt ready, integration pending)
-- [ ] Daemon background processing
-- [ ] Claude Code hook end-to-end integration
+- [x] HTML report rendering (self-contained inline diffs + annotation panels)
+- [x] CLI commands (init, review, render, history, onboard, analyze, idea, install)
+- [x] Claude Code + Codex hook integration end-to-end (PostToolUse capture, PreToolUse guard)
+- [x] Queue processing via hook-spawned short-lived worker
+- [x] LLM-powered test generation (onboarding pipeline)

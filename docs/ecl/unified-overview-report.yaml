@@ -1,8 +1,9 @@
 ecl_version: "2.0"
 feature: "unified-overview-report"
-status: phase-9-review
+status: abandoned
+# never completed; superseded by generate-overview.ts /ccoverview
 created: 2026-05-18
-updated: 2026-05-18
+updated: 2026-08-17
 
 prompt_calibration:
   raw_input: "将多个 HTML report 统一为 Overview HTML，三层结构+函数调用图+checkbox 人工确认"

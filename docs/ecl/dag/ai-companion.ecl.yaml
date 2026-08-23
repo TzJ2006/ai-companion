@@ -3,7 +3,7 @@ feature: "ai-companion-repo-dag"
 repo: "ai-companion"
 status: "documented"   # reverse-engineered into a two-level DAG (recipe dogfood)
 created: "2026-06-20"
-updated: "2026-06-20"
+updated: "2026-08-23"
 recipe: "docs/ecl/dag/README.md"
 sources: [ "CLAUDE.md", "devcompanion.config.ts", "docs/ecl/*.yaml", "git log", ".devcompanion/analysis.json" ]
 
@@ -303,9 +303,9 @@ milestones:
     layer: Endpoints
     status: done
     depends_on: [ FEAT-aic-14, FEAT-aic-15, FEAT-aic-16, FEAT-aic-17, FEAT-aic-18, FEAT-aic-19 ]
-    what: "一整条『发散 → 规划 → 执行 → 调试』的完整工作流（/idea → /ccdiscuss → /ccplan → /ccedit → /ccdebug，再加上 /cconboard），全部接好线、可以真正使用。"
+    what: "一整条『发散 → 规划 → 执行 → 调试』的完整工作流（/idea → /ccdiscuss → /ccplan → /ccedit → /ccdebug，再加上 /cconboard、/ccoverview 与 /ccaudit），全部接好线、可以真正使用。"
     why: "这个仓库本身就是用它自己的这条流水线来开发的——所以『这条流水线能够运转起来』本身，就是这个项目最主要的交付物。"
-    how: "全部 7 条命令都已接好（.claude/commands/* 加上 skills/*/SKILL.md）；它们之间靠 ECL 的 YAML 文件串接起来；这一切已经在 commit d683ce4 中落地。"
+    how: "全部 8 条命令都已接好（.claude/commands/* 加上 skills/*/SKILL.md）；它们之间靠 ECL 的 YAML 文件串接起来；主体在 commit d683ce4 中落地，/ccaudit 在 commit 353f614 中补齐。"
     why_this_way: "各条命令之间通过持久化的 ECL 文件来交接（『发现就读取』），因此整条链路是可自由组合的，而不是一个铁板一块的单体。"
     expected: "一个改动可以借助这些斜杠命令，从想法 → 讨论 → 规划 → 编辑 → 调试，端到端地完整流转。"
 
@@ -313,7 +313,7 @@ milestones:
   - id: FEAT-aic-23
     name: "/ccdiscuss 强制层（已推迟）"
     layer: Skills
-    status: pending
+    status: blocked  # deferred-blocked; do not implement the hard-gate. /ccdiscuss is best-effort.
     depends_on: [ FEAT-aic-15 ]
     what: "把 /ccdiscuss 的对齐从『尽力而为』升级成一道强制门禁，包含三部分：对齐门禁、价值验证步骤，以及对 ecl-parser 的改造。"
     why: "目前最小可用版本的 /ccdiscuss 只是建议性质的；引入强制层之后，对齐就会成为开始规划之前一道硬性的前置条件。"
@@ -329,7 +329,7 @@ tasks:
   - id: FN-aic-2301
     parent: FEAT-aic-23
     name: "/ccplan 之前的对齐门禁"
-    status: pending
+    status: blocked  # deferred-blocked with FEAT-aic-23
     depends_on: []
     what: "一道前置条件：让 /ccplan 在开始规划之前，先检查是否存在一份已经对齐、且通过校验的 ECL。"
     why: "让对齐成为可强制执行的硬性要求，而不只是『发现就读取』那种软衔接。"
@@ -340,7 +340,7 @@ tasks:
   - id: FN-aic-2302
     parent: FEAT-aic-23
     name: "价值验证步骤"
-    status: pending
+    status: blocked  # deferred-blocked with FEAT-aic-23
     depends_on: []
     what: "把人写下的『期望结果』和 AI 的理解放在一起做核对（这是一种需要人主观判断、并签字确认的软性标准）。"
     why: "为了捕捉『期望结果』层面的分歧，而不只是结构层面的对齐。"
@@ -351,7 +351,7 @@ tasks:
   - id: FN-aic-2303
     parent: FEAT-aic-23
     name: "为强制层改造 ecl-parser"
-    status: pending
+    status: blocked  # deferred-blocked; depends on FN-aic-2301
     depends_on: [ FN-aic-2301 ]
     what: "让解析器支持门禁和价值验证所需要的那些『强制层字段』。"
     why: "最小可用版本当初是有意没有动 ecl-parser.ts 的；而强制层的实现需要它。"
@@ -363,7 +363,7 @@ tasks:
   - id: FN-aic-2101
     parent: FEAT-aic-21
     name: "根据仓库可见性管理 .gitignore + 解放安装路径"
-    status: pending
+    status: done  # 2026-08-17 落地：安装器已带 --public/--private 可见性开关与受管 .gitignore
     depends_on: []
     what: "让安装器根据仓库是公开还是私有来管理 .gitignore，并解放（不再写死）安装路径。"
     why: "companion 生成的文件，在公开仓库和私有仓库里需要遵循不同的提交策略（来自想法清单）。"
@@ -411,7 +411,7 @@ dependency_graph:
 # ─── Where I left off ──────────────────────────────────────────
 left_off:
   summary: >-
-    整个变更追踪核心、LLM／exec 两大引擎、全部 7 条命令、安装生命周期，以及
+    整个变更追踪核心、LLM／exec 两大引擎、全部 8 条命令、安装生命周期，以及
     dashboard，都已经完成（commit d683ce4 落地了 llm／exec／idea／dashboard，加上
     install 以及各条命令的接线）。三个最终交付的终点都已经以最小可用版本（MVP）达成。
     接下来还没做的工作都属于加固打磨，而不是再去搭新的地基。
@@ -421,10 +421,9 @@ left_off:
           FEAT-aic-19, FEAT-aic-20, FEAT-aic-21, FEAT-aic-22 ]
   in_progress: []
   frontier_next:   # pending nodes whose deps are all done — start here
-    - FN-aic-2101   # installer: visibility-aware .gitignore + path freedom (idea backlog)
-    - FN-aic-2301   # ccdiscuss enforcement: alignment gate before /ccplan
-    - FN-aic-2302   # ccdiscuss enforcement: value-verification step
+    - FN-aic-2102   # roll the artifact-commit policy out to every installed repository
   blocked_until:
-    FN-aic-2303: "需要先做好对齐门禁（FN-aic-2301）"
-    FN-aic-2102: "需要先做好『区分可见性』的安装（FN-aic-2101）"
-    FEAT-aic-23: "等 FN-aic-2301 到 2303 全部完成后，它才算完成"
+    FN-aic-2301: "FEAT-aic-23 hard-gate deferred-blocked; /ccdiscuss is not a gate"
+    FN-aic-2302: "FEAT-aic-23 hard-gate deferred-blocked; /ccdiscuss is not a gate"
+    FN-aic-2303: "需要先做好对齐门禁（FN-aic-2301）； currently blocked with FEAT-aic-23"
+    FEAT-aic-23: "deferred-blocked — do not implement the /ccdiscuss hard-gate"

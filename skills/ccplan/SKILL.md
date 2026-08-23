@@ -626,7 +626,7 @@ Use divergent thinking methods as appropriate:
 - Analogy transfer ("How does [different domain] solve this?")
 - SCAMPER (Substitute, Combine, Adapt, Modify, Put to other use, Eliminate, Reverse)
 
-See `references/methods-catalog.md` for the full catalog of divergent/convergent methods.
+See `./methods-catalog.md` for the full catalog of divergent/convergent methods.
 
 **Tool invocation note:** If chaining to search-first skill or using WebSearch for research, follow the Tool Invocation State Preservation protocol — re-anchor on Phase 3 after results return.
 
@@ -1248,7 +1248,7 @@ It reads existing ECL files, checks guards, and reports. Use it:
 The ECL document is the **persistent artifact** that survives across sessions,
 compactions, and model switches. It is stored at `docs/ecl/<feature-name>.yaml`.
 
-See `references/ecl-schema.md` for the full schema specification.
+See `./ecl-schema.md` for the full schema specification.
 
 Key properties:
 - **Machine-readable** — YAML format parseable by any agent

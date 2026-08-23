@@ -1,9 +1,10 @@
 # ─── Header ────────────────────────────────────────────────────
 ecl_version: "1.0"
 feature: "ccoverview"
-status: "phase-10-ready-for-execution" # Phase 9 APPROVED; handed off to /ccedit
+status: completed
+# wrapper shipped; --skip-translation now emits English chrome
 created: "2026-06-02"
-updated: "2026-06-02"
+updated: "2026-08-17"
 produced_by: "/ccdiscuss → /ccplan"
 related_features:
   - "unified-overview-report" # the overview HTML this skill invokes (phase-9-review)
@@ -163,7 +164,7 @@ features:
     modules: [ MOD-001 ]
     dependencies: []
     complexity: small
-    status: pending
+    status: done
 
 # ─── Modules ──────────────────────────────────────────────────
 modules:
@@ -396,7 +397,7 @@ soft_acceptance:
     Run /ccoverview once in default mode. Confirm overview-en.html exists and
     its UI chrome is English (contains "Overview Report") AND overview-zh.html
     exists and its UI chrome is Chinese (contains "概览报告").
-  sign_off: { required: true, approver: human, status: pending }
+  sign_off: { required: true, approver: human, status: done }
 
 # ─── Feature Guard (activated at Phase 10 handoff) ────────────
 feature_guard:

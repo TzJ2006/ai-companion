@@ -223,7 +223,7 @@ self-contained, aligned unit.
 - A compound idea → multiple nodes (one per cohesive sub-idea), each with its own
   5 questions, expected result, resolved divergences, and verification block.
 - Persist to `docs/ecl/<feature>.yaml`. Each node records the reuse
-  classification from Step 1 (`reuse-direct` / `reuse-extend` / `new`).
+  classification from Step 1 (`reuse-direct` / `reuse-extend` / `reuse-adapt` / `new`).
 
 Example node shape (illustrative):
 
