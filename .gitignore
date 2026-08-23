@@ -11,3 +11,10 @@ dist/
 
 # local-only Claude Code settings
 .claude/settings.local.json
+
+# one-off backup snapshots and scratch files (history preserved in git)
+archive/
+temp_*
+
+# regenerable HTML reports at the repo root (real output goes to .devcompanion/reports/)
+/*.html
