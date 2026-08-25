@@ -251,3 +251,12 @@ Append-only. Every code, doc, and idea change goes here.
 - 2026-08-25 02:36  Edit .claude/settings.json
 - 2026-08-25 02:37  Write package.json
 - 2026-08-25 02:38  Edit package.json
+- 2026-08-25 02:44  读 claude-companion/install.ts  (扫描还剩 295)
+- 2026-08-25 02:44  Edit claude-companion/install.ts
+- 2026-08-25 02:44  Edit claude-companion/install.ts
+- 2026-08-25 02:44  Write claude-companion/.installs.json
+- 2026-08-25 02:45  Edit claude-companion/install.ts
+- 2026-08-25 02:46  Edit .devcompanion/tests/test_ideas_graph.test.ts
+- 2026-08-25 02:46  Edit .devcompanion/tests/test_ideas_graph.test.ts
+- 2026-08-25 02:47  Edit .devcompanion/tests/test_ideas_graph.test.ts
+- 2026-08-25 02:47  Edit claude-companion/README.md

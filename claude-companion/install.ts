@@ -112,19 +112,107 @@ ideas: []
   }
 
   installed.push(`hooks: ${installHooks(target, HERE).join(", ")}`);
+  remember(target);
   return { installed, skipped };
 }
 
-if (argv[1]?.endsWith("install.ts")) {
-  const target = argv[2];
-  if (!target) { console.error("usage: install.ts <target-repo> [--force]"); exit(2); }
+// ─── keeping installs up to date ────────────────────────────────────────────
+// The engine (ideas.ts / guard.ts) is never copied, so fixing it fixes every
+// repo at once. The five command files ARE copies, and copies go stale. This
+// is the registry that makes "update everywhere" possible.
+
+export const registryPath = join(HERE, ".installs.json");
+
+/** Recorded targets, minus any that have since been deleted or uninstalled. */
+export function targets(): string[] {
+  if (!existsSync(registryPath)) return [];
   try {
-    const { installed, skipped } = install(resolve(target), argv.includes("--force"));
-    console.log(`installed into ${resolve(target)}:\n  ${installed.join("\n  ")}`);
-    if (skipped.length > 0) {
-      console.log(`\nskipped (already exists, not ours — pass --force to overwrite):\n  ${skipped.join("\n  ")}`);
+    const list = JSON.parse(readFileSync(registryPath, "utf8")) as string[];
+    return list.filter((t) => existsSync(join(t, ".claude", "commands")));
+  } catch {
+    return [];
+  }
+}
+
+function remember(target: string): void {
+  const known = new Set(targets());
+  known.add(resolve(target));
+  writeFileSync(registryPath, JSON.stringify([...known].sort(), null, 2) + "\n");
+}
+
+export type FileState = "current" | "stale" | "missing" | "foreign";
+
+/**
+ * Compare against what this source would produce right now. No version numbers:
+ * a number you have to remember to bump is a number that will eventually be
+ * wrong, and the content already knows whether it matches.
+ *
+ * Line endings are normalised first. On Windows git hands you CRLF sources
+ * while the installed copies are LF, so a raw byte comparison reports every
+ * install as stale forever — which makes the whole check worthless.
+ */
+const sameText = (a: string, b: string) => a.replaceAll("\r\n", "\n") === b.replaceAll("\r\n", "\n");
+
+export function statusOf(target: string): Record<string, FileState> {
+  const report: Record<string, FileState> = {};
+  for (const name of readdirSync(join(HERE, "commands")).filter((f) => f.endsWith(".md"))) {
+    const destination = join(target, ".claude", "commands", name);
+    if (!existsSync(destination)) { report[name] = "missing"; continue; }
+    const actual = readFileSync(destination, "utf8");
+    if (!actual.includes("ideas.ts")) report[name] = "foreign";
+    else report[name] = sameText(actual, portable(readFileSync(join(HERE, "commands", name), "utf8"), HERE))
+      ? "current" : "stale";
+  }
+  return report;
+}
+
+/** Re-install into every recorded target. Foreign files are still left alone. */
+export function updateAll(): Array<{ target: string; changed: string[] }> {
+  return targets().map((target) => {
+    const before = statusOf(target);
+    install(target);
+    const changed = Object.entries(before)
+      .filter(([, state]) => state === "stale" || state === "missing")
+      .map(([name]) => name);
+    return { target, changed };
+  });
+}
+
+if (argv[1]?.endsWith("install.ts")) {
+  const arg = argv[2];
+  try {
+    if (arg === "--status") {
+      const known = targets();
+      if (known.length === 0) console.log("还没有记录任何安装。");
+      for (const target of known) {
+        const report = statusOf(target);
+        const counts = Object.values(report).reduce<Record<string, number>>(
+          (acc, s) => ({ ...acc, [s]: (acc[s] ?? 0) + 1 }), {});
+        const summary = Object.entries(counts).map(([s, n]) => `${s} ${n}`).join(" · ");
+        console.log(`${counts.current === Object.keys(report).length ? "最新" : "需更新"}  ${target}   (${summary})`);
+        for (const [name, state] of Object.entries(report)) {
+          if (state !== "current") console.log(`        ${name}: ${state}`);
+        }
+      }
+    } else if (arg === "--update") {
+      const results = updateAll();
+      if (results.length === 0) console.log("还没有记录任何安装。");
+      for (const { target, changed } of results) {
+        console.log(`${changed.length ? "已更新" : "本来就最新"}  ${target}${changed.length ? "   " + changed.join(", ") : ""}`);
+      }
+    } else if (!arg) {
+      console.error("usage: install.ts <target-repo> [--force]");
+      console.error("       install.ts --status    看每个已安装仓库是否最新");
+      console.error("       install.ts --update    把命令文件刷新到所有已安装仓库");
+      exit(2);
+    } else {
+      const { installed, skipped } = install(resolve(arg), argv.includes("--force"));
+      console.log(`installed into ${resolve(arg)}:\n  ${installed.join("\n  ")}`);
+      if (skipped.length > 0) {
+        console.log(`\nskipped (already exists, not ours — pass --force to overwrite):\n  ${skipped.join("\n  ")}`);
+      }
+      console.log(`\nnext: run /ccscan in that repo.`);
     }
-    console.log(`\nnext: run /ccscan in that repo.`);
   } catch (error) {
     console.error(String(error instanceof Error ? error.message : error));
     exit(1);
