@@ -1,0 +1,54 @@
+{
+  "schema_version": "idea-node/v1",
+  "id": "align-intent",
+  "name": "Align intent",
+  "status": "planned",
+  "what": "Confirm what to build, what observable result means success, and why it matters.",
+  "why": "A short prompt can hide incompatible assumptions between the user and the agent.",
+  "expected_result": "The user approves a concise three-part intent contract before decomposition.",
+  "implementation": {
+    "how": "Run a read-only discussion gate and store the confirmed answers in an idea node.",
+    "why_this_way": "Three high-level questions make disagreement visible without prematurely designing code.",
+    "target_paths": [
+      ".codex-companion/nodes/**"
+    ],
+    "research": {
+      "local_findings": [
+        "Existing AI Dev Companion discussion skills demonstrate the value of a review gate but are not imported."
+      ],
+      "external_findings": [
+        "https://openspec.dev/ keeps agreed intent in repository artifacts instead of chat history."
+      ],
+      "reuse_decision": "Reuse the durable-spec principle; use a new JSON node contract and no ECL dependency."
+    },
+    "weekly_plan": [
+      {
+        "week": 1,
+        "outcome": "A user-approved intent node with explicit assumptions and non-goals."
+      }
+    ]
+  },
+  "code_refs": [],
+  "verification": [
+    {
+      "id": "intent-review",
+      "kind": "manual",
+      "plan": "The user can restate what, expected result, and why without discovering an unstated assumption.",
+      "command": "",
+      "test_paths": [],
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "future_use": "Approved intent becomes the parent contract for all later idea nodes.",
+  "depends_on": [],
+  "inputs": [
+    "User request",
+    "Relevant existing project context"
+  ],
+  "outputs": [
+    "Approved what, expected result, and why"
+  ],
+  "created_at": "2026-08-24T00:00:00+00:00",
+  "updated_at": "2026-08-24T00:00:00+00:00"
+}

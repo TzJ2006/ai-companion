@@ -8,13 +8,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)",
-      "Bash(npm run clean:*)",
-      "Bash(npm run dashboard:status:*)",
       "Bash(npx vitest run:*)",
-      "Bash(npx tsx:*)",
-      "Bash(node packages/cli/dist/main.js:*)",
-      "Bash(node packages/exec/dist/cli.js:*)"
+      "Bash(npx tsx:*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",
@@ -28,7 +23,19 @@
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "node packages/hook/dist/index.js" }
+          {
+            "type": "command",
+            "command": "node packages/hook/dist/index.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+          }
         ]
       }
     ],
@@ -36,7 +43,39 @@
       {
         "matcher": "Edit|Write|Bash",
         "hooks": [
-          { "type": "command", "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/pre-tool-use.js\"" }
+          {
+            "type": "command",
+            "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/pre-tool-use.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+          }
         ]
       }
     ]
