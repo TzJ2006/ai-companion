@@ -27,6 +27,30 @@ npx tsx D:/GitHub/ai-companion/claude-companion/install.ts <目标仓库路径>
 引擎本身**不复制** —— 所有仓库共用 `claude-companion/` 这一份，修一次全部修好。
 装完**重启一下那个仓库的 Claude Code**，hook 才会生效。
 
+## 装出去之后怎么更新
+
+分两半，因为只有一半是拷贝：
+
+| | 是不是拷贝 | 怎么更新 |
+|---|---|---|
+| 引擎（`ideas.ts` / `guard.ts` / `FORMAT.md`） | 否，所有仓库跑同一份 | **改完立刻生效**，什么都不用做 |
+| 五个命令文件 | 是 | 要刷新 |
+
+```bash
+npx tsx claude-companion/install.ts --status   # 每个已装仓库是不是最新
+npx tsx claude-companion/install.ts --update   # 全部刷新
+```
+
+装过的仓库记在 `claude-companion/.installs.json`（本机绝对路径，不进 git）。
+「是不是最新」靠**和当前源文件逐字比对**，不是靠版本号 —— 版本号总有一天会忘记改，
+内容自己知道对不对。四种状态：`current` / `stale` / `missing` / `foreign`
+（`foreign` = 那个文件名被别人占了，`--update` 不碰它）。
+
+比对前会先统一换行符。Windows 上 git 给你的源文件是 CRLF、装出去的是 LF，
+不统一的话每个安装都会被永远报成过期，这个检查就废了。
+
+`claude-companion/` 整个目录挪了位置也用 `--update` 修 —— 命令文件里烧的是绝对路径。
+
 ## 2. 第一次进一个项目
 
 ```

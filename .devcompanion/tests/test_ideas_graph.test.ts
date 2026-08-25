@@ -8,7 +8,8 @@ import {
   graphPath, agentName, nameIsTaken,
   type Graph,
 } from "../../claude-companion/ideas.js";
-import { install, installHooks } from "../../claude-companion/install.js";
+import { install, installHooks, statusOf, updateAll } from "../../claude-companion/install.js";
+import { resolve } from "node:path";
 
 // The idea-graph engine. Format: claude-companion/FORMAT.md
 describe("idea graph", () => {
@@ -283,6 +284,51 @@ ideas:
     const after = readFileSync(join(commands, "ccgraph.md"), "utf8");
     expect(after).toMatch(/ideas\.ts check/);
     expect(after).not.toMatch(/(?<!\/)claude-companion\/ideas\.ts/);   // rewritten to absolute
+  });
+
+  // Command files are copies and copies go stale. The engine is not copied, so
+  // it never does — this only has to keep the five command files honest.
+  describe("keeping installs up to date", () => {
+    it("reports current / stale / missing / foreign per command file", () => {
+      install(dir);
+      expect(Object.values(statusOf(dir))).toEqual(
+        Array(Object.keys(statusOf(dir)).length).fill("current"));
+
+      const commands = join(dir, ".claude", "commands");
+      writeFileSync(join(commands, "ccfix.md"), readFileSync(join(commands, "ccfix.md"), "utf8") + "\ndrift\n");
+      rmSync(join(commands, "ccbuild.md"));
+      writeFileSync(join(commands, "ccgraph.md"), "someone else's command\n");
+
+      const report = statusOf(dir);
+      expect(report["ccfix.md"]).toBe("stale");
+      expect(report["ccbuild.md"]).toBe("missing");
+      expect(report["ccgraph.md"]).toBe("foreign");
+      expect(report["ccscan.md"]).toBe("current");
+    });
+
+    it("does not call a file stale just because the line endings differ", () => {
+      // Windows git hands out CRLF sources while installs are LF. Comparing raw
+      // bytes would mark every install stale forever and make --status useless.
+      install(dir);
+      const file = join(dir, ".claude", "commands", "ccscan.md");
+      const text = readFileSync(file, "utf8");
+      writeFileSync(file, text.replaceAll("\r\n", "\n"));            // installed as LF
+      expect(statusOf(dir)["ccscan.md"]).toBe("current");
+      writeFileSync(file, text.replaceAll("\r\n", "\n").replaceAll("\n", "\r\n"));  // and as CRLF
+      expect(statusOf(dir)["ccscan.md"]).toBe("current");
+    });
+
+    it("updateAll refreshes only what drifted, and leaves foreign files alone", () => {
+      install(dir);
+      const commands = join(dir, ".claude", "commands");
+      writeFileSync(join(commands, "ccfix.md"), "stale\n// ideas.ts\n");
+      writeFileSync(join(commands, "ccgraph.md"), "someone else's command\n");
+
+      const result = updateAll().find((r) => r.target === resolve(dir));
+      expect(result?.changed).toEqual(["ccfix.md"]);
+      expect(statusOf(dir)["ccfix.md"]).toBe("current");
+      expect(readFileSync(join(commands, "ccgraph.md"), "utf8")).toBe("someone else's command\n");
+    });
   });
 
   it("registers the guard on three events, keeps other tools' hooks, and is idempotent", () => {

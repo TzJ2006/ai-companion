@@ -27,3 +27,6 @@ ideas/graph.html
 .devcompanion/*
 !.devcompanion/tests/
 # <<< AI Dev Companion
+
+# per-machine install registry (absolute paths)
+claude-companion/.installs.json
