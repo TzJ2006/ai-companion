@@ -7,10 +7,10 @@
 // ponytail: no package, no build step, no server. tsx runs it from source so a
 // target repo needs nothing installed but this folder's `yaml` dependency.
 
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { execFileSync } from "node:child_process";
-import { argv, exit, cwd } from "node:process";
+import { argv, exit, cwd, pid } from "node:process";
 import { parseDocument, type Document } from "yaml";
 
 export type Status = "todo" | "doing" | "done" | "blocked";
@@ -223,6 +223,49 @@ function walk(dir: string, root: string): string[] {
   return out;
 }
 
+// One hook process runs per Read, and parallel Reads in one message mean
+// parallel processes striking this one file. Two halves keep that safe: the
+// rename in writeWorklist makes every write atomic (a reader can never see a
+// torn line), and the lock makes strike's read→filter→write indivisible (a
+// writer can never resurrect a strike another one just made).
+
+const lockPath = (projectDir: string) => `${worklistFile(projectDir)}.lock`;
+
+/** Synchronous sleep — hooks are sync code, so setTimeout cannot help here. */
+const sleepSync = (ms: number) =>
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * Run `fn` holding the worklist lock. `wx` creation is the atomic primitive:
+ * exactly one process can create the file. A crashed holder must not wedge the
+ * scan forever, so a lock much older than any real hold is stolen — by rename,
+ * so two stealers cannot both win. Past the deadline we run unlocked anyway:
+ * the guard fails open by design, and with atomic writes the worst an unlocked
+ * run can do is lose one strike (the file just stays on the list), which beats
+ * a hook that hangs.
+ */
+export function withWorklistLock<T>(projectDir: string, fn: () => T): T {
+  const lock = lockPath(projectDir);
+  mkdirSync(dirname(lock), { recursive: true });
+  const deadline = Date.now() + 2000;
+  let held = false;
+  while (Date.now() < deadline) {
+    try { writeFileSync(lock, `${pid}\n`, { flag: "wx" }); held = true; break; }
+    catch { /* taken — see below whether the holder is still alive */ }
+    try {
+      if (Date.now() - statSync(lock).mtimeMs > 10_000) {
+        const stale = `${lock}.stale-${pid}`;
+        renameSync(lock, stale);   // only one stealer wins the rename
+        rmSync(stale, { force: true });
+        continue;
+      }
+    } catch { /* released or stolen between the checks — just retry */ }
+    sleepSync(2 + Math.random() * 8);   // jitter so waiters don't retry in lockstep
+  }
+  try { return fn(); }
+  finally { if (held) rmSync(lock, { force: true }); }
+}
+
 export function readWorklist(projectDir: string): string[] {
   const file = worklistFile(projectDir);
   if (!existsSync(file)) return [];
@@ -230,8 +273,12 @@ export function readWorklist(projectDir: string): string[] {
 }
 
 export function writeWorklist(projectDir: string, files: string[]): void {
-  mkdirSync(dirname(worklistFile(projectDir)), { recursive: true });
-  writeFileSync(worklistFile(projectDir), files.join("\n") + (files.length > 0 ? "\n" : ""));
+  const file = worklistFile(projectDir);
+  mkdirSync(dirname(file), { recursive: true });
+  // Same trick as save(), plus the pid so two writers never share a tmp file.
+  const tmp = `${file}.${pid}.tmp`;
+  writeFileSync(tmp, files.join("\n") + (files.length > 0 ? "\n" : ""));
+  renameSync(tmp, file);
 }
 
 /**
@@ -241,14 +288,35 @@ export function writeWorklist(projectDir: string, files: string[]): void {
  * costs more than it catches; revisit if agents start gaming it.
  */
 export function strike(projectDir: string, filePath: string): boolean {
-  const list = readWorklist(projectDir);
-  if (list.length === 0) return false;
-  const target = relative(projectDir, resolve(filePath)).replaceAll("\\", "/");
-  const key = target.toLowerCase();
-  const kept = list.filter((f) => f.toLowerCase() !== key);
-  if (kept.length === list.length) return false;
-  writeWorklist(projectDir, kept);
-  return true;
+  // Every Read in every repo lands here; without a scan running, stay free of
+  // side effects — no lock file, no ideas/ directory.
+  if (!existsSync(worklistFile(projectDir))) return false;
+  const key = relative(projectDir, resolve(filePath)).replaceAll("\\", "/").toLowerCase();
+  return withWorklistLock(projectDir, () => {
+    const list = readWorklist(projectDir);
+    const kept = list.filter((f) => f.toLowerCase() !== key);
+    if (kept.length === list.length) return false;
+    writeWorklist(projectDir, kept);
+    return true;
+  });
+}
+
+/**
+ * Drop lines no Read can ever strike: paths matching nothing in
+ * listProjectFiles() — debris from a write race predating the lock, or files
+ * deleted since the scan began. Reading a nonexistent file errors before the
+ * hook fires, so such a line would otherwise pin the countdown above zero
+ * forever, and R7 forbids editing it by hand.
+ */
+export function pruneWorklist(projectDir: string, all: string[]): string[] {
+  if (!existsSync(worklistFile(projectDir))) return [];
+  const known = new Set(all.map((f) => f.toLowerCase()));   // strike matches case-insensitively; so does this
+  return withWorklistLock(projectDir, () => {
+    const list = readWorklist(projectDir);
+    const dropped = list.filter((f) => !known.has(f.toLowerCase()));
+    if (dropped.length > 0) writeWorklist(projectDir, list.filter((f) => known.has(f.toLowerCase())));
+    return dropped;
+  });
 }
 
 // ─── check ──────────────────────────────────────────────────────────────────
@@ -639,6 +707,10 @@ function main(args: string[]): number {
     if (args.includes("--reset") || !existsSync(worklistFile(projectDir))) {
       writeWorklist(projectDir, all);
       console.log(`worklist: ${all.length} 个文件待读 → ${relative(projectDir, worklistFile(projectDir))}`);
+    }
+    const dropped = pruneWorklist(projectDir, all);
+    if (dropped.length > 0) {
+      console.log(`清掉 ${dropped.length} 个对不上任何项目文件的残行（竞争遗留或文件已删）：${dropped.join("、")}`);
     }
     const left = readWorklist(projectDir);
     const done = all.length - left.length;
