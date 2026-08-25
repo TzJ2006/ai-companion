@@ -302,3 +302,12 @@ Append-only. Every code, doc, and idea change goes here.
 - 2026-08-25 03:07  读 .claude/commands/ccthink.md  (扫描还剩 7)
 - 2026-08-25 03:08  读 claude-companion/FORMAT.md  (扫描还剩 6)
 - 2026-08-25 03:08  读 claude-companion/example/graph.html  (扫描还剩 5)
+- 2026-08-25 03:18  Edit ideas/graph.claude.yaml
+- 2026-08-25 03:19  Edit ideas/graph.claude.yaml
+
+## 2026-08-25 · ccscan · 重建想法图
+- 扫描：worklist 42 个文件，全部 Read 过；账本因并发丢写显示还剩 5（见 I-055）
+- 旧图 I-001~I-019 描述的是 ca7e956 删掉的 packages/scripts/skills/docs，经人确认删除
+- 新建 19 个想法 I-041~I-059，新 id 不复用旧号；终点三个：I-057 / I-058 / I-059
+- check：0 errors / 5 warnings；前沿：I-055、I-056
+- 未答：I-054.how、I-054.why_this_way、I-055.why_this_way、I-056.why_this_way、I-053 两侧失败方向相反的原因

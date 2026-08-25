@@ -2,672 +2,673 @@ version: 1
 agent: claude
 project: ai-companion
 overview: >
-  一个 TypeScript 单体仓库，做两件互相支撑的事：在函数这一级别追踪代码改动并记录 「为什么改」；以及在这个追踪核心之上长出一套可以装进任何仓库的
-  AI 开发工作流。 终点只有一个 —— 那套工作流真的能装进别的仓库并跑起来。追踪核心、报告渲染、 执行引擎都是为这个终点服务的手段。
-  2026-08-24 晚：旧代码树（packages/ scripts/ skills/ docs/）先被移到 archive/、
-  随后从磁盘上消失了。它只存在于 tag pre-archive-2026-08-24。因此 I-001~I-019
-  这批描述追踪核心的想法已改为 blocked —— 它们做完过，但不再是本仓库的活代码。
-  注意：这个仓库同时住着三个 agent 的 companion。这张图是 Claude 侧的； Cursor 侧的在
-  ideas/graph.yaml，Codex 侧在 codex-companion/。互不覆盖。
+  三套「想法图」开发工作流，一个仓库里并排住着，各服务一个 agent：
+  claude-companion（TypeScript，五个斜杠命令 + 七条 hook 规则）、
+  cursor-companion（TypeScript，写闸门式）、codex-companion（Python）。
+  共同的核心是一句话：项目里的每一个想法都是图上的一个节点，前置关系是唯一的边，
+  每个节点必须回答八个问题。所有东西存在 ideas/graph.yaml 一个文件里。
+  它要解决的是同一个根因：想法从来没被写下来过，只有代码被写下来了。
 
-# 什么叫「这个项目做完了」（2026-08-24 由人在 /ccscan 第 2 步确认）
-endpoints: [ I-040 ]
+  2026-08-25 重建：commit ca7e956 把旧的 monorepo（packages/ scripts/ skills/ docs/，
+  即函数级变更追踪那一整套）移进 gitignore 的 archive/ 并从工作树上删除，只留在 git
+  历史和 tag pre-archive-2026-08-24 里。旧图的 I-001~I-019 描述的就是那批代码，
+  已经不是本仓库的活代码，因此整张图按人的决定重建，新 id 从 I-041 起
+  （FORMAT.md 规定 id 永不复用）。
+
+# 什么叫「这个项目做完了」（2026-08-25 由人在 /ccscan 第 2 步选定）
+endpoints: [ I-057, I-058, I-059 ]
 
 ideas:
 
   # ─────────────────────────────────────────────────────────────
-  # 追踪核心：解析代码 → 归因到函数 → 存下来 → 渲染出来
+  # 地基：格式与引擎
   # ─────────────────────────────────────────────────────────────
 
-  - id: I-001
-    name: "不随行号漂移的函数身份"
-    status: blocked
-    needs: []
-    what: >
-      给每个函数算一个稳定的身份哈希：sha256(文件路径 :: 类名 :: 函数名 :: 参数名:类型)，取前 16 位十六进制。
-    why: >
-      整个追踪系统需要回答「这个函数的历史」，而 git 只知道行号。代码一挪位置， 按行号索引的历史就全断了。必须有一个不随行号变化的身份。
-    expected: >
-      同一个函数在文件里上下移动之后，哈希不变，历史能接上；改了参数类型则哈希改变 （这是故意的 —— 契约变了就是另一个函数）。
-    how: >
-      identity.ts 里拼出 identityString 再做 sha256。刻意剔除 self / cls，
-      因为它们是语言噪音而不是契约的一部分。
-    why_this_way: >
-      把参数的「名字:类型」都算进哈希，是为了区分重载；把 class_name 算进去， 是为了区分不同类里的同名方法。不含行号 ——
-      这正是整个设计的要点。
-    code:
-      - file: archive/2026-08-24/packages/ast/src/identity.ts
-        symbol: computeFunctionIdentity
-        lines: "4-32"
-    verify:
-      command: "npx vitest run
-        .devcompanion/tests/test_ast_computeFunctionIdentity.test.ts"
-      pass: "exit 0"
-    future: >
-      历史存储、变更归因、报告渲染全都以这个哈希为主键。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-002
-    name: "Python 与 TypeScript 的统一解析"
-    status: blocked
-    needs: [ I-001, I-003 ]
-    what: >
-      用 tree-sitter（WASM 版）把两种语言的源文件解析成同一个 ParsedModule 结构：
-      函数、类、方法、参数、装饰器、返回类型、docstring、import。
-    why: >
-      要在函数级别归因，就必须先知道每个函数占哪几行。正则做不到这件事 —— 嵌套类、装饰器、类型注解都会让正则失效。
-    expected: >
-      给一个 .py 或 .ts 文件，parseFileAuto 返回它全部的函数签名和行号范围， 调用方不需要知道是哪种语言。
-    how: >
-      parser-factory.ts 提供一个语言无关的工厂（init / parseSource / parseFile）， Python 和
-      TypeScript 各自只提供一个 parseModule 回调；multi-lang.ts 按扩展名分发。
-    why_this_way: >
-      用工厂而不是两份复制的解析器代码，是因为初始化、读文件、建树这三步两种语言 完全一样，不同的只有「怎么从语法树里取东西」。新增一门语言只需要写一个
-      parseModule 回调。
-    code:
-      - file: archive/2026-08-24/packages/ast/src/parser-factory.ts
-        symbol: createLanguageParser
-        lines: "18-46"
-      - file: archive/2026-08-24/packages/ast/src/multi-lang.ts
-        symbol: parseFileAuto
-        lines: "17-31"
-      - file: archive/2026-08-24/packages/ast/src/parser.ts
-        symbol: parsePythonModule
-        lines: "26-279"
-      - file: archive/2026-08-24/packages/ast/src/ts-parser.ts
-        symbol: parseTsModule
-        lines: "21-320"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_ast_multiLang.test.ts"
-      pass: "exit 0"
-    future: >
-      变更归因、onboard 扫描、测试骨架生成都建立在它之上。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-003
-    name: "运行时定位 WASM 文件"
-    status: blocked
-    needs: []
-    what: >
-      在运行时向上搜索 node_modules，找到 tree-sitter 的 .wasm 文件， 而不是把路径写死。
-    why: >
-      同一份代码要能在 monorepo 里跑、被别的仓库安装之后也能跑。 npm 和 pnpm 的提升策略不同，.wasm 的实际位置也就不同。
-    expected: >
-      不管这个包是被提升到根目录还是嵌在某一层，都能找到 .wasm；找不到时 报错要列出搜过的全部候选路径。
-    how: >
-      从当前文件位置出发，试三个固定深度的 ../node_modules，第一个存在的就用。
-    why_this_way: >
-      三个固定深度而不是无限向上遍历 —— 覆盖了实际会出现的所有布局， 而且不会在一个巨大的目录树上退化。报错时列出全部候选路径，
-      是因为这类失败最难查，直接把线索给出来。
-    code:
-      - file: archive/2026-08-24/packages/ast/src/wasm-resolver.ts
-        symbol: resolveWasmPath
-        lines: "13-25"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_ast_findWasmPath.test.ts"
-      pass: "exit 0"
-    future: >
-      两个语言解析器共用它 —— 这是 WASM 路径解析的唯一来源， docs/ecl 里有一条特性守卫盯着这一点。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-004
-    name: "把 diff hunk 归因到函数"
-    status: blocked
-    needs: [ I-002 ]
-    what: >
-      解析 git 的 unified diff，把每个 hunk 的行号范围和文件里各函数的行号范围 做重叠比对，得出「这次改动动了哪几个函数」。
-    why: >
-      git 只会告诉你「这个文件的第 41-53 行变了」。要回答「为什么改」， 得先知道改的是哪个函数。
-    expected: >
-      给一段 diff 和一份函数签名表，得到一串带函数名和身份哈希的变更记录； 落在任何函数之外的 hunk 标成 module-level 或
-      config-change，而不是丢掉。
-    how: >
-      parser.ts 解析 diff 文本成 FileDiff[]；annotator.ts 对每个 hunk 求重叠函数，
-      再按「文件::函数哈希」去重合并同一函数的多个 hunk。
-    why_this_way: >
-      归因不上的 hunk 保留成 module-level 而不是丢弃 —— 丢掉就意味着记录不完整，
-      而不完整的记录看起来和完整的一样，这比没有记录更糟。
-    code:
-      - file: archive/2026-08-24/packages/core/src/diff/parser.ts
-        symbol: parseUnifiedDiff
-        lines: "59-141"
-      - file: archive/2026-08-24/packages/core/src/diff/annotator.ts
-        symbol: annotateChanges
-        lines: "28-164"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_diff_annotateChanges.test.t\
-        s"
-      pass: "exit 0"
-    future: >
-      钩子和 CLI 两条路径都用它把改动变成 ChangeRecord。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-005
-    name: "崩溃安全的历史存储"
-    status: blocked
-    needs: [ I-001, I-004 ]
-    what: >
-      把变更记录存成纯 JSON 文件：不可变的 session 日志（journal）加上由它推导出的
-      索引与按文件分组的历史（projection），带跨进程文件锁、原子写、 以及可自愈的投影清单。
-    why: >
-      历史记录一旦损坏，整个「为什么改」的价值就没了。而钩子是多进程并发写的， 编辑器随时可能被关掉。
-    expected: >
-      并发写不会互相覆盖；写到一半崩溃不会留下半份文件；投影和日志对不上时 能自动重建；日志被人篡改成非法结构时明确报错而不是静默吃掉。
-    how: >
-      withProjectLock 用带心跳租约的独占锁文件（过期可回收）；所有写都是 临时文件 + rename；projectSession
-      增量投影并维护一份带摘要的清单， 清单对不上就整体重建。
-    why_this_way: >
-      日志（journal）不可变、索引可推导 —— 这样任何投影损坏都能从日志重算， 不需要备份。锁用心跳租约而不是看 PID：PID 会被复用，
-      而复用的 PID 会让仓库被永久锁死（代码里明确写了这条注释）。
-    code:
-      - file: archive/2026-08-24/packages/history/src/store.ts
-        symbol: HistoryStore
-        lines: "305-710"
-      - file: archive/2026-08-24/packages/history/src/store.ts
-        symbol: withProjectLock
-        lines: "247-303"
-      - file: archive/2026-08-24/packages/history/src/projector.ts
-        symbol: projectSession
-        lines: "60-136"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_history_durableSession.test\
-        .ts"
-      pass: "exit 0"
-    future: >
-      /ccdebug 靠它回答「这个函数上次为什么被改」。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-006
-    name: "托管的 gitignore 策略"
-    status: blocked
-    needs: [ I-005 ]
-    what: >
-      在目标仓库的 .gitignore 里写入一段有标记的托管区块，按仓库公开／私有 采取不同规则；并清掉会把测试目录一起藏起来的历史遗留行。
-    why: >
-      .devcompanion/ 里既有不该提交的运行时状态，也有必须提交的测试。 一条笼统的 `.devcompanion/` 会把测试也藏掉 ——
-      这个坑真的踩过。
-    expected: >
-      重复执行结果不变；测试目录始终可见；公开仓库不泄露机器本地的 hook 配置路径。
-    how: >
-      用 `# >>> AI Dev Companion (managed)` 一对标记界定区块，替换而不是追加； 三种档位：init（仅保测试）/
-      public / private。
-    why_this_way: >
-      装进别人的仓库就必须可逆、可重入 —— 有标记的区块才能被安全替换， 直接追加会在每次安装时越堆越多。
-    code:
-      - file: archive/2026-08-24/packages/history/src/managed-gitignore.ts
-        symbol: applyManagedGitignore
-        lines: "66-83"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_store_ensureGitignore.test.\
-        ts"
-      pass: "exit 0"
-    future: >
-      installer 和 `aidev init` 共用同一份策略，不会互相打架。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-007
-    name: "函数分析：LLM 加启发式兜底"
-    status: doing
-    needs: [ I-002, I-011 ]
-    what: >
-      对每个函数产出 why / what / how 三句话，外加输入输出契约、 可能抛出的错误、依赖了谁。
-    why: >
-      要理解一个陌生仓库，光有函数名和签名不够，需要「它为什么存在」。
-    expected: >
-      有 claude CLI 时走 LLM；没有、超时或超预算时自动退回启发式， 流程不中断，结果里标明来源是 llm 还是 heuristic。
-    how: >
-      analyzeBatch 按并发分块，用 maxLlmCalls 卡预算，超出的部分走 analyzeHeuristic ——
-      后者靠函数名前缀模式（parse→、validate→…）推断。
-    why_this_way: >
-      每一次 LLM 调用都有启发式兜底，是因为这条链路要能在没有网络、 没有订阅的环境里照常跑完。默认 haiku 是成本考虑。
-    code:
-      - file: archive/2026-08-24/packages/core/src/analysis/analyzer.ts
-        symbol: analyzeBatch
-        lines: "85-123"
-      - file: archive/2026-08-24/packages/core/src/analysis/heuristic.ts
-        symbol: analyzeHeuristic
-        lines: "192-214"
-    verify:
-      manual: "在一个真实仓库上跑 aidev analyze，看 why/what/how 是否说得中要害"
-      signed_off: null
-    future: >
-      onboard 流水线和想法图的建图都以它的输出为种子。
-    log:
-      - date: 2026-08-24
-        by: ccscan
-        note: 人工验证未签字，不能算 done
-
-  - id: I-008
-    name: "模块化分析与接口契约"
-    status: doing
-    needs: [ I-007 ]
-    what: >
-      给每个函数算内聚度、耦合度、隐藏依赖（环境变量／全局／文件系统／时间／单例）、 接口清晰度，给出重构建议，并能导出 TypeScript
-      接口契约文件。
-    why: >
-      「这段代码能不能测」这个问题需要一个可量化的答案，而不是感觉。
-    expected: >
-      能标出超过 50 行且职责不单一的 god function，能列出隐藏依赖的具体行号。
-    how: >
-      正则加行数的启发式打分，同样带 LLM 版本和兜底。
-    why_this_way: null # 扫描时没有找到当初为什么选这套指标、这些阈值的记录
-    code:
-      - file: archive/2026-08-24/packages/core/src/modularity/heuristic.ts
-        symbol: analyzeModularityHeuristic
-        lines: "206-233"
-      - file: archive/2026-08-24/packages/core/src/modularity/contracts.ts
-        symbol: emitContractFiles
-        lines: "36-61"
-    verify:
-      manual: "跑 aidev analyze --modularity，看标出来的 god function 是否真的该拆"
-      signed_off: null
-    future: >
-      /cconboard 的风险分级本来要用它 —— 但扫描范围内没看到任何命令真的读它的输出。
-    log:
-      - date: 2026-08-24
-        by: ccscan
-        note: 人工验证未签字，不能算 done
-
-  - id: I-009
-    name: "测试骨架生成"
-    status: blocked
-    needs: [ I-002 ]
-    what: >
-      给每个函数和类生成一份 vitest 测试骨架：按参数类型猜测 mock 值， 按返回类型生成断言，按函数名推断是否该测抛错。
-    why: >
-      onboarding 一个没有测试的仓库时，从零手写测试的门槛太高； 有骨架就只剩填断言。
-    expected: >
-      生成的文件路径符合本仓库约定（test_<模块>_<函数名>.test.ts）， 内容能直接跑（哪怕断言还很弱）。
-    how: >
-      inferMockValue 按类型再按参数名猜值；inferTestCases 生成 「不抛异常 / 返回类型正确 / 非法输入抛错 /
-      幂等」几类用例。
-    why_this_way: >
-      先按类型猜、类型缺失时再按名字猜 —— 因为这个仓库里大量参数带类型， 名字兜底只是为了不产出 undefined。
-    code:
-      - file: archive/2026-08-24/packages/core/src/test-gen/ts-generator.ts
-        symbol: generateTestSkeleton
-        lines: "18-50"
-    verify:
-      command: "npx vitest run
-        .devcompanion/tests/test_ts-generator_buildTestPath.test.ts"
-      pass: "exit 0"
-    future: >
-      /cconboard 第 3 阶段的特征测试用它打底。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-010
-    name: "自包含的 HTML 报告"
-    status: blocked
-    needs: [ I-005 ]
-    what: >
-      两种报告：单次 review 的变更报告（按原因分组、可折叠的行内 diff）， 和项目全貌的 onboard 报告（统计面板 + 文件分解 +
-      可搜索函数索引）。
-    why: >
-      记录下来的东西必须有人真的会去看。JSON 没人看，网页有人看。
-    expected: >
-      一个 HTML 文件，双击就能开，没有任何外部依赖，可以直接发给别人。
-    how: >
-      字符串拼接生成 HTML，CSS 和 JS 全部内联，暗色主题。
-    why_this_way: >
-      不引入任何前端框架或构建步骤 —— 报告要能离线看、能邮件发、 能在几年后仍然打得开。
-    code:
-      - file: archive/2026-08-24/packages/render/src/renderer.ts
-        symbol: renderSessionToHtml
-        lines: "7-17"
-      - file: archive/2026-08-24/packages/render/src/onboard/index.ts
-        symbol: renderOnboardHtml
-        lines: "10-26"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_renderer_buildFullPage.test\
-        .ts"
-      pass: "exit 0"
-    future: >
-      dashboard 直接把这些 HTML 服务出去。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-011
-    name: "Claude CLI 封装"
+  - id: I-041
+    name: "八问的想法节点格式"
     status: doing
     needs: []
     what: >
-      一个薄封装：预检 claude 是否可用（带缓存）、超时中止、输出截断、 Windows 上绕开 WindowsApps 的假垫片。
+      一个想法节点的格式：id / name / status / needs，加上八个必答问题
+      （是什么、为什么有它、预期结果、如何实现、为什么这样实现、代码在哪几行、
+      如何验证、未来怎么用），外加一条 append-only 的 log。
     why: >
-      多个引擎都要调 LLM，各自处理超时和不可用会写四遍。
+      AI 出幻觉、prompt 对不齐需求、返工之后自己也看不懂项目框架 —— 这三件事的
+      根因是同一个：想法从来没被写下来，只有代码被写下来了。
     expected: >
-      claude 不在 PATH 上时抛 ClaudeNotAvailableError 并给出安装指引， 而不是卡住或抛一个看不懂的 spawn 错误。
+      同一个想法，人和 AI 读同一份记录得到同一个理解；一个冷启动的陌生 agent
+      读这个文件就能接着干，不需要额外上下文。
     how: >
-      spawn + AbortController；Windows 上走 cmd.exe /c 并从 PATH 里 滤掉 WindowsApps。
+      YAML，一个扁平的 ideas 列表，一种节点、一种边。规格写在 FORMAT.md，
+      三个 companion 各有一份基本一致的副本。
     why_this_way: >
-      滤掉 WindowsApps 是因为微软商店的垫片会拦截命令名却什么都不做 —— 不滤会得到一个静默失败。
+      选一层扁平结构而不是需求／特性／模块／函数四层 —— FORMAT.md 结尾写明：
+      诉求是「所有想法都变成一个个模块」，模块不是分类法，四层结构本身就是让人
+      看不懂项目的那种复杂度。YAML 而不是 JSON，因为八个回答都是成段散文。
     code:
-      - file: archive/2026-08-24/packages/llm/src/caller.ts
-        symbol: callClaude
-        lines: "80-150"
+      - file: claude-companion/FORMAT.md
+        lines: "1-143"
     verify:
-      manual: "在没装 claude CLI 的机器上调用，确认报错信息有可操作的指引"
+      manual: "拿一个真实想法填一遍八问，看有没有哪个问题填不进去、或者填完还说不清这个想法"
       signed_off: null
     future: >
-      idea 研究、onboarding 分析、overview 翻译都走它。
+      整套工具的其它部分都只读写这一个格式；加字段的成本是一个 YAML key。
     log:
-      - date: 2026-08-24
+      - date: "2026-08-25"
         by: ccscan
-        note: 人工验证未签字，不能算 done
+        note: "重建后的第一个节点；人工验证未签字，所以不是 done"
+
+  - id: I-042
+    name: "图的解析与校验"
+    status: done
+    needs: [ I-041 ]
+    what: >
+      读 graph.yaml，检查 id 唯一、needs 指向存在的想法、图无环、done 的节点必须有
+      code 和 verify、done 的 code 路径真的存在、人工验证必须有人签字；
+      八问里没填的字段报成警告。
+    why: >
+      没有校验，图会安静地烂掉：done 却没有代码、code 指向已删掉的文件、两个想法
+      互相依赖。烂掉的图比没有图更糟，因为它看起来是完整的。
+    expected: >
+      健康的图 check 通过、退出码 0；每一种烂法都能被指出来并说明是哪个 id。
+    how: >
+      DFS 三色标记查环；从 endpoints 反向遍历 needs 找出通不到任何终点的孤儿；
+      existsSync 验证 done 节点的 code 路径（todo 的不查 —— 那是计划中的位置）。
+    why_this_way: >
+      把「done 必须有 code + verify」做成硬错误而不是警告 —— 代码注释写明这是整套
+      东西成立的前提：如果「完成」可以没有证据，这张图就只是一份愿望清单。
+      todo 的 code 路径刻意不查，否则计划本身会被当成错误。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: check
+        lines: "260-327"
+      - file: claude-companion/ideas.ts
+        symbol: findCycle
+        lines: "119-137"
+      - file: claude-companion/ideas.ts
+        symbol: orphans
+        lines: "140-154"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccbuild 动手前先跑它；/ccgraph 用它的输出告诉人接下来该做什么；
+      guard 的 R5 用它拦住「回合结束时图是坏的」。
+
+  - id: I-043
+    name: "前沿查询"
+    status: done
+    needs: [ I-042 ]
+    what: >
+      算出现在可以做哪些想法：status 是 todo、且所有前置都已 done 的节点。
+    why: >
+      「接下来做什么」应该是图算出来的，不该是另一份要手动同步的 TODO 列表 ——
+      两份清单一定会不一致。
+    expected: >
+      next 打出来的就是可以立刻动手的想法；一个都没有时说清是全做完了还是全被挡住了。
+    how: >
+      一次过滤：status === todo 且 needs.every(前置已 done)。
+    why_this_way: >
+      不做拓扑排序 —— 代码注释写明前沿只需要一次过滤，做完一个再算一次即可，
+      少一个可能出错的地方。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: frontier
+        lines: "111-116"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccbuild 的入口；互不相干的前沿想法可以并行交给多个 subagent。
+
+  - id: I-044
+    name: "状态写回与记录"
+    status: done
+    needs: [ I-042 ]
+    what: >
+      改一个想法的状态，同时在它自己的 log 里追加一条记录；写回时保留 YAML 注释；
+      拒绝没有 code / verify 的 done，拒绝没签字的人工验证。
+    why: >
+      改了什么代码、什么文档、什么想法要有详细记录，而原因要放在想法旁边，
+      不是另一个文件里 —— 放远了就没人读。
+    expected: >
+      set 之后重新读：状态变了、log 多了一条、原来的注释还在；对一个没有 code 的
+      想法 set done 会失败并说明原因。
+    how: >
+      yaml 的 parseDocument 保留注释和格式，setIn 定点修改，写临时文件再 rename。
+    why_this_way: >
+      走 Document 而不是 parse → 改 → stringify：后者会抹掉整个文件的注释和排版，
+      而注释正是人留给自己的东西。rename 是原子的，写到一半崩溃不会毁掉原图
+      （代码注释：a crash mid-write leaves the old graph intact）。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: setStatus
+        lines: "331-355"
+      - file: claude-companion/ideas.ts
+        symbol: save
+        lines: "95-99"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      五个命令都通过它写状态，所以不存在「忘了记一笔」这条路径。
+
+  - id: I-045
+    name: "可点击可缩放的想法图"
+    status: done
+    needs: [ I-042 ]
+    what: >
+      渲染成一个自包含网页：上面是只显示想法名称的完整项目图，可平移缩放；
+      点任意节点跳到下面的详情卡片，卡片里是八问的全部回答，以及它的前置想法和
+      「它是哪些想法的前置」，两个方向都能继续点。
+    why: >
+      看不见形状的项目最后一定会被重写。图是给人看的，不是给机器看的，
+      而人要判断的三件事（节点做得太多、缺边、通不到终点）只有画出来才判断得了。
+    expected: >
+      双击打开 graph.html 就能一眼看出项目形状；缩放之后线条依然锐利；
+      拖拽不会被误判成点击节点。
+    how: >
+      Mermaid flowchart TD（CDN）做布局，节点标签只放 name，click 回调跳详情。
+      缩放靠改 SVG 自身的 width/height 让矢量重画，平移靠 wrapper 的 translate。
+    why_this_way: >
+      用 Mermaid 而不是 d3 / cytoscape：静态 HTML，没有构建步骤也不用起服务器。
+      缩放刻意不用 CSS scale() —— 代码注释写明 scale 会把图层栅格化一次再拉伸，
+      那正是之前看起来发虚的原因；fit 只缩不放，因为把一张小图放到 235% 不是
+      任何人说「适应窗口」时想要的。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: render
+        lines: "364-605"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccthink 第 2 步用它让人在动手之前就看出拆分错了；/ccscan 用它交付结果。
+
+  - id: I-046
+    name: "可核验的扫描清单"
+    status: done
+    needs: [ I-042 ]
+    what: >
+      /ccscan 开始时把项目里值得读的文件列成一张清单（ideas/.scan-todo），
+      每 Read 一个文件由 hook 划掉一个；check 在清单没清空时持续警告。
+      ideas/.scanignore 可以按路径前缀排除（第三方包、别的 agent 的并行版本）。
+    why: >
+      「我读完了」是一句 agent 随口就能说的话。一张图如果是从半个项目上建起来的，
+      它看起来和完整的一模一样 —— 这比没有图更糟。
+    expected: >
+      扫描进度是「已读 37/42」这样的数字而不是一句保证；Grep / Glob 不算，
+      因为它们不把文件内容放进上下文。
+    how: >
+      git ls-files -z --cached --others --exclude-standard 生成清单
+      （拿不到 git 时退化成目录遍历），按扩展名和 .scanignore 过滤；
+      strike() 按大小写不敏感的相对路径划掉一行。
+    why_this_way: >
+      用 git ls-files 而不是自己遍历，因为它已经懂 .gitignore、子模块和大小写；
+      加 -z 是因为不加时 git 会把非 ASCII 路径转义成八进制，那些文件就永远划不掉
+      （代码注释明确写了这一点）。node_modules 显式排除，因为仓库可能真的把它提交了。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: listProjectFiles
+        lines: "192-210"
+      - file: claude-companion/ideas.ts
+        symbol: strike
+        lines: "243-252"
+      - file: claude-companion/ideas.ts
+        symbol: scanIgnores
+        lines: "184-190"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
+      pass: "exit 0"
+    future: >
+      任何声称「通读了项目」的命令都可以挂在同一张清单上。
 
   # ─────────────────────────────────────────────────────────────
-  # 捕获层：编辑发生的那一刻，自动记下来
+  # 强制层：跑在 harness 里、agent 绕不过去的纪律
   # ─────────────────────────────────────────────────────────────
 
-  - id: I-012
-    name: "百毫秒内的编辑捕获"
-    status: blocked
-    needs: [ I-004 ]
+  - id: I-047
+    name: "七条 hook 强制规则"
+    status: done
+    needs: [ I-042, I-046 ]
     what: >
-      PostToolUse 钩子：Claude 或 Codex 每次写文件之后立刻触发， 在 100
-      毫秒内把事件（含改前／改后快照证据）写进队列，然后就结束。
+      一个 guard.ts 挂在 PreToolUse / PostToolUse / Stop / UserPromptSubmit 上，
+      按事件分派七条规则：R1 每次编辑自动记进 log；R2 已有想法的 status 只能走 set；
+      R3 测试文件不存在就不准写实现；R4 how / why_this_way 没填就不准动它的代码；
+      R5 图有错误就不准结束回合；R6 没人批准的图不准开始实现；
+      R7 文件只有被真的 Read 过才算扫描过。
     why: >
-      希望每次改动连同原因都被自动记下来，不需要人手动登记； 同时绝对不能让编辑卡顿。
+      五个命令都只是提示词 —— agent 可以跳过调研、编造 why_this_way、直接 Edit
+      把 status 改成 done 绕过全部校验、自问自答说「看起来合理」然后继续。
+      写在提示词里的纪律，到第三十轮对话就不算数了。
     expected: >
-      编辑一个文件之后队列里恰好多出一条对应事件，且编辑体感无延迟。
+      跳过测试直接写实现会被拒绝并告诉它先写哪个文件；手改 status 会被拒绝并给出
+      该跑的 set 命令；图坏着不准结束回合；每次编辑在 ideas/log.md 留一行，
+      不需要 agent 配合。
     how: >
-      钩子只做 JSON 落盘，不做 diff 不做解析；用 correlation_id 把 改前快照和这次改动配对；证据不全时降级并记录降级原因。
+      退出码 2 + stderr = 「拦下并把原因告诉 Claude」，这是四个 hook 事件上唯一
+      通用的机制，所以一个脚本按 hook_event_name 分派就够。
+      install.ts 负责写进目标仓库的 .claude/settings.json 且不覆盖别人的 hook。
     why_this_way: >
-      把「快速捕获」和「耗时处理」彻底拆开，是这一层唯一的设计要点 —— 钩子守住延迟预算，重活全部推给后台。任何异常都吞掉： PostToolUse
-      是观察者，它失败绝不能让已经完成的编辑报错。
+      只强制机器判得了的事：文件存不存在、字段填没填、状态变没变、check 过不过。
+      八个回答的质量、联网搜索是否诚实强制不了，唯一的防线是让遗漏在 check 和
+      渲染里可见 —— 硬拦一个判不准的东西比不拦更糟。所有异常路径一律 fail open
+      （代码注释：a guard that crashes must never block work），
+      守卫自己崩了不能把人锁在外面；AIDEV_GUARD=off 是逃生口。
     code:
-      - file: archive/2026-08-24/packages/hook/src/index.ts
-        symbol: handlePostToolUse
-        lines: "433-497"
-      - file: archive/2026-08-24/packages/hook/src/index.ts
-        symbol: enqueueCapturedEvents
-        lines: "339-431"
+      - file: claude-companion/guard.ts
+        symbol: decide
+        lines: "159-190"
+      - file: claude-companion/guard.ts
+        symbol: ruleTestFirst
+        lines: "217-274"
+      - file: claude-companion/guard.ts
+        symbol: ruleGraphIsSound
+        lines: "307-320"
     verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_hook_handlePostToolUse.test\
-        .ts"
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
-      后台 worker 从这个队列取事件做真正的分析。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
+      要加新纪律就在 decide 里加一条规则加一个测试 —— 前提是它机器判得了。
 
-  - id: I-013
-    name: "不支持的文件退化到文件级"
-    status: blocked
-    needs: [ I-012 ]
+  - id: I-048
+    name: "不可伪造的人工批准"
+    status: done
+    needs: [ I-047 ]
     what: >
-      不能做 AST 解析的扩展名（.md / .yaml / .json …）不丢弃，而是记录成 文件级事件并打上 file_level
-      标记；只有明确的二进制产物才跳过。
+      批准绑定在图的 sha256 前 12 位上，只有 UserPromptSubmit 事件里整条消息就是
+      「批准 / approve / 同意」时才写进 ideas/.approved；图改一个字批准就失效。
+      .approved 和 .scan-todo 这两个账本文件本身被 PreToolUse 拦住，不能用 Write 写。
     why: >
-      改了文档、改了配置，也是改动。丢掉它们，记录就有洞， 而有洞的记录看起来和完整的一样。
+      agent 写得进去的标记，agent 就能伪造。一个「我已确认」的标记如果由被约束者
+      自己写，它约束不了任何东西。
     expected: >
-      编辑一个 .md 文件，队列里有对应事件且 file_level 为 true； 编辑一张 .png 则没有事件。
+      没批准过的图上动手会被拒绝并要求先给人看；「我不批准」不会被算成批准；
+      任何工具事件都产生不了批准。
     how: >
-      两个集合：AST 支持的扩展名、二进制黑名单；两个都不命中就是文件级。
+      APPROVALS 是一个集合，比对的是 trim + 小写 + 去尾部标点之后的整条 prompt；
+      换行符先归一化再做哈希，免得 CRLF 检出被读成另一张图。
     why_this_way: >
-      用「二进制黑名单」而不是「文本白名单」—— 白名单会持续漏掉新的文本格式， 而黑名单漏掉的只会是多记一条。
+      把「我做了」绑到一个不真做就产生不了的事件上：UserPromptSubmit 只有人亲手敲
+      消息才会触发。判断「整条消息就是批准」而不是「消息里含批准」，否则
+      「我不批准」会被算成批准。
+      已知天花板（README 如实写出）：agent 仍可以用 Bash 直接喂一个假的
+      UserPromptSubmit 给 guard.ts。R6 挡的是顺手跳过，不是铁了心要绕过去的 agent。
     code:
-      - file: archive/2026-08-24/packages/hook/src/index.ts
-        symbol: isFileLevelExtension
-        lines: "77-92"
+      - file: claude-companion/guard.ts
+        symbol: graphHash
+        lines: "92-98"
+      - file: claude-companion/guard.ts
+        symbol: isApproval
+        lines: "112-119"
+      - file: claude-companion/guard.ts
+        symbol: recordApproval
+        lines: "280-285"
     verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/mvp_hook_recording.test.ts"
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
-      想法图和 ECL 这类 yaml 文件的改动因此也进了同一条记录链。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-014
-    name: "钩子拉起的短命 worker"
-    status: blocked
-    needs: [ I-012 ]
-    what: >
-      钩子写完队列后拉起一个后台进程，由它做真正耗时的 diff、AST 解析、 归因和落库；带 5 秒冷却闸门防止拉起风暴。
-    why: >
-      耗时的活必须离开编辑的关键路径，但又不能要求用户手动开一个常驻守护进程。
-    expected: >
-      连续快速编辑不会拉起几十个进程；队列最终被清空并落进历史。
-    how: >
-      用一个独占创建的闸门文件（wx）加 mtime 冷却判断；进程 detached + unref。
-    why_this_way: >
-      短命 worker 而不是常驻守护进程 —— 用户不需要记得启动任何东西， 装完就能用。代价是每次拉起有进程启动开销，冷却闸门就是为此。
-    code:
-      - file: archive/2026-08-24/packages/hook/src/index.ts
-        symbol: spawnQueueWorker
-        lines: "308-337"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_daemon_recoverableQueue.tes\
-        t.ts"
-      pass: "exit 0"
-    future: >
-      队列是持久的，worker 拉起失败也不丢事件，下次编辑会再试。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-015
-    name: "自动关联到当前 ECL 特性"
-    status: blocked
-    needs: [ I-012 ]
-    what: >
-      钩子扫 docs/ecl/*.yaml，找出当前非完结的特性，把 feature / REQ / DEC 注入到这次改动的记录里。
-    why: >
-      希望「这次改动属于哪个需求」是自动关联的，而不是靠人手工标注 —— 手工标注一定会漏。
-    expected: >
-      有 active ECL 时，变更记录带 ecl_context，报告里能看到特性徽章。
-    how: >
-      正则扫 yaml 的 feature / status / REQ-*/DEC-* 行，取第一个未完结的。
-    why_this_way: >
-      用正则而不是完整解析 yaml，是因为这段跑在 100 毫秒预算里； 读错了最多是少一个徽章，代价可接受。
-    code:
-      - file: archive/2026-08-24/packages/hook/src/index.ts
-        symbol: detectActiveEcl
-        lines: "513-545"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_hook_parseFeatureGuards.tes\
-        t.ts"
-      pass: "exit 0"
-    future: >
-      新的想法图工作流不再用 ECL，这条关联对它没有作用。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
-
-  - id: I-016
-    name: "规划期只读守卫"
-    status: blocked
-    needs: []
-    what: >
-      PreToolUse 钩子：当 .devcompanion/.ccplan-active 标记存在时， 拦下一切非 ECL 文件的写操作和有副作用的
-      Bash 命令。
-    why: >
-      /ccplan 是「只思考不动手」的阶段。写在提示词里的「只读」会被忽略， 写在钩子里的不会。
-    expected: >
-      规划模式下改源码被拒绝，改 docs/ecl/*.yaml 放行。
-    how: >
-      一个标记文件当开关；文件写工具看路径，Bash 看命令是否匹配写操作模式。
-    why_this_way: >
-      用标记文件而不是环境变量，是因为钩子进程和 agent 进程不共享环境； 文件是它们唯一都能看到的东西。
-    code:
-      - file: archive/2026-08-24/packages/hook/src/pre-tool-use-guard.ts
-        symbol: handlePreToolUse
-        lines: "48-76"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_hook_handlePreToolUse.test.\
-        ts"
-      pass: "exit 0"
-    future: >
-      claude-companion 的守卫沿用了同一个思路，但把判据从「标记文件」 换成了「agent 造不出来的事件」—— 因为标记文件 agent
-      自己也能创建。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
+      任何「必须由人点头」的关卡都可以用同一招：绑到 agent 造不出来的事件上。
 
   # ─────────────────────────────────────────────────────────────
-  # 执行引擎
+  # 工作流：五个命令
   # ─────────────────────────────────────────────────────────────
 
-  - id: I-017
-    name: "计划 DAG 的拓扑执行"
-    status: blocked
-    needs: []
+  - id: I-049
+    name: "五个斜杠命令"
+    status: doing
+    needs: [ I-041, I-043, I-044, I-045 ]
     what: >
-      读 ECL 里的 FN 节点，做拓扑排序分层，算出「现在哪些可以做」， 跑验证命令，把状态原子写回 yaml。
+      /ccscan 通读项目建图、/ccthink 对齐→拆分→调研→设计测试→按周排期、
+      /ccbuild 测试先行地实现、/ccfix 先查代码与想法是否一致再查想法本身、
+      /ccgraph 只看不改。每个都是一份 markdown 提示词。
     why: >
-      一份计划如果不能被机械地推进，它就只是一份文档。
+      引擎只是数据结构，真正决定产出质量的是「按什么顺序做事」。
+      一句 prompt 对不齐需求，返工的成本远高于先花二十分钟对齐。
     expected: >
-      有环时明确报出环上的节点；同一层内的节点可以并行； 状态写回不会破坏 yaml 里的注释。
+      每个命令在真实项目上跑一遍，产出的是它承诺的东西：
+      /ccscan 给出诚实的覆盖数字和一份「我也不知道」的清单，
+      /ccfix 给出带行号的不一致而不是泛泛而谈。
     how: >
-      Kahn 算法分层；写回走 yaml 的 Document API（保注释）加临时文件 + rename。
+      纯 markdown，步骤固定不可跳；关键处停下来等人（ccthink 第 2 步审拆分、
+      ccfix 第 1 步审不一致、所有命令的最后等「批准」）。
     why_this_way: >
-      只有编排者能写状态、子 agent 永远不能 —— 否则并发写会互相覆盖， 而且没人知道是谁改的。
+      /ccthink 把「能借就借」设成命令里优先级最高的规则，并把调研放在回答
+      「如何实现」之前 —— 否则调研只会变成给已有答案找依据。
+      /ccfix 刻意不让 AI 自己判断代码和想法哪边对：它恰恰是判断不了的那一方。
+      /ccscan 明确禁止编造 why_this_way，因为编出来的理由会被下一个 agent 当成
+      事实并一直维护下去，这是这个命令能造成的最大伤害。
     code:
-      - file: archive/2026-08-24/packages/exec/src/topological-sort.ts
-        symbol: topologicalSort
-        lines: "4-60"
-      - file: archive/2026-08-24/packages/exec/src/status-manager.ts
-        symbol: updateFnStatus
-        lines: "12-51"
-      - file: archive/2026-08-24/packages/exec/src/session-recovery.ts
-        symbol: getExecutionState
-        lines: "3-44"
+      - file: claude-companion/commands/ccscan.md
+        lines: "1-125"
+      - file: claude-companion/commands/ccthink.md
+        lines: "1-153"
+      - file: claude-companion/commands/ccbuild.md
+        lines: "1-122"
+      - file: claude-companion/commands/ccfix.md
+        lines: "1-110"
+      - file: claude-companion/commands/ccgraph.md
+        lines: "1-42"
     verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_exec_topologicalSort.test.t\
-        s"
-      pass: "exit 0"
+      manual: "五个命令各在一个真实项目上跑一遍，确认每一步都做到了它承诺的事；尤其看 /ccfix 是否报出准确行号"
+      signed_off: null
     future: >
-      claude-companion 的 frontier 是同一个概念的更简版本（一次过滤，不排序）。
+      产出的图直接就是 /ccbuild 的执行计划，中间不需要再转一次格式。
     log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
+      - date: "2026-08-25"
+        by: ccscan
+        note: "五个命令都写完并装出去了，但没有一个在真项目上从头到尾走过；人工验证未签字"
 
-  - id: I-018
-    name: "Windows 上的 spawn 兼容"
-    status: blocked
-    needs: [ I-017 ]
-    what: >
-      跑验证命令时先用 shell:false，只在 Windows 且报 ENOENT 时才退回 shell:true。
-    why: >
-      两种模式各有一个致命问题：shell:false 解析不了 npx 这类 .cmd 垫片； shell:true 会让 cmd.exe
-      重新解释命令里的元字符（比如箭头函数的 `>`）。
-    expected: >
-      `npx vitest run x.test.ts` 能跑起来；`node -e "() => 1"` 不会被 cmd.exe 改写。
-    how: >
-      先试无 shell，捕获 win32 的 ENOENT 之后重试一次带 shell。
-    why_this_way: >
-      顺序是关键：先试更安全的那个，只在它确实失败时才用危险的那个。 这一点被测试锁住了，不能合并成单一模式（AGENTS.md 里明确写了别动）。
-    code:
-      - file: archive/2026-08-24/packages/exec/src/status-manager.ts
-        symbol: runVerification
-        lines: "53-97"
-    verify:
-      command: "npx vitest run
-        archive/2026-08-24/.devcompanion/tests/test_exec_runVerification.test.t\
-        s"
-      pass: "exit 0"
-    future: >
-      任何要在 Windows 上跑用户提供命令的地方都会撞上同一个坑。
-    log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
+  # ─────────────────────────────────────────────────────────────
+  # 多 agent 共存与分发
+  # ─────────────────────────────────────────────────────────────
 
-  - id: I-019
-    name: "子 agent 的最小上下文"
-    status: blocked
-    needs: [ I-017 ]
+  - id: I-050
+    name: "文件名按 agent 认领"
+    status: done
+    needs: [ I-042 ]
     what: >
-      给每个待实现的节点组装一份刚好够用的提示词：它自己的规格、输出位置、 父模块的公开接口、已完成依赖的导出位置、验证命令。
+      ideas/graph.yaml 空着就用它并在文件里写 agent: claude；被别人占了就用
+      ideas/graph.claude.yaml，配套的 .approved / .scan-todo / log.md 一起加后缀。
+      选择做一次就固定，因为「后缀文件存在」本身就是答案。
     why: >
-      子 agent 拿到整份计划就会跑偏去改别的东西；拿得太少又实现不出来。
+      Claude、Codex、Cursor 三个 companion 住在同一个仓库里，都想要
+      ideas/graph.yaml。谁后写谁就毁掉前一个。
     expected: >
-      提示词里不含 ECL 文件路径 —— 子 agent 必须没有能力去写状态。
+      三边并存，谁也不覆盖谁；一个没有 agent: 键的 graph.yaml 被当成别人的
+      （反过来假设就会毁掉别人的东西）。
     how: >
-      buildSubagentContext 只挑这几样，formatSubagentPrompt 拼成 markdown。
+      nameIsTaken 先看后缀文件在不在（在 = 已经选过了），再看平名文件的 agent: 行；
+      agentName 按有没有扩展名决定后缀是插入还是追加（dotfile 没有扩展名可拆）。
     why_this_way: >
-      刻意排除 ECL 路径，是把「只有编排者写状态」这条纪律做成了 「子 agent 根本不知道文件在哪」——纪律靠结构保证，不靠提示词。
+      先到的保留干净名字。用「文件是否存在」当状态，而不是另存一份配置 ——
+      少一个可能和现实不一致的地方。agent: 键不是装饰，代码注释写明没有它，
+      下一次调用会把我们自己的平名图读成别人的，从而悄悄换到后缀文件、
+      抛弃刚写的图。
     code:
-      - file: archive/2026-08-24/packages/exec/src/build-subagent-context.ts
-        symbol: buildSubagentContext
-        lines: "11-124"
+      - file: claude-companion/ideas.ts
+        symbol: nameIsTaken
+        lines: "34-44"
+      - file: claude-companion/ideas.ts
+        symbol: agentName
+        lines: "47-52"
     verify:
-      command: "npx vitest run
-        .devcompanion/tests/test_exec_buildSubagentContext.test.ts"
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
-      并行执行互不相干的节点时，每个子 agent 的上下文互不污染。
+      再加第四个 agent 只需要换一个 AGENT 常量。
+
+  - id: I-051
+    name: "装进其它仓库"
+    status: doing
+    needs: [ I-047, I-049, I-050 ]
+    what: >
+      把五个命令复制进目标仓库的 .claude/commands/（路径改写成绝对路径）、
+      建一个空的 ideas/graph.yaml、把 guard 挂进 .claude/settings.json 的四个事件、
+      并写一份 ideas/.gitignore 区分「该进 git 的记录」和「本机状态」。
+    why: >
+      这套流程要用在所有项目上，不是只用在这一个仓库里。
+    expected: >
+      在别的仓库里五个斜杠命令都能调起来；不覆盖已经存在的、不属于这套工具的
+      命令文件（除非 --force）；重复安装结果不变，hook 不会越堆越多。
+    how: >
+      逐个复制 commands/*.md 并把 `claude-companion/` 替换成本目录绝对路径；
+      装 hook 时先滤掉自己旧的那条再加回去，别人的原样保留。
+    why_this_way: >
+      引擎（ideas.ts / guard.ts）刻意不复制 —— 所有仓库共用一份，修一次全部修好，
+      不会出现五个仓库跑着五个版本。代价是这个目录挪了位置之后需要重装。
+      graph 和 log.md 进 git（那是记录），.scan-todo 和 .approved 不进
+      （半途的扫描和一个人的签字是本机状态）。
+    code:
+      - file: claude-companion/install.ts
+        symbol: install
+        lines: "67-117"
+      - file: claude-companion/install.ts
+        symbol: installHooks
+        lines: "34-65"
+    verify:
+      manual: "在一个真实的、不是这个仓库的项目上装好，重启 Claude Code，确认五个命令能调起来且 hook 真的拦得住"
+      signed_off: null
+    future: >
+      新项目的第一步：装上，跑 /ccscan。
+
+  - id: I-052
+    name: "安装注册表与批量更新"
+    status: done
+    needs: [ I-051 ]
+    what: >
+      每次安装把目标绝对路径记进 claude-companion/.installs.json；
+      --status 逐文件报 current / stale / missing / foreign；--update 刷新全部，
+      foreign 的文件不碰。
+    why: >
+      引擎共用所以永远不过期，但五个命令文件是拷贝，拷贝会过期 —— 而且过去没有
+      任何办法知道它们装到哪去了、是不是最新的。
+    expected: >
+      改完命令文件跑 --status 会看到 stale，跑 --update 之后全变 current；
+      别人占了同名文件的报 foreign 且不被覆盖。
+    how: >
+      和「当前源文件现在会生成什么」逐字比对；比对前先统一换行符。
+    why_this_way: >
+      不用版本号：commit 里写明「一个你必须记得去 bump 的数字，总有一天会是错的，
+      而内容自己知道对不对」。归一化换行是必须的 —— Windows 上 git 给的源文件是
+      CRLF、装出去的是 LF，不归一化的话每个安装都会被永远报成过期，这个检查就废了。
+    code:
+      - file: claude-companion/install.ts
+        symbol: statusOf
+        lines: "156-167"
+      - file: claude-companion/install.ts
+        symbol: updateAll
+        lines: "170-179"
+      - file: claude-companion/install.ts
+        symbol: targets
+        lines: "127-135"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      claude-companion/ 整个目录挪位置之后也用 --update 修 —— 命令文件里烧的是绝对路径。
+
+  - id: I-053
+    name: "Cursor 侧的写闸门 companion"
+    status: doing
+    needs: [ I-041, I-050 ]
+    what: >
+      同一套想法图给 Cursor 用：五个 skill（idea-onboard / discuss / build / debug /
+      record）、一个 preToolUse 写闸门、一个 afterFileEdit 记录 hook、
+      一个 sessionStart 提示 hook。
+    why: >
+      工作流不该只服务一个 agent；而 Cursor 的 hook 模型和 Claude Code 不一样，
+      同一份 guard.ts 挂不上去。
+    expected: >
+      没有想法处于 doing 时，产品代码写不进去；只有 doing 且 build-ready 的想法的
+      code / verify 文件被解锁；两个 doing 的想法不能共用同一个 code 文件。
+    how: >
+      gate-lib.mjs 是纯 Node ESM 的共享判定层（hook 等不起 tsx 启动），
+      ideas.ts 和 hooks/gate.mjs 都调 decideWrite；harness 文件本身锁死，
+      agent 卸不掉这套闸门。
+    why_this_way: >
+      和 Claude 侧相反，Cursor 侧是 fail closed —— gate.mjs 顶部注释写明
+      「a crash or missing yaml denies the edit」。两边的取舍不同：Claude 侧的
+      guard 是七条独立规则，崩了放行；Cursor 侧只有一条规则（写闸门），
+      崩了拦下。为什么在同一个项目里选相反的失败方向，仓库里没有找到记录。
+    code:
+      - file: .cursor/companion/gate-lib.mjs
+        symbol: decideWrite
+        lines: "184-224"
+      - file: .cursor/hooks/gate.mjs
+        lines: "1-93"
+      - file: .cursor/companion/ideas.ts
+        symbol: setStatus
+        lines: "247-292"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_companion_gate.test.ts"
+      pass: "exit 0"
+    future: >
+      三个 companion 共享同一个 ideas/ 目录和同一套八问，人可以在三个 agent 之间换着用。
     log:
-      - date: 2026-08-25
-        by: ccfix
-        note: 代码已不在工作树里，只存在于 tag pre-archive-2026-08-24；不再是本仓库的活代码
+      - date: "2026-08-25"
+        by: ccscan
+        note: "gate-lib.mjs 第 201 / 208 行的 reason 文案里有编码损坏的问号，应该是箭头"
+
+  - id: I-054
+    name: "Codex 侧的 companion"
+    status: todo
+    needs: [ I-041, I-050 ]
+    what: >
+      同一套想法图给 Codex 用：一份 Python 引擎（scripts/companion.py）、
+      hooks/hooks.json、一个 codex-companion skill 及其 agents / references。
+    why: >
+      三个 agent 里 Codex 是唯一用 Python 而不是 TypeScript 的，
+      而它同样需要能读写这个仓库共享的 ideas/ 目录且不覆盖另外两边。
+    expected: >
+      Codex 侧能建图、能被闸门约束、写的是 graph.codex.yaml 一类的后缀文件，
+      并且和另外两个 companion 共存时谁也不动谁的账本。
+    how: null # 没读过 codex-companion/，不知道它现在实现到哪一步
+    why_this_way: null # 为什么 Codex 侧选 Python 而不是复用 TypeScript 引擎，没有找到记录
+    code:
+      - file: codex-companion/scripts/companion.py
+      - file: codex-companion/hooks/hooks.json
+    verify:
+      manual: "在 Codex 里装上并建一次图，确认它写的是自己的后缀文件、没有碰 Claude 和 Cursor 的账本"
+      signed_off: null
+    future: >
+      三边齐了之后，同一个项目的想法图可以由任意一个 agent 接手。
+    log:
+      - date: "2026-08-25"
+        by: ccscan
+        note: "codex-companion/ 在 ideas/.scanignore 里，本次扫描没有读它；这个节点的八问是从目录结构推的，不是从代码读的"
+
+  # ─────────────────────────────────────────────────────────────
+  # 已知缺陷
+  # ─────────────────────────────────────────────────────────────
+
+  - id: I-055
+    name: "扫描清单的并发安全"
+    status: todo
+    needs: [ I-046 ]
+    what: >
+      让 strike() 在多个 hook 进程同时划掉文件时不丢写、不写坏文件。
+    why: >
+      本次 /ccscan 亲眼撞上了：同一轮里并行 Read 五个文件，hook 也就并行跑了五个
+      guard 进程，各自 readWorklist → filter → writeFileSync。后写的覆盖先写的，
+      log 里留下证据（「读 .gitignore (还剩 32)」紧接着「读 package.json (还剩 32)」，
+      数字没降），并且清单里被写进了一行残缺内容 `n`。
+      结果是：文件真的读了，账本却说没读 —— R7 报出的数字反而不准了。
+    expected: >
+      并行 Read N 个文件之后，清单恰好少 N 行，且不出现任何不是文件路径的行。
+    how: >
+      待定。同一个文件里的 save() 已经用了「写临时文件 + rename」的原子写，
+      strike 却是裸 writeFileSync —— 至少要对齐；丢写还需要一把锁或者重试循环。
+    why_this_way: null # 还没调研；strike 上方的 ponytail 注释只谈了部分 Read 的取舍，没谈并发
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: strike
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
+      pass: "exit 0"
+    future: >
+      R7 的数字只有在这条修好之后才真的是「事实而不是估计」。
+
+  - id: I-056
+    name: "清掉指向已删包的 hook 配置"
+    status: todo
+    needs: [ I-047 ]
+    what: >
+      .claude/settings.json 里还挂着两条指向 packages/hook/dist/*.js 的 hook，
+      而 packages/ 已经在 ca7e956 里被删除了。
+    why: >
+      这两条 hook 每次编辑都会跑一次并且每次都失败。本仓库自己就是这套工作流的
+      第一个使用者，它自己的配置指着不存在的文件，说明「安装是可逆、可重入的」
+      这条承诺还没有覆盖卸载。
+    expected: >
+      settings.json 里只剩下 claude-companion/guard.ts 这一套 hook；
+      编辑文件时不再有失败的 hook 进程。
+    how: >
+      待定。可能就是手工删两段；也可能应该给 install.ts 加一个 uninstall
+      （README 现在说「卸载 = 删掉五个命令文件」，但没说 hook 怎么撤）。
+    why_this_way: null # 取舍未定：手工删一次，还是补一个真正的卸载路径
+    code:
+      - file: .claude/settings.json
+    verify:
+      manual: "编辑任意文件，确认没有 hook 报找不到 packages/hook/dist"
+      signed_off: null
+    future: >
+      有了卸载路径，这套东西装进别人的仓库才算真的可逆。
 
   # ─────────────────────────────────────────────────────────────
   # 终点
   # ─────────────────────────────────────────────────────────────
 
-  - id: I-040
-    name: "一套能装进其它仓库的工作流"
-    status: doing
-    needs: [ I-012, I-016, I-017 ]
+  - id: I-057
+    name: "装进任意仓库并在那里跑起来"
+    status: todo
+    needs: [ I-051, I-052, I-056 ]
     what: >
-      把这套 AI 开发工作流（命令 + 钩子 + 引擎）安装进任意一个仓库， 并在那里真正跑起来。
+      在一个陌生仓库里装上这套工作流，五个命令和七条 hook 规则在那边真的生效、
+      能更新、能撤下来。
     why: >
-      这是整个项目存在的目的 —— 所有其它工作都是为了抵达这里。 前面的追踪核心、报告、执行引擎都只是手段。
+      这是分发这一侧的终点：一套只能在自己仓库里跑的工作流没有价值。
     expected: >
-      在一个陌生仓库里装上之后，能走完「理解项目 → 提出想法 → 实现 → 调试」 一整条链路，并且过程留下可以在几个月后重新读懂的记录。
+      在一个真实的、不是这个仓库的项目上走完「装 → /ccscan → 批准 → /ccbuild」，
+      过程中 hook 真的拦住了该拦的，`--status` 能如实说出那个仓库是不是最新。
     how: >
-      待补完 —— 扫描进行到这里时还没读 scripts/install.ts 和 skills/*， 而这一节点的实现主要在那里。
-    why_this_way: null # 仓库里同时存在旧 ECL 流水线和新想法图两套安装路径，取舍未定
+      install.ts 已有的安装 + 注册表 + 更新三步，加上一条目前缺失的卸载路径。
+    why_this_way: >
+      终点定成「在别人的仓库里跑起来」而不是「功能齐全」，因为装出去一次会暴露
+      所有硬编码路径和平台假设，而这些在自己仓库里永远不会暴露。
     verify:
-      manual: "在一个真实的、不是这个仓库的项目上装好并走完一次完整流程"
+      manual: "在一个真实的外部项目上装好并走完一次完整流程，记录每一处卡住的地方"
       signed_off: null
     future: >
       装好之后，每个项目都有一张自己的想法图。
 
-# 扫描状态（2026-08-24）：读了 74/371 个文件，断点在 ideas/.scan-todo.claude。
-# history,render,llm,exec} 和 hook 的主干；未读：scripts/、skills/、
-# .claude/commands/、docs/ecl/、.devcompanion/tests/、claude-companion/、
-# packages/{cli,daemon,idea,dashboard}。断点在 ideas/.scan-todo。
+  - id: I-058
+    name: "工作流自己跑通一次"
+    status: todo
+    needs: [ I-048, I-049, I-051, I-055 ]
+    what: >
+      用这套工具改进它自己：/ccscan 建图 → /ccthink 提一个真实改动 →
+      /ccbuild 实现 → /ccfix 修一次，全程只通过这张图。
+    why: >
+      一套没有被自己用过的工作流，只是一份文档。README 的「老实说」一节自己承认：
+      引擎和守卫有测试，五个命令写完了，但还没在真项目上从头到尾走过一遍。
+    expected: >
+      完成一次真实改动，全过程留在 ideas/graph.claude.yaml 和 ideas/log.claude.md 里，
+      并且事后读这份记录足以在几个月后重新理解当时为什么那样做。
+    how: >
+      挑一个小的真实需求（I-055 或 I-056 就很合适）走完整条链，
+      把每一步卡住的地方记下来。
+    why_this_way: >
+      终点定成「跑通一次」而不是「功能齐全」，因为跑通一次会告诉你哪些功能
+      其实根本不需要。
+    verify:
+      manual: "读一遍那次改动留下的记录，看是否足以在几个月后重新理解当时的决定"
+      signed_off: null
+    future: >
+      跑通之后，才有资格决定接下来往哪个方向加东西。
+
+  - id: I-059
+    name: "三个 agent 的 companion 并存互不覆盖"
+    status: todo
+    needs: [ I-050, I-053, I-054 ]
+    what: >
+      Claude、Cursor、Codex 三套 companion 在同一个仓库里同时可用，
+      共享 ideas/ 目录，各写各的账本，谁也不覆盖谁。
+    why: >
+      同一个项目会被不同的 agent 接手。如果换一个 agent 就要重建一次想法图，
+      那这张图就不是项目的记录，只是某个 agent 的记忆。
+    expected: >
+      三边都装上之后，ideas/ 里是 graph.yaml + graph.claude.yaml + graph.cursor.yaml
+      各归各家；任何一边跑 init / 记录 / 渲染都不会动到另外两边的文件。
+    how: >
+      文件名认领规则（I-050）已经是共享机制，三份实现里都有一份等价的
+      nameIsTaken / agentName。剩下的是 Codex 侧补齐，以及一次三边同装的验证。
+    why_this_way: >
+      不做一个统一的多 agent 抽象层，而是让三份实现各自遵守同一条命名约定 ——
+      因为三个 agent 的 hook 模型和语言都不同，共享代码会变成最小公分母。
+      代价是这条约定要在三处分别正确，所以它必须简单到一眼看得出对不对。
+    verify:
+      manual: "在一个仓库里同时装上三套 companion，各跑一次建图，确认三份账本互不覆盖"
+      signed_off: null
+    future: >
+      项目的想法图从此独立于用哪个 agent。
