@@ -82,12 +82,12 @@ n_I_002["图的解析与校验"]
 n_I_003["前沿查询"]
 n_I_004["可点击的图"]
 n_I_005["状态写回与记录"]
-n_I_006["/ccscan — 通读项目建图"]
-n_I_007["/ccthink — 对齐、拆分、调研、排期"]
-n_I_008["/ccbuild — 先测试后实现"]
-n_I_009["/ccfix — 先查一致性，再查想法"]
-n_I_010["/ccgraph — 看图"]
-n_I_013["强制层：七条 hook 规则"]
+n_I_006["/ccscan — 通读<br>项目建图"]
+n_I_007["/ccthink — 对<br>齐、拆分、调研、排期"]
+n_I_008["/ccbuild — 先<br>测试后实现"]
+n_I_009["/ccfix — 先查一<br>致性，再查想法"]
+n_I_010["/ccgraph — 看<br>图"]
+n_I_013["强制层：七条 hook<br>规则"]
 n_I_011["装到其它仓库"]
 n_I_012["整条工作流跑通"]
 n_I_001 --> n_I_002
@@ -420,7 +420,19 @@ click n_I_012 call nodeClick("I-012")</pre></div></div>
 </section>
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "dark" });
+  // ELK packs big graphs far tighter than the default dagre and routes edges
+  // with fewer crossings; if its CDN module fails to load, dagre still renders.
+  let layout = "dagre";
+  try {
+    const elk = await import("https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs");
+    mermaid.registerLayoutLoaders(elk.default);
+    layout = "elk";
+  } catch (e) { console.warn("ELK layout unavailable, falling back to dagre", e); }
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: "loose", theme: "dark", layout,
+    elk: { mergeEdges: true, nodePlacementStrategy: "LINEAR_SEGMENTS" },
+    flowchart: { nodeSpacing: 30, rankSpacing: 55, curve: "basis", padding: 8 },
+  });
 
   // ── pan / zoom ────────────────────────────────────────────────────────────
   // Plain CSS transform on a wrapper: no library, no dependency, and the SVG
@@ -521,6 +533,9 @@ click n_I_012 call nodeClick("I-012")</pre></div></div>
 
   // Render first, then fit — the diagram has no size until mermaid has drawn it.
   await mermaid.run({ nodes: document.querySelectorAll(".mermaid") });
+  // ELK lays out asynchronously: run() can resolve before the svg has its
+  // final viewBox, and fitting then would silently do nothing. Wait for it.
+  for (let i = 0; i < 120 && !natural(); i++) await new Promise(requestAnimationFrame);
   fit();
   new ResizeObserver(() => { if (k === 1 && tx === 0 && ty === 0) fit(); }).observe(viewport);
 </script></body></html>

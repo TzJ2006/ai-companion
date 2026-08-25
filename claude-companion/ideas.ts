@@ -361,6 +361,22 @@ const esc = (s: unknown = "") =>
 
 const NONE = "<span class='none'>—</span>";
 
+// A rank's width is the sum of its node widths, so one long name per node is
+// what blows the diagram out sideways. Wrap at ~12 display characters: CJK
+// breaks anywhere, latin words stay whole.
+const wrapLabel = (name: string, max = 12): string => {
+  if ([...name].length <= max) return name;
+  const units = name.match(/[\u3000-\u9fff\uf900-\ufaff\uff00-\uffef]|[^\s\u3000-\u9fff\uf900-\ufaff\uff00-\uffef]+|\s+/g) ?? [name];
+  const lines: string[] = [];
+  let line = "";
+  for (const u of units) {
+    if (line && [...(line + u)].length > max) { lines.push(line.trim()); line = ""; }
+    line += u;
+  }
+  if (line.trim()) lines.push(line.trim());
+  return lines.join("<br>");
+};
+
 export function render(g: Graph): string {
   const map = byId(g);
   const ends = new Set(g.endpoints ?? []);
@@ -376,7 +392,7 @@ export function render(g: Graph): string {
     "classDef blocked fill:#7c2d12,stroke:#fdba74,color:#fff7ed,stroke-dasharray:2 2;",
     "classDef endpoint fill:#581c87,stroke:#d8b4fe,color:#faf5ff,stroke-width:3px;",
   ];
-  for (const i of g.ideas) mermaid.push(`${mid(i.id)}["${(i.name || i.id).replace(/["()<>]/g, "")}"]`);
+  for (const i of g.ideas) mermaid.push(`${mid(i.id)}["${wrapLabel((i.name || i.id).replace(/["()<>]/g, ""))}"]`);
   for (const i of g.ideas) {
     for (const need of i.needs ?? []) if (map.has(need)) mermaid.push(`${mid(need)} --> ${mid(i.id)}`);
   }
@@ -498,7 +514,19 @@ export function render(g: Graph): string {
 ${g.ideas.map(card).join("\n")}
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-  mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "dark" });
+  // ELK packs big graphs far tighter than the default dagre and routes edges
+  // with fewer crossings; if its CDN module fails to load, dagre still renders.
+  let layout = "dagre";
+  try {
+    const elk = await import("https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs");
+    mermaid.registerLayoutLoaders(elk.default);
+    layout = "elk";
+  } catch (e) { console.warn("ELK layout unavailable, falling back to dagre", e); }
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: "loose", theme: "dark", layout,
+    elk: { mergeEdges: true, nodePlacementStrategy: "LINEAR_SEGMENTS" },
+    flowchart: { nodeSpacing: 30, rankSpacing: 55, curve: "basis", padding: 8 },
+  });
 
   // ── pan / zoom ────────────────────────────────────────────────────────────
   // Plain CSS transform on a wrapper: no library, no dependency, and the SVG
@@ -599,6 +627,9 @@ ${g.ideas.map(card).join("\n")}
 
   // Render first, then fit — the diagram has no size until mermaid has drawn it.
   await mermaid.run({ nodes: document.querySelectorAll(".mermaid") });
+  // ELK lays out asynchronously: run() can resolve before the svg has its
+  // final viewBox, and fitting then would silently do nothing. Wait for it.
+  for (let i = 0; i < 120 && !natural(); i++) await new Promise(requestAnimationFrame);
   fit();
   new ResizeObserver(() => { if (k === 1 && tx === 0 && ty === 0) fit(); }).observe(viewport);
 </script></body></html>`;
