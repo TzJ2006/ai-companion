@@ -1,0 +1,16 @@
+---
+description: This project is a gated idea-graph harness. Product code cannot be edited unless an idea is doing.
+alwaysApply: true
+---
+
+# Cursor Companion (harness)
+
+Source of truth: `ideas/graph.yaml`, or `ideas/graph.cursor.yaml` if that name was already taken. Visual: matching `graph.html`. Format: `.cursor/companion/FORMAT.md`. `ideas.ts paths` prints the resolved files.
+
+Engine: `npx tsx .cursor/companion/ideas.ts` — `check` | `next` | `show` | `new` | `set` | `allow` | `enforce` | `log` | `render` | `paths`.
+
+**Writes are gated.** The preToolUse hook denies product-code edits unless an idea is `doing` (`how` + `expected` + `verify` + `code.file`, prerequisites done) and the file is in that idea's `code` or `verify.command`.
+
+Always allowed: this companion's ledger (`graph.yaml` / `log.md` / `graph.html`, or the `.cursor` suffix if the plain names are taken). Emergency: `ideas.ts enforce off`.
+
+Skills: `/idea-onboard` · `/idea-discuss` · `/idea-build` · `/idea-debug` · `/idea-record`.

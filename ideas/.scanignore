@@ -1,0 +1,9 @@
+# /ccscan 跳过这些路径前缀。一行一个。
+# 决定于 2026-08-24 的扫描范围确认。
+
+# 第三方 skill 包，本项目零引用（109 个 example + 多语言 README）
+skills/.agents/skills/huashu-nuwa/
+
+# Codex 和 Cursor 的并行版本 —— 各自独立演进，两边不互相覆盖
+codex-companion/
+cursor-companion/

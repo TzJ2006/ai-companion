@@ -1,0 +1,391 @@
+version: 1
+project: claude-companion
+overview: >
+  这套工具描述它自己。一个真实的小图：引擎已经建好并且有测试（已完成），五个命令
+  写完了但还没在真项目上完整跑过（进行中），终点是"用它自己的流程改进它自己"。
+  渲染：npx tsx claude-companion/ideas.ts render --file claude-companion/example/graph.yaml
+
+# 什么叫"这个工具做完了"
+endpoints: [I-012]
+
+ideas:
+  - id: I-001
+    name: "八问的想法节点"
+    status: doing        # 格式定了，但还没人在真实项目上签过字
+    needs: []
+    what: >
+      一个想法节点的格式：八个必答问题（是什么／为什么／预期结果／如何实现／
+      为什么这样实现／代码在哪／如何验证／未来怎么用），加上一条 needs 边表示前置。
+    why: >
+      AI 会产生幻觉、prompt 对不齐需求、返工之后自己也看不懂项目框架 —— 这三件事
+      的根因是同一个：想法从来没被写下来，只有代码被写下来了。
+    expected: >
+      任何一个想法，人和 AI 读同一份记录，得到同一个理解；一个陌生 agent 冷启动
+      读这个文件就能接着干，不需要上下文。
+    how: >
+      YAML，一个扁平的 ideas 列表，一种节点、一种边。规格写在 FORMAT.md。
+    why_this_way: >
+      选一层扁平结构，而不是需求／特性／模块／函数四层 —— 因为提出的诉求是
+      "所有想法都变成一个个模块"，模块不是分类法。四层结构本身就是让人看不懂
+      项目的那种复杂度。YAML 而不是 JSON，因为八个回答都是成段的散文，
+      JSON 里写多行散文没法看。
+    code:
+      - file: claude-companion/FORMAT.md
+        lines: "1-120"
+    verify:
+      manual: "拿一个真实想法填一遍八问，看有没有哪个问题填不进去、或者填完还说不清这个想法"
+      signed_off: null
+    future: >
+      整套工具的所有其它部分都读写这一个格式；加字段的成本是一个 YAML key。
+
+  - id: I-002
+    name: "图的解析与校验"
+    status: done
+    needs: [I-001]
+    what: >
+      读 graph.yaml，检查 id 唯一、needs 都指向存在的想法、图无环、done 的节点
+      必须有 code 和 verify、code 指的文件真的存在、人工验证必须有人签字。
+    why: >
+      没有校验，图会安静地烂掉：done 却没有代码、code 指向已经删掉的文件、
+      两个想法互相依赖。烂掉的图比没有图更糟，因为它看起来是完整的。
+    expected: >
+      一个健康的图 check 通过、退出码 0；每一种烂法都能被指出来，并且指出是哪个 id。
+    how: >
+      DFS 三色标记查环；从 endpoints 反向遍历 needs 找出不通向任何终点的想法；
+      existsSync 验证 code 路径。
+    why_this_way: >
+      把"done 必须有 code + verify"做成硬错误而不是警告 —— 这条是整套东西成立的
+      前提：如果"完成"可以没有证据，那这张图就只是一份愿望清单。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: check
+        lines: "123-181"
+      - file: claude-companion/ideas.ts
+        symbol: findCycle
+        lines: "80-99"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccbuild 在动手前先跑它；/ccgraph 用它的输出告诉人接下来该做什么。
+
+  - id: I-003
+    name: "前沿查询"
+    status: done
+    needs: [I-002]
+    what: >
+      算出"现在可以做哪些想法"：状态是 todo、并且所有前置都已经 done 的节点。
+    why: >
+      "接下来做什么"应该是图算出来的，不该是另一份要手动同步的 TODO 列表 ——
+      两份清单一定会不一致。
+    expected: >
+      next 打出来的就是可以立刻动手的想法；一个都没有的时候，说清楚是全做完了
+      还是全被挡住了。
+    how: >
+      一次过滤：status === todo 且 needs.every(已完成)。不需要拓扑排序。
+    why_this_way: >
+      不做拓扑排序 —— 前沿只需要一次过滤就够了，做完一个再算一次即可。
+      少一个可能出错的地方。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: frontier
+        lines: "72-78"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccbuild 的入口；互不相干的前沿想法可以并行交给多个 subagent。
+
+  - id: I-004
+    name: "可点击的图"
+    status: done
+    needs: [I-002]
+    what: >
+      渲染成一个自包含网页：上面是只显示想法名称的完整项目图，每个节点可以点，
+      点进去是八问的全部回答，以及它的前置想法和"它是哪些想法的前置"。
+    why: >
+      看不见形状的项目，最后一定会被重写。图是给人看的，不是给机器看的。
+    expected: >
+      打开 graph.html，能一眼看出项目形状；点任意节点能看到它的完整想法；
+      从详情页可以沿着两个方向继续点下去。
+    how: >
+      Mermaid flowchart TD 做布局，节点标签只放 name，click 回调跳到下面的详情卡片。
+      前置方向读 needs，后继方向反向扫一遍 needs。
+    why_this_way: >
+      用 Mermaid（CDN）而不是 d3 或 cytoscape：静态 HTML，没有构建步骤，
+      也不用起服务器 —— 双击就能打开。代价是超大的图会挤，到那时再分页。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: render
+        lines: "218-341"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      /ccthink 在拆分之后用它让人审核形状，动手之前就能发现拆错了。
+
+  - id: I-005
+    name: "状态写回与记录"
+    status: done
+    needs: [I-002]
+    what: >
+      改一个想法的状态，同时在它自己的 log 里追加一条记录；写回时保留 YAML 注释；
+      拒绝没有 code / verify 的 done，拒绝没签字的人工验证。
+    why: >
+      改了什么代码、什么文档、什么想法，需要有一份详细的记录。原因要放在想法旁边，
+      而不是另一个文件里 —— 放远了就没人读。
+    expected: >
+      set 之后重新读，状态变了、log 多了一条、原来的注释还在；
+      对着一个没有代码的想法 set done 会失败并说明原因。
+    how: >
+      yaml 的 parseDocument 保留注释和格式，setIn 定点修改，
+      写临时文件再 rename（原子写，写到一半崩溃不会毁掉原图）。
+    why_this_way: >
+      走 Document 而不是 parse → 改 → stringify：后者会把整个文件的注释和排版
+      全部抹掉，而注释正是人留给自己的东西。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: setStatus
+        lines: "185-209"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      pass: "exit 0"
+    future: >
+      五个命令都通过它写状态，所以记录不会漏 —— 不存在"忘了记一笔"这条路径。
+
+  - id: I-006
+    name: "/ccscan — 通读项目建图"
+    status: doing
+    needs: [I-001, I-002]
+    what: >
+      读完整个项目的每个文件、每份文档、每行代码和注释，抽出所有想法，
+      连成图，渲染出来。
+    why: >
+      接手一个自己已经记不住的项目时，第一件事是重新看清它的形状。
+    expected: >
+      跑完得到一张图，加上一份诚实的清单：读了多少文件、跳过了哪些、
+      哪些节点的 why_this_way 或 verify 没能找到答案。
+    how: >
+      按"意图→结构→代码→历史"的顺序读；从代码结构和 git log 里抽想法；
+      终点问人；找不到理由的地方写 null 并列进报告。
+    why_this_way: >
+      明确禁止编造 why_this_way —— 编出来的理由会被下一个 agent 当成事实并且
+      一直维护下去，这是这个命令能造成的最大伤害。
+    code:
+      - file: claude-companion/commands/ccscan.md
+        lines: "1-95"
+    verify:
+      manual: "在一个自己熟悉的仓库上跑一遍，看抽出来的想法是不是自己心里的那些想法"
+      signed_off: null
+    future: >
+      每个新仓库的第一步；代码走远了之后用 --refresh 重新对齐。
+
+  - id: I-007
+    name: "/ccthink — 对齐、拆分、调研、排期"
+    status: doing
+    needs: [I-004, I-006]
+    what: >
+      三个高层问题对齐 → 拆成小想法 → 渲染出图让人审核 → 调研（仓库内 + 联网，
+      能借就借）→ 回答如何实现和为什么这样实现 → 设计测试方案 → 按周排出完整计划。
+    why: >
+      一句 prompt 对不齐需求。返工的成本远高于先花二十分钟对齐的成本。
+    expected: >
+      拿到一份可以直接交给别人执行的计划：图审过了、借用的东西列清楚了、
+      每个节点的测试要断言什么说明白了、按周排好了。
+    how: >
+      六步，顺序固定。第 2 步之后必须停下来等人审图；第 3 步的调研必须在
+      回答"如何实现"之前完成。
+    why_this_way: >
+      "能借就借"设成这个命令里优先级最高的规则：除非人明确禁止某个项目，
+      只要存在可用的东西就借，自己造需要一个经得起追问的理由。
+      顺序上把调研放在"如何实现"之前，否则调研只会变成给已有答案找依据。
+    code:
+      - file: claude-companion/commands/ccthink.md
+        lines: "1-135"
+    verify:
+      manual: "拿一个真实的新需求走一遍，看第 2 步的图有没有真的改变拆分方式"
+      signed_off: null
+    future: >
+      产出的图直接就是 /ccbuild 的执行计划，中间不需要再转一次格式。
+
+  - id: I-008
+    name: "/ccbuild — 先测试后实现"
+    status: doing
+    needs: [I-003, I-005, I-007]
+    what: >
+      按拓扑序推进前沿：先写测试并确认它失败，再实现，再验证，
+      填上真实行号，标记完成；失败三次转 /ccfix。
+    why: >
+      "假设这个节点已经被实现了，如何知道它和预期一致" —— 这个问题必须在
+      实现之前回答，否则答案会被写成"反正现在这样"。
+    expected: >
+      每个 done 的想法背后都有一个先写、先失败、后通过的测试。
+    how: >
+      读 next 拿前沿 → show 读八问 → 写测试跑到失败 → 实现 → 验证 →
+      set done。code 指向同一个文件的想法不并行。
+    why_this_way: >
+      "测试必须先失败"是刻意的：一个从没红过的测试，可能根本没在测它声称测的东西。
+    code:
+      - file: claude-companion/commands/ccbuild.md
+        lines: "1-110"
+    verify:
+      manual: "让它建一个真实想法，检查测试文件的提交时间确实早于实现"
+      signed_off: null
+    future: >
+      互不相干的前沿节点可以并行，图本身就说明了哪些互不相干。
+
+  - id: I-009
+    name: "/ccfix — 先查一致性，再查想法"
+    status: doing
+    needs: [I-005, I-008]
+    what: >
+      第一步：对照 code 指的行，逐条找出实现和想法不一致的地方，带行号引用，
+      交人审核后再改。第二步：如果一致，那就是想法本身错了 —— 摆出真实的
+      输入输出和完整八问，让人来改想法。
+    why: >
+      大部分 bug 是代码和想法不一致；剩下的是想法本身错了。
+      跳过第一步直接改想法，会把对的代码改坏。
+    expected: >
+      每一条发现都带文件和行号；没有行号的不算发现。
+    how: >
+      读 code 指的每一段，逐项对照 what / how / why_this_way / expected / needs；
+      列出全部不一致后停下来，一条条问人：是代码错了，还是想法过期了。
+    why_this_way: >
+      故意不让 AI 自己判断哪边对 —— 它恰恰是判断不了的那一方，
+      这就是这一步以人审收尾的原因。第二步要求摆真实值而不是举例值，
+      因为这一步的全部意义就是让人看见现实。
+    code:
+      - file: claude-companion/commands/ccfix.md
+        lines: "1-105"
+    verify:
+      manual: "制造一处文档与实现的偏差，看它是否报出准确的行号而不是泛泛而谈"
+      signed_off: null
+    future: >
+      改完的想法回到 /ccbuild，因为 verify 变了，测试要重写。
+
+  - id: I-010
+    name: "/ccgraph — 看图"
+    status: doing
+    needs: [I-004]
+    what: >
+      渲染 + 校验 + 报告：项目现在什么状态、哪些想法可以做、哪里出了问题。
+    why: >
+      随时能问一句"我到哪了"，而不用自己去读 YAML。
+    expected: >
+      一条命令拿到：图的路径、状态统计、前沿、以及所有 check 报出来的问题。
+    how: >
+      调 check / render / next，按严重程度排序报出来，最后给一句
+      "接下来该跑哪个命令"。
+    why_this_way: >
+      只看不改。看和改混在一个命令里，人就没法安心地问"现在怎么样了"。
+    code:
+      - file: claude-companion/commands/ccgraph.md
+        lines: "1-45"
+    verify:
+      manual: "在一个有问题的图上跑，看报出来的问题排序是否合理"
+      signed_off: null
+    future: >
+      每天开工前跑一次。
+
+  - id: I-013
+    name: "强制层：七条 hook 规则"
+    status: done
+    needs: [I-002, I-008]
+    what: >
+      七条跑在 harness 层、agent 绕不过去的规则：每次编辑自动记录；已有想法的
+      status 只能通过 set 修改；某个想法的测试文件不存在就不准写它的实现；
+      how / why_this_way 没填就不准动它的代码；图有错误就不准结束回合；
+      没有人批准过的图不准开始实现；文件只有被真的 Read 过才算扫描过。
+    why: >
+      前面五个命令都只是 prompt —— agent 可以跳过调研、可以编造 why_this_way、
+      可以直接用 Edit 把 status 改成 done 绕过所有校验、可以自问自答说"看起来
+      合理"然后接着往下做、可以只读了主要文件就宣称通读完了。
+      写在提示词里的纪律，到了第三十轮对话就不算数了。
+    expected: >
+      跳过测试直接写实现会被拒绝并告诉它先写哪个文件；手改 status 会被拒绝并
+      给出该跑的 set 命令；没人批准过的图上动手会被拒绝并要求先给人看；
+      扫描进度是"已读 487/511"这样的数字而不是一句"我读完了"；
+      每次编辑都在 ideas/log.md 里留下一行，不需要 agent 配合。
+    how: >
+      一个 guard.ts 挂在 PreToolUse / PostToolUse / Stop / UserPromptSubmit
+      四个事件上，按 hook_event_name 分派；退出码 2 + stderr 表示"拦下并把原因
+      告诉 Claude"。批准绑定在图的 sha256 上；扫描清单由 git ls-files -z 生成，
+      每次 Read 划掉一个。install.ts 负责把它加进目标仓库的
+      .claude/settings.json，且不覆盖别人的 hook。
+    why_this_way: >
+      只强制机器判得了的事：文件存不存在、字段填没填、状态变没变、check 过不过、
+      人有没有亲口批准、文件有没有真的被读进上下文。
+      批准挂 UserPromptSubmit、扫描挂 Read，是同一个思路：把"我做了"绑到一个
+      不真做就产生不了的事件上 —— 任何 agent 写得进去的标记，agent 就能伪造。
+      判断"整条消息就是批准"而不是"消息里含批准"，否则"我不批准"会被算成批准。
+      八个回答的质量、联网搜索是否诚实 —— 这些仍然强制不了，唯一的防线是让遗漏
+      在 check 和渲染里可见。硬拦一个判不准的东西，比不拦更糟。
+      所有异常路径一律放行（fail open）：守卫自己崩了不能把人锁在外面。
+    code:
+      - file: claude-companion/guard.ts
+        symbol: decide
+        lines: "155-173"
+      - file: claude-companion/guard.ts
+        symbol: graphHash
+        lines: "89-119"
+      - file: claude-companion/ideas.ts
+        symbol: strike
+        lines: "124-190"
+      - file: claude-companion/install.ts
+        symbol: installHooks
+        lines: "33-71"
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
+      pass: "exit 0"
+    future: >
+      要加新纪律，就在 decide 里加一条规则加一个测试 —— 前提是它机器判得了。
+
+  - id: I-011
+    name: "装到其它仓库"
+    status: doing
+    needs: [I-006, I-007, I-008, I-009, I-010, I-013]
+    what: >
+      把五个命令装进任意一个仓库的 .claude/commands/，路径改写成绝对路径，
+      并建一个空的 ideas/graph.yaml。
+    why: >
+      这套流程要用到我所有的项目上，不是只用在这一个仓库里。
+    expected: >
+      在别的仓库里能直接用这五个斜杠命令；不覆盖已经存在的、不属于这套工具的命令文件。
+    how: >
+      复制 commands/*.md 并把 `claude-companion/` 替换成本目录的绝对路径；
+      引擎不复制。
+    why_this_way: >
+      引擎只有一份，所有仓库共用 —— 修一次就全部修好，不会出现五个仓库跑着
+      五个版本。代价是移动这个目录之后需要重装。
+    code:
+      - file: claude-companion/install.ts
+        symbol: install
+        lines: "22-64"
+    verify:
+      manual: "装进一个真实仓库，确认五个命令都能调起来、并且没有覆盖已有命令"
+      signed_off: null
+    future: >
+      新项目的第一步：装上，跑 /ccscan。
+
+  - id: I-012
+    name: "整条工作流跑通"
+    status: todo
+    needs: [I-011]
+    what: >
+      用这套工具自己改进它自己：/ccscan 建图 → /ccthink 提一个真实改动 →
+      /ccbuild 实现 → /ccfix 修一次 —— 全程只通过这个图。
+    why: >
+      一套没有被自己用过的工作流，只是一份文档。
+    expected: >
+      完成一次真实改动，全过程留在 ideas/graph.yaml 和 ideas/log.md 里，
+      并且事后读这份记录能看懂当时为什么那样做。
+    how: >
+      挑一个小的真实需求走完整条链，把每一步卡住的地方记下来。
+    why_this_way: >
+      终点定成"跑通一次"而不是"功能齐全"，因为跑通一次会告诉你哪些功能
+      其实根本不需要。
+    verify:
+      manual: "读一遍那次改动留下的记录，看是否足以在几个月后重新理解当时的决定"
+      signed_off: null
+    future: >
+      跑通之后，才有资格决定接下来往哪个方向加东西。

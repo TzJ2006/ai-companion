@@ -6,11 +6,13 @@ dist/
 *.tsbuildinfo
 
 # local runtime state — but keep the test suite tracked
-.devcompanion/*
-!.devcompanion/tests/
 
 # local-only Claude Code settings
 .claude/settings.local.json
+
+# Cursor Companion engine install (yaml lives here)
+.cursor/companion/node_modules/
+.cursor/companion/package-lock.json
 
 # one-off backup snapshots and scratch files (history preserved in git)
 archive/
@@ -18,3 +20,10 @@ temp_*
 
 # regenerable HTML reports at the repo root (real output goes to .devcompanion/reports/)
 /*.html
+ideas/graph.html
+
+# >>> AI Dev Companion (managed)
+# 3a tests-preserving (aidev init / HistoryStore; installer may replace this block)
+.devcompanion/*
+!.devcompanion/tests/
+# <<< AI Dev Companion

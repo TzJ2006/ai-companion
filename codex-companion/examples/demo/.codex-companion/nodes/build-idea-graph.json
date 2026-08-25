@@ -1,0 +1,64 @@
+{
+  "schema_version": "idea-node/v1",
+  "id": "build-idea-graph",
+  "name": "Build Idea Graph",
+  "status": "planned",
+  "what": "Decompose approved intent into small idea nodes connected by prerequisite edges.",
+  "why": "A graph preserves the project structure and lets the user inspect one decision without losing the whole.",
+  "expected_result": "Acyclic, clickable project graph whose nodes expose all eight idea sections.",
+  "implementation": {
+    "how": "Store one JSON file per node, validate dependencies, derive reverse edges, and render self-contained HTML.",
+    "why_this_way": "Per-node JSON is deterministic, dependency-free, merge-friendly, and keeps edges in one source of truth.",
+    "target_paths": [
+      "scripts/companion.py",
+      "skills/codex-companion/**"
+    ],
+    "research": {
+      "local_findings": [
+        "The repository already contains HTML DAG rendering ideas, but this plugin stays isolated from its ECL model."
+      ],
+      "external_findings": [
+        "https://github.github.com/spec-kit/ separates specification, planning, tasks, and implementation."
+      ],
+      "reuse_decision": "Reuse the staged artifact pattern; implement the graph renderer with browser-native HTML, CSS, and SVG."
+    },
+    "weekly_plan": [
+      {
+        "week": 1,
+        "outcome": "Validated schema and user-approved name-only decomposition graph."
+      },
+      {
+        "week": 2,
+        "outcome": "Researched node details and a clickable self-contained HTML review surface."
+      }
+    ]
+  },
+  "code_refs": [],
+  "verification": [
+    {
+      "id": "graph-interaction",
+      "kind": "automated",
+      "plan": "Render a graph, click each node, and verify eight sections plus prerequisites and dependents are visible.",
+      "command": "python -m unittest discover -s tests -v",
+      "test_paths": [
+        "tests/test_companion.py"
+      ],
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "future_use": "Planning, implementation, debugging, and onboarding all share the same graph contract.",
+  "depends_on": [
+    "align-intent"
+  ],
+  "inputs": [
+    "Approved intent contract",
+    "Project and external research"
+  ],
+  "outputs": [
+    "Validated Idea Graph",
+    "Clickable HTML report"
+  ],
+  "created_at": "2026-08-24T00:00:00+00:00",
+  "updated_at": "2026-08-24T00:00:00+00:00"
+}
