@@ -2,21 +2,20 @@ version: 1
 agent: claude
 project: ai-companion
 overview: >
-  三套「想法图」开发工作流，一个仓库里并排住着，各服务一个 agent：
-  claude-companion（TypeScript，五个斜杠命令 + 七条 hook 规则）、
-  cursor-companion（TypeScript，写闸门式）、codex-companion（Python）。
-  共同的核心是一句话：项目里的每一个想法都是图上的一个节点，前置关系是唯一的边，
-  每个节点必须回答八个问题。所有东西存在 ideas/graph.yaml 一个文件里。
-  它要解决的是同一个根因：想法从来没被写下来过，只有代码被写下来了。
+  三套「想法图」开发工作流，一个仓库里并排住着，各服务一个 agent： claude-companion（TypeScript，五个斜杠命令 + 七条
+  hook 规则）、 cursor-companion（TypeScript，靠「写代码之前先拦一道闸门」来强制流程）、
+  codex-companion（Python）。 共同的核心是一句话：项目里的每一个想法都是图上的一个节点，前置关系是唯一的边，
+  每个节点必须回答八个问题。所有东西存在 ideas/graph.yaml 一个文件里。 它要解决的是同一个根因：想法从来没被写下来过，只有代码被写下来了。
 
   2026-08-25 重建：commit ca7e956 把旧的 monorepo（packages/ scripts/ skills/ docs/，
-  即函数级变更追踪那一整套）移进 gitignore 的 archive/ 并从工作树上删除，只留在 git
-  历史和 tag pre-archive-2026-08-24 里。旧图的 I-001~I-019 描述的就是那批代码，
-  已经不是本仓库的活代码，因此整张图按人的决定重建，新 id 从 I-041 起
-  （FORMAT.md 规定 id 永不复用）。
+  即函数级变更追踪那一整套）移进 gitignore 的 archive/ 并从工作树上删除，只留在 git 历史和 tag
+  pre-archive-2026-08-24 里。旧图的 I-001~I-019 描述的就是那批代码， 已经不是本仓库的活代码，因此整张图按人的决定重建，新
+  id 从 I-041 起 （FORMAT.md 规定 id 永不复用）。
 
-# 什么叫「这个项目做完了」（2026-08-25 由人在 /ccscan 第 2 步选定）
-endpoints: [ I-057, I-058, I-059 ]
+# 什么叫「这个项目做完了」（2026-08-25 由人在 /ccscan 第 2 步选定；
+# 2026-08-29 /ccthink 新增 I-068「改图即改项目」；
+# 2026-08-29 /ccthink 新增 I-075「共同基座：改一处三边生效」）
+endpoints: [ I-057, I-058, I-059, I-068, I-075 ]
 
 ideas:
 
@@ -25,26 +24,22 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-041
-    name: "八问的想法节点格式"
+    name: "想法节点的记录格式：每个想法必须回答八个问题"
     status: doing
     needs: []
     what: >
       一个想法节点的格式：id / name / status / needs，加上八个必答问题
-      （是什么、为什么有它、预期结果、如何实现、为什么这样实现、代码在哪几行、
-      如何验证、未来怎么用），外加一条 append-only 的 log。
+      （是什么、为什么有它、预期结果、如何实现、为什么这样实现、代码在哪几行、 如何验证、未来怎么用），外加一条 append-only 的 log。
     why: >
-      AI 出幻觉、prompt 对不齐需求、返工之后自己也看不懂项目框架 —— 这三件事的
-      根因是同一个：想法从来没被写下来，只有代码被写下来了。
+      AI 出幻觉、prompt 对不齐需求、返工之后自己也看不懂项目框架 —— 这三件事的 根因是同一个：想法从来没被写下来，只有代码被写下来了。
     expected: >
-      同一个想法，人和 AI 读同一份记录得到同一个理解；一个冷启动的陌生 agent
-      读这个文件就能接着干，不需要额外上下文。
+      同一个想法，人和 AI 读同一份记录得到同一个理解；一个冷启动的陌生 agent 读这个文件就能接着干，不需要额外上下文。
     how: >
-      YAML，一个扁平的 ideas 列表，一种节点、一种边。规格写在 FORMAT.md，
-      三个 companion 各有一份基本一致的副本。
+      YAML，一个扁平的 ideas 列表，一种节点、一种边。规格写在 FORMAT.md， 三个 companion 各有一份基本一致的副本。
     why_this_way: >
       选一层扁平结构而不是需求／特性／模块／函数四层 —— FORMAT.md 结尾写明：
-      诉求是「所有想法都变成一个个模块」，模块不是分类法，四层结构本身就是让人
-      看不懂项目的那种复杂度。YAML 而不是 JSON，因为八个回答都是成段散文。
+      诉求是「所有想法都变成一个个模块」，模块不是分类法，四层结构本身就是让人 看不懂项目的那种复杂度。YAML 而不是
+      JSON，因为八个回答都是成段散文。
     code:
       - file: claude-companion/FORMAT.md
         lines: "1-143"
@@ -59,25 +54,22 @@ ideas:
         note: "重建后的第一个节点；人工验证未签字，所以不是 done"
 
   - id: I-042
-    name: "图的解析与校验"
+    name: "读取想法图，并检查它有没有坏掉"
     status: done
     needs: [ I-041 ]
     what: >
-      读 graph.yaml，检查 id 唯一、needs 指向存在的想法、图无环、done 的节点必须有
-      code 和 verify、done 的 code 路径真的存在、人工验证必须有人签字；
-      八问里没填的字段报成警告。
+      读 graph.yaml，检查 id 唯一、needs 指向存在的想法、图无环、done 的节点必须有 code 和 verify、done 的
+      code 路径真的存在、人工验证必须有人签字； 八问里没填的字段报成警告。
     why: >
-      没有校验，图会安静地烂掉：done 却没有代码、code 指向已删掉的文件、两个想法
-      互相依赖。烂掉的图比没有图更糟，因为它看起来是完整的。
+      没有校验，图会安静地烂掉：done 却没有代码、code 指向已删掉的文件、两个想法 互相依赖。烂掉的图比没有图更糟，因为它看起来是完整的。
     expected: >
       健康的图 check 通过、退出码 0；每一种烂法都能被指出来并说明是哪个 id。
     how: >
-      DFS 三色标记查环；从 endpoints 反向遍历 needs 找出通不到任何终点的孤儿；
-      existsSync 验证 done 节点的 code 路径（todo 的不查 —— 那是计划中的位置）。
+      DFS 三色标记查环；从 endpoints 反向遍历 needs 找出通不到任何终点的孤儿； existsSync 验证 done 节点的
+      code 路径（todo 的不查 —— 那是计划中的位置）。
     why_this_way: >
       把「done 必须有 code + verify」做成硬错误而不是警告 —— 代码注释写明这是整套
-      东西成立的前提：如果「完成」可以没有证据，这张图就只是一份愿望清单。
-      todo 的 code 路径刻意不查，否则计划本身会被当成错误。
+      东西成立的前提：如果「完成」可以没有证据，这张图就只是一份愿望清单。 todo 的 code 路径刻意不查，否则计划本身会被当成错误。
     code:
       - file: claude-companion/ideas.ts
         symbol: check
@@ -92,25 +84,22 @@ ideas:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
-      /ccbuild 动手前先跑它；/ccgraph 用它的输出告诉人接下来该做什么；
-      guard 的 R5 用它拦住「回合结束时图是坏的」。
+      /ccbuild 动手前先跑它；/ccgraph 用它的输出告诉人接下来该做什么； guard 的 R5 用它拦住「回合结束时图是坏的」。
 
   - id: I-043
-    name: "前沿查询"
+    name: "算出现在可以立刻动手做的想法有哪些"
     status: done
     needs: [ I-042 ]
     what: >
       算出现在可以做哪些想法：status 是 todo、且所有前置都已 done 的节点。
     why: >
-      「接下来做什么」应该是图算出来的，不该是另一份要手动同步的 TODO 列表 ——
-      两份清单一定会不一致。
+      「接下来做什么」应该是图算出来的，不该是另一份要手动同步的 TODO 列表 —— 两份清单一定会不一致。
     expected: >
       next 打出来的就是可以立刻动手的想法；一个都没有时说清是全做完了还是全被挡住了。
     how: >
       一次过滤：status === todo 且 needs.every(前置已 done)。
     why_this_way: >
-      不做拓扑排序 —— 代码注释写明前沿只需要一次过滤，做完一个再算一次即可，
-      少一个可能出错的地方。
+      不做拓扑排序 —— 代码注释写明「现在可以做什么」只需要一次过滤，做完一个再算一次即可， 少一个可能出错的地方。
     code:
       - file: claude-companion/ideas.ts
         symbol: frontier
@@ -119,27 +108,24 @@ ideas:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
-      /ccbuild 的入口；互不相干的前沿想法可以并行交给多个 subagent。
+      /ccbuild 的入口；互不相干的、都可以立刻动手的想法可以并行交给多个 subagent。
 
   - id: I-044
-    name: "状态写回与记录"
+    name: "修改想法状态时，自动留下一条修改记录"
     status: done
     needs: [ I-042 ]
     what: >
-      改一个想法的状态，同时在它自己的 log 里追加一条记录；写回时保留 YAML 注释；
-      拒绝没有 code / verify 的 done，拒绝没签字的人工验证。
+      改一个想法的状态，同时在它自己的 log 里追加一条记录；写回时保留 YAML 注释； 拒绝没有 code / verify 的
+      done，拒绝没签字的人工验证。
     why: >
-      改了什么代码、什么文档、什么想法要有详细记录，而原因要放在想法旁边，
-      不是另一个文件里 —— 放远了就没人读。
+      改了什么代码、什么文档、什么想法要有详细记录，而原因要放在想法旁边， 不是另一个文件里 —— 放远了就没人读。
     expected: >
-      set 之后重新读：状态变了、log 多了一条、原来的注释还在；对一个没有 code 的
-      想法 set done 会失败并说明原因。
+      set 之后重新读：状态变了、log 多了一条、原来的注释还在；对一个没有 code 的 想法 set done 会失败并说明原因。
     how: >
       yaml 的 parseDocument 保留注释和格式，setIn 定点修改，写临时文件再 rename。
     why_this_way: >
-      走 Document 而不是 parse → 改 → stringify：后者会抹掉整个文件的注释和排版，
-      而注释正是人留给自己的东西。rename 是原子的，写到一半崩溃不会毁掉原图
-      （代码注释：a crash mid-write leaves the old graph intact）。
+      走 Document 而不是 parse → 改 → stringify：后者会抹掉整个文件的注释和排版， 而注释正是人留给自己的东西。rename
+      是原子的，写到一半崩溃不会毁掉原图 （代码注释：a crash mid-write leaves the old graph intact）。
     code:
       - file: claude-companion/ideas.ts
         symbol: setStatus
@@ -154,26 +140,22 @@ ideas:
       五个命令都通过它写状态，所以不存在「忘了记一笔」这条路径。
 
   - id: I-045
-    name: "可点击可缩放的想法图"
+    name: "把想法图渲染成一个可以点击、缩放的网页"
     status: done
     needs: [ I-042 ]
     what: >
-      渲染成一个自包含网页：上面是只显示想法名称的完整项目图，可平移缩放；
-      点任意节点跳到下面的详情卡片，卡片里是八问的全部回答，以及它的前置想法和
+      渲染成一个自包含网页：上面是只显示想法名称的完整项目图，可平移缩放； 点任意节点跳到下面的详情卡片，卡片里是八个问题的全部回答，以及它的前置想法和
       「它是哪些想法的前置」，两个方向都能继续点。
     why: >
-      看不见形状的项目最后一定会被重写。图是给人看的，不是给机器看的，
-      而人要判断的三件事（节点做得太多、缺边、通不到终点）只有画出来才判断得了。
+      看不见形状的项目最后一定会被重写。图是给人看的，不是给机器看的， 而人要判断的三件事（节点做得太多、缺边、通不到终点）只有画出来才判断得了。
     expected: >
-      双击打开 graph.html 就能一眼看出项目形状；缩放之后线条依然锐利；
-      拖拽不会被误判成点击节点。
+      双击打开 graph.html 就能一眼看出项目形状；缩放之后线条依然锐利； 拖拽不会被误判成点击节点。
     how: >
-      Mermaid flowchart TD（CDN）做布局，节点标签只放 name，click 回调跳详情。
-      缩放靠改 SVG 自身的 width/height 让矢量重画，平移靠 wrapper 的 translate。
+      Mermaid flowchart TD（CDN）做布局，节点标签只放 name，click 回调跳详情。 缩放靠改 SVG 自身的
+      width/height 让矢量重画，平移靠 wrapper 的 translate。
     why_this_way: >
-      用 Mermaid 而不是 d3 / cytoscape：静态 HTML，没有构建步骤也不用起服务器。
-      缩放刻意不用 CSS scale() —— 代码注释写明 scale 会把图层栅格化一次再拉伸，
-      那正是之前看起来发虚的原因；fit 只缩不放，因为把一张小图放到 235% 不是
+      用 Mermaid 而不是 d3 / cytoscape：静态 HTML，没有构建步骤也不用起服务器。 缩放刻意不用 CSS scale() ——
+      代码注释写明 scale 会把图层栅格化一次再拉伸， 那正是之前看起来发虚的原因；fit 只缩不放，因为把一张小图放到 235% 不是
       任何人说「适应窗口」时想要的。
     code:
       - file: claude-companion/ideas.ts
@@ -186,27 +168,22 @@ ideas:
       /ccthink 第 2 步用它让人在动手之前就看出拆分错了；/ccscan 用它交付结果。
 
   - id: I-046
-    name: "可核验的扫描清单"
+    name: "用一张文件清单证明项目真的被读完了"
     status: done
     needs: [ I-042 ]
     what: >
-      /ccscan 开始时把项目里值得读的文件列成一张清单（ideas/.scan-todo），
-      每 Read 一个文件由 hook 划掉一个；check 在清单没清空时持续警告。
-      ideas/.scanignore 可以按路径前缀排除（第三方包、别的 agent 的并行版本）。
+      /ccscan 开始时把项目里值得读的文件列成一张清单（ideas/.scan-todo）， 每 Read 一个文件由 hook
+      划掉一个；check 在清单没清空时持续警告。 ideas/.scanignore 可以按路径前缀排除（第三方包、别的 agent 的并行版本）。
     why: >
-      「我读完了」是一句 agent 随口就能说的话。一张图如果是从半个项目上建起来的，
-      它看起来和完整的一模一样 —— 这比没有图更糟。
+      「我读完了」是一句 agent 随口就能说的话。一张图如果是从半个项目上建起来的， 它看起来和完整的一模一样 —— 这比没有图更糟。
     expected: >
-      扫描进度是「已读 37/42」这样的数字而不是一句保证；Grep / Glob 不算，
-      因为它们不把文件内容放进上下文。
+      扫描进度是「已读 37/42」这样的数字而不是一句保证；Grep / Glob 不算， 因为它们不把文件内容放进上下文。
     how: >
-      git ls-files -z --cached --others --exclude-standard 生成清单
-      （拿不到 git 时退化成目录遍历），按扩展名和 .scanignore 过滤；
-      strike() 按大小写不敏感的相对路径划掉一行。
+      git ls-files -z --cached --others --exclude-standard 生成清单 （拿不到 git
+      时退化成目录遍历），按扩展名和 .scanignore 过滤； strike() 按大小写不敏感的相对路径划掉一行。
     why_this_way: >
-      用 git ls-files 而不是自己遍历，因为它已经懂 .gitignore、子模块和大小写；
-      加 -z 是因为不加时 git 会把非 ASCII 路径转义成八进制，那些文件就永远划不掉
-      （代码注释明确写了这一点）。node_modules 显式排除，因为仓库可能真的把它提交了。
+      用 git ls-files 而不是自己遍历，因为它已经懂 .gitignore、子模块和大小写； 加 -z 是因为不加时 git 会把非
+      ASCII 路径转义成八进制，那些文件就永远划不掉 （代码注释明确写了这一点）。node_modules 显式排除，因为仓库可能真的把它提交了。
     code:
       - file: claude-companion/ideas.ts
         symbol: listProjectFiles
@@ -228,33 +205,28 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-047
-    name: "七条 hook 强制规则"
+    name: "七条挂在 hook 上、agent 绕不过去的强制规则"
     status: done
     needs: [ I-042, I-046 ]
     what: >
       一个 guard.ts 挂在 PreToolUse / PostToolUse / Stop / UserPromptSubmit 上，
-      按事件分派七条规则：R1 每次编辑自动记进 log；R2 已有想法的 status 只能走 set；
-      R3 测试文件不存在就不准写实现；R4 how / why_this_way 没填就不准动它的代码；
-      R5 图有错误就不准结束回合；R6 没人批准的图不准开始实现；
-      R7 文件只有被真的 Read 过才算扫描过。
+      按事件分派七条规则：R1 每次编辑自动记进 log；R2 已有想法的 status 只能走 set； R3 测试文件不存在就不准写实现；R4 how
+      / why_this_way 没填就不准动它的代码； R5 图有错误就不准结束回合；R6 没人批准的图不准开始实现； R7 文件只有被真的 Read
+      过才算扫描过。
     why: >
-      五个命令都只是提示词 —— agent 可以跳过调研、编造 why_this_way、直接 Edit
-      把 status 改成 done 绕过全部校验、自问自答说「看起来合理」然后继续。
-      写在提示词里的纪律，到第三十轮对话就不算数了。
+      五个命令都只是提示词 —— agent 可以跳过调研、编造 why_this_way、直接 Edit 把 status 改成 done
+      绕过全部校验、自问自答说「看起来合理」然后继续。 写在提示词里的纪律，到第三十轮对话就不算数了。
     expected: >
-      跳过测试直接写实现会被拒绝并告诉它先写哪个文件；手改 status 会被拒绝并给出
-      该跑的 set 命令；图坏着不准结束回合；每次编辑在 ideas/log.md 留一行，
-      不需要 agent 配合。
+      跳过测试直接写实现会被拒绝并告诉它先写哪个文件；手改 status 会被拒绝并给出 该跑的 set 命令；图坏着不准结束回合；每次编辑在
+      ideas/log.md 留一行， 不需要 agent 配合。
     how: >
-      退出码 2 + stderr = 「拦下并把原因告诉 Claude」，这是四个 hook 事件上唯一
-      通用的机制，所以一个脚本按 hook_event_name 分派就够。
-      install.ts 负责写进目标仓库的 .claude/settings.json 且不覆盖别人的 hook。
+      退出码 2 + stderr = 「拦下并把原因告诉 Claude」，这是四个 hook 事件上唯一 通用的机制，所以一个脚本按
+      hook_event_name 分派就够。 install.ts 负责写进目标仓库的 .claude/settings.json 且不覆盖别人的
+      hook。
     why_this_way: >
-      只强制机器判得了的事：文件存不存在、字段填没填、状态变没变、check 过不过。
-      八个回答的质量、联网搜索是否诚实强制不了，唯一的防线是让遗漏在 check 和
-      渲染里可见 —— 硬拦一个判不准的东西比不拦更糟。所有异常路径一律 fail open
-      （代码注释：a guard that crashes must never block work），
-      守卫自己崩了不能把人锁在外面；AIDEV_GUARD=off 是逃生口。
+      只强制机器判得了的事：文件存不存在、字段填没填、状态变没变、check 过不过。 八个回答的质量、联网搜索是否诚实强制不了，唯一的防线是让遗漏在
+      check 和 渲染里可见 —— 硬拦一个判不准的东西比不拦更糟。所有异常路径一律 fail open （代码注释：a guard that
+      crashes must never block work）， 守卫自己崩了不能把人锁在外面；AIDEV_GUARD=off 是逃生口。
     code:
       - file: claude-companion/guard.ts
         symbol: decide
@@ -272,28 +244,24 @@ ideas:
       要加新纪律就在 decide 里加一条规则加一个测试 —— 前提是它机器判得了。
 
   - id: I-048
-    name: "不可伪造的人工批准"
+    name: "只有人亲手输入「批准」才能生效的批准机制"
     status: done
     needs: [ I-047 ]
     what: >
-      批准绑定在图的 sha256 前 12 位上，只有 UserPromptSubmit 事件里整条消息就是
-      「批准 / approve / 同意」时才写进 ideas/.approved；图改一个字批准就失效。
-      .approved 和 .scan-todo 这两个账本文件本身被 PreToolUse 拦住，不能用 Write 写。
+      批准绑定在图的 sha256 前 12 位上，只有 UserPromptSubmit 事件里整条消息就是 「批准 / approve /
+      同意」时才写进 ideas/.approved；图改一个字批准就失效。 .approved 和 .scan-todo
+      这两个记录批准与扫描进度的文件本身被 PreToolUse 拦住， agent 不能用 Write 直接写它们。
     why: >
-      agent 写得进去的标记，agent 就能伪造。一个「我已确认」的标记如果由被约束者
-      自己写，它约束不了任何东西。
+      agent 写得进去的标记，agent 就能伪造。一个「我已确认」的标记如果由被约束者 自己写，它约束不了任何东西。
     expected: >
-      没批准过的图上动手会被拒绝并要求先给人看；「我不批准」不会被算成批准；
-      任何工具事件都产生不了批准。
+      没批准过的图上动手会被拒绝并要求先给人看；「我不批准」不会被算成批准； 任何工具事件都产生不了批准。
     how: >
-      APPROVALS 是一个集合，比对的是 trim + 小写 + 去尾部标点之后的整条 prompt；
-      换行符先归一化再做哈希，免得 CRLF 检出被读成另一张图。
+      APPROVALS 是一个集合，比对的是 trim + 小写 + 去尾部标点之后的整条 prompt； 换行符先归一化再做哈希，免得 CRLF
+      检出被读成另一张图。
     why_this_way: >
       把「我做了」绑到一个不真做就产生不了的事件上：UserPromptSubmit 只有人亲手敲
-      消息才会触发。判断「整条消息就是批准」而不是「消息里含批准」，否则
-      「我不批准」会被算成批准。
-      已知天花板（README 如实写出）：agent 仍可以用 Bash 直接喂一个假的
-      UserPromptSubmit 给 guard.ts。R6 挡的是顺手跳过，不是铁了心要绕过去的 agent。
+      消息才会触发。判断「整条消息就是批准」而不是「消息里含批准」，否则 「我不批准」会被算成批准。 已知天花板（README 如实写出）：agent
+      仍可以用 Bash 直接喂一个假的 UserPromptSubmit 给 guard.ts。R6 挡的是顺手跳过，不是铁了心要绕过去的 agent。
     code:
       - file: claude-companion/guard.ts
         symbol: graphHash
@@ -315,29 +283,24 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-049
-    name: "五个斜杠命令"
+    name: "五个斜杠命令，覆盖从建图到实现的完整工作流"
     status: doing
     needs: [ I-041, I-043, I-044, I-045 ]
     what: >
-      /ccscan 通读项目建图、/ccthink 对齐→拆分→调研→设计测试→按周排期、
-      /ccbuild 测试先行地实现、/ccfix 先查代码与想法是否一致再查想法本身、
-      /ccgraph 只看不改。每个都是一份 markdown 提示词。
+      /ccscan 通读项目建图、/ccthink 对齐→拆分→调研→设计测试→按周排期、 /ccbuild 测试先行地实现、/ccfix
+      先查代码与想法是否一致再查想法本身、 /ccgraph 只看不改。每个都是一份 markdown 提示词。
     why: >
-      引擎只是数据结构，真正决定产出质量的是「按什么顺序做事」。
-      一句 prompt 对不齐需求，返工的成本远高于先花二十分钟对齐。
+      引擎只是数据结构，真正决定产出质量的是「按什么顺序做事」。 一句 prompt 对不齐需求，返工的成本远高于先花二十分钟对齐。
     expected: >
-      每个命令在真实项目上跑一遍，产出的是它承诺的东西：
-      /ccscan 给出诚实的覆盖数字和一份「我也不知道」的清单，
-      /ccfix 给出带行号的不一致而不是泛泛而谈。
+      每个命令在真实项目上跑一遍，产出的是它承诺的东西： /ccscan 给出诚实的覆盖数字和一份「我也不知道」的清单， /ccfix
+      给出带行号的不一致而不是泛泛而谈。
     how: >
-      纯 markdown，步骤固定不可跳；关键处停下来等人（ccthink 第 2 步审拆分、
-      ccfix 第 1 步审不一致、所有命令的最后等「批准」）。
+      纯 markdown，步骤固定不可跳；关键处停下来等人（ccthink 第 2 步审拆分、 ccfix 第 1
+      步审不一致、所有命令的最后等「批准」）。
     why_this_way: >
-      /ccthink 把「能借就借」设成命令里优先级最高的规则，并把调研放在回答
-      「如何实现」之前 —— 否则调研只会变成给已有答案找依据。
-      /ccfix 刻意不让 AI 自己判断代码和想法哪边对：它恰恰是判断不了的那一方。
-      /ccscan 明确禁止编造 why_this_way，因为编出来的理由会被下一个 agent 当成
-      事实并一直维护下去，这是这个命令能造成的最大伤害。
+      /ccthink 把「能借就借」设成命令里优先级最高的规则，并把调研放在回答 「如何实现」之前 —— 否则调研只会变成给已有答案找依据。
+      /ccfix 刻意不让 AI 自己判断代码和想法哪边对：它恰恰是判断不了的那一方。 /ccscan 明确禁止编造
+      why_this_way，因为编出来的理由会被下一个 agent 当成 事实并一直维护下去，这是这个命令能造成的最大伤害。
     code:
       - file: claude-companion/commands/ccscan.md
         lines: "1-125"
@@ -364,27 +327,23 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-050
-    name: "文件名按 agent 认领"
+    name: "用文件名后缀区分不同 agent，各写各的文件"
     status: done
     needs: [ I-042 ]
     what: >
       ideas/graph.yaml 空着就用它并在文件里写 agent: claude；被别人占了就用
       ideas/graph.claude.yaml，配套的 .approved / .scan-todo / log.md 一起加后缀。
-      选择做一次就固定，因为「后缀文件存在」本身就是答案。
+      选择做一次就固定，因为「带后缀的文件已经存在」本身就是答案。
     why: >
-      Claude、Codex、Cursor 三个 companion 住在同一个仓库里，都想要
-      ideas/graph.yaml。谁后写谁就毁掉前一个。
+      Claude、Codex、Cursor 三个 companion 住在同一个仓库里，都想要 ideas/graph.yaml。谁后写谁就毁掉前一个。
     expected: >
-      三边并存，谁也不覆盖谁；一个没有 agent: 键的 graph.yaml 被当成别人的
-      （反过来假设就会毁掉别人的东西）。
+      三边并存，谁也不覆盖谁；一个没有 agent: 键的 graph.yaml 被当成别人的 （反过来假设就会毁掉别人的东西）。
     how: >
-      nameIsTaken 先看后缀文件在不在（在 = 已经选过了），再看平名文件的 agent: 行；
-      agentName 按有没有扩展名决定后缀是插入还是追加（dotfile 没有扩展名可拆）。
+      nameIsTaken 先看带后缀的文件在不在（在 = 已经选过了），再看不带后缀的文件里的 agent: 行； agentName
+      按有没有扩展名决定后缀是插入还是追加（dotfile 没有扩展名可拆）。
     why_this_way: >
-      先到的保留干净名字。用「文件是否存在」当状态，而不是另存一份配置 ——
-      少一个可能和现实不一致的地方。agent: 键不是装饰，代码注释写明没有它，
-      下一次调用会把我们自己的平名图读成别人的，从而悄悄换到后缀文件、
-      抛弃刚写的图。
+      先到的保留干净名字。用「文件是否存在」当状态，而不是另存一份配置 —— 少一个可能和现实不一致的地方。agent: 键不是装饰，代码注释写明没有它，
+      下一次调用会把我们自己写的、不带后缀的图误认成别人的，从而悄悄换到 带后缀的文件、抛弃刚写的图。
     code:
       - file: claude-companion/ideas.ts
         symbol: nameIsTaken
@@ -399,26 +358,24 @@ ideas:
       再加第四个 agent 只需要换一个 AGENT 常量。
 
   - id: I-051
-    name: "装进其它仓库"
+    name: "把这套工作流安装进其它仓库"
     status: doing
     needs: [ I-047, I-049, I-050 ]
     what: >
-      把五个命令复制进目标仓库的 .claude/commands/（路径改写成绝对路径）、
-      建一个空的 ideas/graph.yaml、把 guard 挂进 .claude/settings.json 的四个事件、
-      并写一份 ideas/.gitignore 区分「该进 git 的记录」和「本机状态」。
+      把五个命令复制进目标仓库的 .claude/commands/（路径改写成绝对路径）、 建一个空的 ideas/graph.yaml、把 guard
+      挂进 .claude/settings.json 的四个事件、 并写一份 ideas/.gitignore 区分「该进 git
+      的记录」和「本机状态」。
     why: >
       这套流程要用在所有项目上，不是只用在这一个仓库里。
     expected: >
-      在别的仓库里五个斜杠命令都能调起来；不覆盖已经存在的、不属于这套工具的
-      命令文件（除非 --force）；重复安装结果不变，hook 不会越堆越多。
+      在别的仓库里五个斜杠命令都能调起来；不覆盖已经存在的、不属于这套工具的 命令文件（除非 --force）；重复安装结果不变，hook 不会越堆越多。
     how: >
-      逐个复制 commands/*.md 并把 `claude-companion/` 替换成本目录绝对路径；
-      装 hook 时先滤掉自己旧的那条再加回去，别人的原样保留。
+      逐个复制 commands/*.md 并把 `claude-companion/` 替换成本目录绝对路径； 装 hook
+      时先滤掉自己旧的那条再加回去，别人的原样保留。
     why_this_way: >
       引擎（ideas.ts / guard.ts）刻意不复制 —— 所有仓库共用一份，修一次全部修好，
-      不会出现五个仓库跑着五个版本。代价是这个目录挪了位置之后需要重装。
-      graph 和 log.md 进 git（那是记录），.scan-todo 和 .approved 不进
-      （半途的扫描和一个人的签字是本机状态）。
+      不会出现五个仓库跑着五个版本。代价是这个目录挪了位置之后需要重装。 graph 和 log.md 进 git（那是记录），.scan-todo 和
+      .approved 不进 （半途的扫描和一个人的签字是本机状态）。
     code:
       - file: claude-companion/install.ts
         symbol: install
@@ -433,25 +390,22 @@ ideas:
       新项目的第一步：装上，跑 /ccscan。
 
   - id: I-052
-    name: "安装注册表与批量更新"
+    name: "记录装到了哪些仓库，并能检查是否过期、批量更新"
     status: done
     needs: [ I-051 ]
     what: >
-      每次安装把目标绝对路径记进 claude-companion/.installs.json；
-      --status 逐文件报 current / stale / missing / foreign；--update 刷新全部，
-      foreign 的文件不碰。
+      每次安装把目标绝对路径记进 claude-companion/.installs.json； --status 逐文件报 current /
+      stale / missing / foreign；--update 刷新全部， foreign 的文件不碰。
     why: >
-      引擎共用所以永远不过期，但五个命令文件是拷贝，拷贝会过期 —— 而且过去没有
-      任何办法知道它们装到哪去了、是不是最新的。
+      引擎共用所以永远不过期，但五个命令文件是拷贝，拷贝会过期 —— 而且过去没有 任何办法知道它们装到哪去了、是不是最新的。
     expected: >
-      改完命令文件跑 --status 会看到 stale，跑 --update 之后全变 current；
-      别人占了同名文件的报 foreign 且不被覆盖。
+      改完命令文件跑 --status 会看到 stale，跑 --update 之后全变 current； 别人占了同名文件的报 foreign
+      且不被覆盖。
     how: >
       和「当前源文件现在会生成什么」逐字比对；比对前先统一换行符。
     why_this_way: >
-      不用版本号：commit 里写明「一个你必须记得去 bump 的数字，总有一天会是错的，
-      而内容自己知道对不对」。归一化换行是必须的 —— Windows 上 git 给的源文件是
-      CRLF、装出去的是 LF，不归一化的话每个安装都会被永远报成过期，这个检查就废了。
+      不用版本号：commit 里写明「一个你必须记得去 bump 的数字，总有一天会是错的， 而内容自己知道对不对」。归一化换行是必须的 ——
+      Windows 上 git 给的源文件是 CRLF、装出去的是 LF，不归一化的话每个安装都会被永远报成过期，这个检查就废了。
     code:
       - file: claude-companion/install.ts
         symbol: statusOf
@@ -469,28 +423,25 @@ ideas:
       claude-companion/ 整个目录挪位置之后也用 --update 修 —— 命令文件里烧的是绝对路径。
 
   - id: I-053
-    name: "Cursor 侧的写闸门 companion"
-    status: doing
+    name: "Cursor 版本：没有进行中的想法时，不允许写产品代码"
+    status: blocked
     needs: [ I-041, I-050 ]
     what: >
       同一套想法图给 Cursor 用：五个 skill（idea-onboard / discuss / build / debug /
-      record）、一个 preToolUse 写闸门、一个 afterFileEdit 记录 hook、
-      一个 sessionStart 提示 hook。
+      record）、一个在写文件之前拦截的 preToolUse 闸门、一个 afterFileEdit 记录 hook、 一个
+      sessionStart 提示 hook。
     why: >
-      工作流不该只服务一个 agent；而 Cursor 的 hook 模型和 Claude Code 不一样，
-      同一份 guard.ts 挂不上去。
+      工作流不该只服务一个 agent；而 Cursor 的 hook 模型和 Claude Code 不一样， 同一份 guard.ts 挂不上去。
     expected: >
-      没有想法处于 doing 时，产品代码写不进去；只有 doing 且 build-ready 的想法的
-      code / verify 文件被解锁；两个 doing 的想法不能共用同一个 code 文件。
+      没有想法处于 doing 时，产品代码写不进去；只有 doing 且 build-ready 的想法的 code / verify 文件被解锁；两个
+      doing 的想法不能共用同一个 code 文件。
     how: >
-      gate-lib.mjs 是纯 Node ESM 的共享判定层（hook 等不起 tsx 启动），
-      ideas.ts 和 hooks/gate.mjs 都调 decideWrite；harness 文件本身锁死，
-      agent 卸不掉这套闸门。
+      gate-lib.mjs 是纯 Node ESM 的共享判定层（hook 等不起 tsx 启动）， ideas.ts 和
+      hooks/gate.mjs 都调 decideWrite；harness 文件本身锁死， agent 卸不掉这套闸门。
     why_this_way: >
-      和 Claude 侧相反，Cursor 侧是 fail closed —— gate.mjs 顶部注释写明
-      「a crash or missing yaml denies the edit」。两边的取舍不同：Claude 侧的
-      guard 是七条独立规则，崩了放行；Cursor 侧只有一条规则（写闸门），
-      崩了拦下。为什么在同一个项目里选相反的失败方向，仓库里没有找到记录。
+      和 Claude 侧相反，Cursor 侧是 fail closed —— gate.mjs 顶部注释写明 「a crash or missing
+      yaml denies the edit」。两边的取舍不同：Claude 侧的 guard 是七条独立规则，崩了放行；Cursor
+      侧只有一条规则（写文件之前的拦截）， 崩了拦下。为什么在同一个项目里选相反的失败方向，仓库里没有找到记录。
     code:
       - file: .cursor/companion/gate-lib.mjs
         symbol: decideWrite
@@ -504,61 +455,66 @@ ideas:
       command: "npx vitest run .devcompanion/tests/test_companion_gate.test.ts"
       pass: "exit 0"
     future: >
-      三个 companion 共享同一个 ideas/ 目录和同一套八问，人可以在三个 agent 之间换着用。
+      三个 companion 共享同一个 ideas/ 目录和同一套八个必答问题，人可以在三个 agent 之间换着用。
     log:
-      - date: "2026-08-25"
+      - date: 2026-08-25
         by: ccscan
-        note: "gate-lib.mjs 第 201 / 208 行的 reason 文案里有编码损坏的问号，应该是箭头"
+        note: gate-lib.mjs 第 201 / 208 行的 reason 文案里有编码损坏的问号，应该是箭头
+      - date: 2026-08-29
+        by: ccthink
+        note: 被共同基座取代：Cursor 独立版本不再补齐，改由 I-073 通过基座接入
 
   - id: I-054
-    name: "Codex 侧的 companion"
-    status: todo
+    name: "Codex 版本：用 Python 实现的同一套想法图工作流"
+    status: blocked
     needs: [ I-041, I-050 ]
     what: >
-      同一套想法图给 Codex 用：一份 Python 引擎（scripts/companion.py）、
-      hooks/hooks.json、一个 codex-companion skill 及其 agents / references。
+      同一套想法图给 Codex 用：一份 Python 引擎（scripts/companion.py）、 hooks/hooks.json、一个
+      codex-companion skill 及其 agents / references。
     why: >
-      三个 agent 里 Codex 是唯一用 Python 而不是 TypeScript 的，
-      而它同样需要能读写这个仓库共享的 ideas/ 目录且不覆盖另外两边。
+      三个 agent 里 Codex 是唯一用 Python 而不是 TypeScript 的， 而它同样需要能读写这个仓库共享的 ideas/
+      目录且不覆盖另外两边。
     expected: >
-      Codex 侧能建图、能被闸门约束、写的是 graph.codex.yaml 一类的后缀文件，
-      并且和另外两个 companion 共存时谁也不动谁的账本。
+      Codex 侧能建图、能被闸门约束、写的是 graph.codex.yaml 一类带后缀的文件， 并且和另外两个 companion
+      共存时，谁也不碰谁的图和记录文件。
     how: null # 没读过 codex-companion/，不知道它现在实现到哪一步
     why_this_way: null # 为什么 Codex 侧选 Python 而不是复用 TypeScript 引擎，没有找到记录
     code:
       - file: codex-companion/scripts/companion.py
       - file: codex-companion/hooks/hooks.json
     verify:
-      manual: "在 Codex 里装上并建一次图，确认它写的是自己的后缀文件、没有碰 Claude 和 Cursor 的账本"
+      manual: "在 Codex 里装上并建一次图，确认它写的是自己带后缀的文件、没有碰 Claude 和 Cursor 的图和记录文件"
       signed_off: null
     future: >
       三边齐了之后，同一个项目的想法图可以由任意一个 agent 接手。
     log:
-      - date: "2026-08-25"
+      - date: 2026-08-25
         by: ccscan
-        note: "codex-companion/ 在 ideas/.scanignore 里，本次扫描没有读它；这个节点的八问是从目录结构推的，不是从代码读的"
+        note: codex-companion/ 在 ideas/.scanignore 里，本次扫描没有读它；这个节点的八问是从目录结构推的，不是从代码读的
+      - date: 2026-08-29
+        by: ccthink
+        note: 被共同基座取代：Python 版本不再补齐，改由 I-074 退役并通过基座接入
 
   # ─────────────────────────────────────────────────────────────
   # 已知缺陷
   # ─────────────────────────────────────────────────────────────
 
   - id: I-055
-    name: "扫描清单的并发安全"
+    name: "修复扫描清单被多个进程同时写入时会丢记录的问题"
     status: todo
     needs: [ I-046 ]
     what: >
       让 strike() 在多个 hook 进程同时划掉文件时不丢写、不写坏文件。
     why: >
-      本次 /ccscan 亲眼撞上了：同一轮里并行 Read 五个文件，hook 也就并行跑了五个
-      guard 进程，各自 readWorklist → filter → writeFileSync。后写的覆盖先写的，
-      log 里留下证据（「读 .gitignore (还剩 32)」紧接着「读 package.json (还剩 32)」，
-      数字没降），并且清单里被写进了一行残缺内容 `n`。
-      结果是：文件真的读了，账本却说没读 —— R7 报出的数字反而不准了。
+      本次 /ccscan 亲眼撞上了：同一轮里并行 Read 五个文件，hook 也就并行跑了五个 guard 进程，各自 readWorklist →
+      filter → writeFileSync。后写的覆盖先写的， log 里留下证据（「读 .gitignore (还剩 32)」紧接着「读
+      package.json (还剩 32)」， 数字没降），并且清单里被写进了一行残缺内容 `n`。 结果是：文件真的读了，账本却说没读 —— R7
+      报出的数字反而不准了。
     expected: >
       并行 Read N 个文件之后，清单恰好少 N 行，且不出现任何不是文件路径的行。
     how: >
-      待定。同一个文件里的 save() 已经用了「写临时文件 + rename」的原子写，
-      strike 却是裸 writeFileSync —— 至少要对齐；丢写还需要一把锁或者重试循环。
+      待定。同一个文件里的 save() 已经用了「写临时文件 + rename」的原子写， strike 却是裸 writeFileSync ——
+      至少要对齐；丢写还需要一把锁或者重试循环。
     why_this_way: null # 还没调研；strike 上方的 ponytail 注释只谈了部分 Read 的取舍，没谈并发
     code:
       - file: claude-companion/ideas.ts
@@ -570,22 +526,20 @@ ideas:
       R7 的数字只有在这条修好之后才真的是「事实而不是估计」。
 
   - id: I-056
-    name: "清掉指向已删包的 hook 配置"
+    name: "清理掉指向已删除代码的过期 hook 配置"
     status: todo
     needs: [ I-047 ]
     what: >
-      .claude/settings.json 里还挂着两条指向 packages/hook/dist/*.js 的 hook，
-      而 packages/ 已经在 ca7e956 里被删除了。
+      .claude/settings.json 里还挂着两条指向 packages/hook/dist/*.js 的 hook， 而 packages/
+      已经在 ca7e956 里被删除了。
     why: >
       这两条 hook 每次编辑都会跑一次并且每次都失败。本仓库自己就是这套工作流的
-      第一个使用者，它自己的配置指着不存在的文件，说明「安装是可逆、可重入的」
-      这条承诺还没有覆盖卸载。
+      第一个使用者，它自己的配置指着不存在的文件，说明「安装是可逆、可重入的」 这条承诺还没有覆盖卸载。
     expected: >
-      settings.json 里只剩下 claude-companion/guard.ts 这一套 hook；
-      编辑文件时不再有失败的 hook 进程。
+      settings.json 里只剩下 claude-companion/guard.ts 这一套 hook； 编辑文件时不再有失败的 hook 进程。
     how: >
-      待定。可能就是手工删两段；也可能应该给 install.ts 加一个 uninstall
-      （README 现在说「卸载 = 删掉五个命令文件」，但没说 hook 怎么撤）。
+      待定。可能就是手工删两段；也可能应该给 install.ts 加一个 uninstall （README 现在说「卸载 =
+      删掉五个命令文件」，但没说 hook 怎么撤）。
     why_this_way: null # 取舍未定：手工删一次，还是补一个真正的卸载路径
     code:
       - file: .claude/settings.json
@@ -600,22 +554,20 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-057
-    name: "装进任意仓库并在那里跑起来"
+    name: "终点：装进一个陌生仓库，并在那里真正跑起来"
     status: todo
     needs: [ I-051, I-052, I-056 ]
     what: >
-      在一个陌生仓库里装上这套工作流，五个命令和七条 hook 规则在那边真的生效、
-      能更新、能撤下来。
+      在一个陌生仓库里装上这套工作流，五个命令和七条 hook 规则在那边真的生效、 能更新、能撤下来。
     why: >
       这是分发这一侧的终点：一套只能在自己仓库里跑的工作流没有价值。
     expected: >
-      在一个真实的、不是这个仓库的项目上走完「装 → /ccscan → 批准 → /ccbuild」，
-      过程中 hook 真的拦住了该拦的，`--status` 能如实说出那个仓库是不是最新。
+      在一个真实的、不是这个仓库的项目上走完「装 → /ccscan → 批准 → /ccbuild」， 过程中 hook
+      真的拦住了该拦的，`--status` 能如实说出那个仓库是不是最新。
     how: >
       install.ts 已有的安装 + 注册表 + 更新三步，加上一条目前缺失的卸载路径。
     why_this_way: >
-      终点定成「在别人的仓库里跑起来」而不是「功能齐全」，因为装出去一次会暴露
-      所有硬编码路径和平台假设，而这些在自己仓库里永远不会暴露。
+      终点定成「在别人的仓库里跑起来」而不是「功能齐全」，因为装出去一次会暴露 所有硬编码路径和平台假设，而这些在自己仓库里永远不会暴露。
     verify:
       manual: "在一个真实的外部项目上装好并走完一次完整流程，记录每一处卡住的地方"
       signed_off: null
@@ -623,12 +575,12 @@ ideas:
       装好之后，每个项目都有一张自己的想法图。
 
   - id: I-058
-    name: "工作流自己跑通一次"
+    name: "终点：用这套工作流完整地改进它自己一次"
     status: todo
     needs: [ I-048, I-049, I-051, I-055 ]
     what: >
-      用这套工具改进它自己：/ccscan 建图 → /ccthink 提一个真实改动 →
-      /ccbuild 实现 → /ccfix 修一次，全程只通过这张图。
+      用这套工具改进它自己：/ccscan 建图 → /ccthink 提一个真实改动 → /ccbuild 实现 → /ccfix
+      修一次，全程只通过这张图。
     why: >
       一套没有被自己用过的工作流，只是一份文档。README 的「老实说」一节自己承认：
       引擎和守卫有测试，五个命令写完了，但还没在真项目上从头到尾走过一遍。
@@ -636,11 +588,9 @@ ideas:
       完成一次真实改动，全过程留在 ideas/graph.claude.yaml 和 ideas/log.claude.md 里，
       并且事后读这份记录足以在几个月后重新理解当时为什么那样做。
     how: >
-      挑一个小的真实需求（I-055 或 I-056 就很合适）走完整条链，
-      把每一步卡住的地方记下来。
+      挑一个小的真实需求（I-055 或 I-056 就很合适）走完整条链， 把每一步卡住的地方记下来。
     why_this_way: >
-      终点定成「跑通一次」而不是「功能齐全」，因为跑通一次会告诉你哪些功能
-      其实根本不需要。
+      终点定成「跑通一次」而不是「功能齐全」，因为跑通一次会告诉你哪些功能 其实根本不需要。
     verify:
       manual: "读一遍那次改动留下的记录，看是否足以在几个月后重新理解当时的决定"
       signed_off: null
@@ -648,27 +598,556 @@ ideas:
       跑通之后，才有资格决定接下来往哪个方向加东西。
 
   - id: I-059
-    name: "三个 agent 的 companion 并存互不覆盖"
+    name: "终点：三个 agent 接手同一张项目想法图，不再各自维护副本"
     status: todo
-    needs: [ I-050, I-053, I-054 ]
+    needs: [ I-050, I-073, I-074 ]
     what: >
-      Claude、Cursor、Codex 三套 companion 在同一个仓库里同时可用，
-      共享 ideas/ 目录，各写各的账本，谁也不覆盖谁。
+      Claude、Cursor、Codex 在同一个仓库里同时可用，共同读写项目级
+      ideas/graph.yaml、日志和证据；换 agent 不重建、不复制、不选择另一张图。
     why: >
-      同一个项目会被不同的 agent 接手。如果换一个 agent 就要重建一次想法图，
-      那这张图就不是项目的记录，只是某个 agent 的记忆。
+      同一个项目会被不同的 agent 接手。如果换一个 agent 就要重建一次想法图， 那这张图就不是项目的记录，只是某个 agent 的记忆。
     expected: >
-      三边都装上之后，ideas/ 里是 graph.yaml + graph.claude.yaml + graph.cursor.yaml
-      各归各家；任何一边跑 init / 记录 / 渲染都不会动到另外两边的文件。
+      三边都装上后只有一张 canonical graph.yaml；任意一边改图、记录或完成节点，
+      另两边重新读取即可看见同一状态。旧后缀图只在显式迁移前保留为只读输入。
     how: >
-      文件名认领规则（I-050）已经是共享机制，三份实现里都有一份等价的
-      nameIsTaken / agentName。剩下的是 Codex 侧补齐，以及一次三边同装的验证。
+      改由共同基座实现（I-069～I-074）：共享引擎只认项目级 graph.yaml，
+      migrate 命令显式选择或合并遗留 graph.*.yaml 与 Codex JSON 状态；三个 agent
+      的 Skill 和 hook 都调用同一份引擎。最后在同一真实仓库做三边接力验证。
     why_this_way: >
-      不做一个统一的多 agent 抽象层，而是让三份实现各自遵守同一条命名约定 ——
-      因为三个 agent 的 hook 模型和语言都不同，共享代码会变成最小公分母。
-      代价是这条约定要在三处分别正确，所以它必须简单到一眼看得出对不对。
+      2026-08-29 人批准推翻旧决定。旧方案用后缀避免覆盖，却让同一项目出现三份
+      需求真相，和「换 agent 不重建想法图」直接矛盾。三家的 hook 已足够接近，
+      差异可由输入输出映射吸收；真正需要隔离的是传输，不是项目状态。
     verify:
-      manual: "在一个仓库里同时装上三套 companion，各跑一次建图，确认三份账本互不覆盖"
+      manual: "在一个仓库里用 Claude 建图、Cursor 接着改、Codex 完成一个节点；全程只产生一张 canonical graph.yaml，三边看到相同状态"
       signed_off: null
     future: >
       项目的想法图从此独立于用哪个 agent。
+    log:
+      - date: "2026-08-29"
+        by: ccthink
+        note: "人批准推翻「不做统一抽象层」；前置从 I-053/I-054 改为 I-073/I-074，实现手段改为共同基座"
+      - date: "2026-08-29"
+        by: codex
+        note: "共同基座复审：从三份互不覆盖的图改为一张项目级图；后缀文件仅作为显式迁移输入"
+
+  # ─────────────────────────────────────────────────────────────
+  # 阅读顺序（2026-08-25 /ccthink，人已对齐第 1 步）
+  # ─────────────────────────────────────────────────────────────
+
+  - id: I-060
+    name: "把想法按依赖顺序排列：前置的永远排在前面"
+    status: todo
+    needs: [ I-042 ]
+    what: >
+      给定一张图，返回按拓扑序排好的想法列表：每个想法都排在它全部前置之后； 同一层内按 id
+      排（拓扑序不唯一，需要一条固定的规则来保证每次输出同样的顺序）； 图有环或有指向不存在 id 的边时，不死循环、不丢任何节点。
+    why: >
+      现在「从上往下读就是依赖顺序」只是巧合 —— 这张图是一次性自底向上建出来的。 /ccthink 每次把新想法追加到文件末尾，这个巧合就会失效。
+    expected: >
+      给一个前置写在后面的图，返回的列表里每个想法仍排在它全部前置之后； 同样的输入永远给出同样的输出；有环的图不会让它卡住或吞掉节点。
+    future: >
+      任何需要「按依赖顺序走一遍」的地方都可以用它 —— 渲染只是第一个消费者。
+
+  - id: I-061
+    name: "网页里的详情卡片按依赖顺序显示，而不是按书写顺序"
+    status: todo
+    needs: [ I-060, I-045 ]
+    what: >
+      render() 输出下方详情卡片时用拓扑序，而不是 yaml 里的书写顺序。 id 不动，yaml 源文件也不动 —— 只有渲染出来的网页变。
+    why: >
+      人读的是网页。顺序不对，读者得自己在脑子里追每个 needs 才知道该先看哪个。
+    expected: >
+      打开 graph.html，卡片从没有前置的地基一路排到终点； 把 yaml 里想法的书写顺序打乱重渲染，卡片顺序不变。
+    future: >
+      新加的想法即使 id 排在末尾，也会出现在依赖关系该在的位置。
+
+  # ─────────────────────────────────────────────────────────────
+  # 网页编辑：改图即改项目
+  # （2026-08-29 /ccthink：第 2 步拆分经人批准；第 3 步仓库内 + 网上双路调研，
+  #   第 4 步的 how / why_this_way 已并入三视角对抗审查（批准安全 / YAML 完整性 /
+  #   使用流程）的全部 fatal 与 serious 修正）
+  # ─────────────────────────────────────────────────────────────
+
+  - id: I-062
+    name: "在网页上直接修改一个想法的文字和状态"
+    status: todo
+    needs: [ I-045 ]
+    what: >
+      想法图网页里的详情卡片从只读变成可编辑：八个问题的文字、想法名称、状态， 人都能直接在浏览器里修改；改动先留在页面里并被标记出来，等待提交。
+    why: >
+      人审图时发现问题，现在只有两条路：用文字转述给 agent（绕一圈，容易失真）， 或者自己去改 YAML
+      文件（容易改坏格式）。看图的地方就应该是改图的地方。
+    expected: >
+      打开图的网页，点开任意想法就能改它的文字和状态；改过的地方有可见标记； 提交之前改动一直被页面记住，不会因为点开别的想法而丢失。
+    how: >
+      render 在网页里嵌入两样东西：整张图的 JSON 数据（一个 script 标签，作为页面唯一的 数据模型，DOM 只是视图）和当前图内容的
+      12 位指纹（供提交时做过期检查）。 每张详情卡片加「编辑」开关：散文字段变多行输入框、状态变下拉、名称变单行输入框； 赋值一律走
+      textContent / value，绝不把想法文字拼进 innerHTML——图里的文字不全是
+      人写的，防脚本注入。每次修改记进内存里的改动清单，并尽力存进浏览器本地存储当草稿 （键用项目路径哈希做命名空间；存取全部包
+      try/catch，存不了就降级为纯内存并在页面 顶部明说「关页即丢」）。草稿恢复永不静默：重开页面时列出「有 N 处未提交的改动」，
+      人逐条确认才恢复。
+    why_this_way: >
+      数据模型嵌 JSON 而不是从页面反解析拼好的展示文字——code 和 verify 的展示串是
+      拼接出来的，反解析必丢结构。不引前端框架，用原生表单元素，维持这个网页零构建、
+      双击即用的现状。草稿只当安全网不当传输通道（mermaid-live-editor 的先例）； 「恢复必须人确认」是因为 file://
+      协议下所有本地网页共享同一个浏览器存储， 别的页面写进来的东西不能被当成人的改动（对抗审查发现的注入路径）。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: render
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_render_edit.test.ts"
+      pass: "exit 0"
+    future: >
+      后面的「提交」和「写回」消费的就是这里产生的改动； 增删节点和边（I-063）复用同一套页面内编辑机制。
+
+  - id: I-063
+    name: "在网页上增删想法和前置关系"
+    status: todo
+    needs: [ I-062 ]
+    what: >
+      在网页上新建想法（自动分配下一个从未用过的编号）、删除想法、 在两个想法之间加上或去掉「前置」箭头；新建的想法至少要填够前三个问题
+      （是什么、为什么、预期结果）才算成形。
+    why: >
+      人审图最常见的两个结论是「缺一条边」和「这个节点做了太多事、该拆开」。 只能改文字不能改结构的话，这两类最有价值的修改仍然要绕回 YAML 文件。
+    expected: >
+      网页上加一个节点、连一条边、删一条边，图立即重画出新形状； 新想法的编号不和历史上任何编号冲突（编号永不复用）。
+    how: >
+      图文件顶层加一个只增不减的取号计数器（next_id），写回指令维护、render 一并嵌进
+      页面——新建想法从它取号，而不是页面自己看当前图算最大值（被删掉的编号页面看不见，
+      算出来会复用）。删除做成「标记待删、提交时生成删除指令」，可反悔。结构一变， 页面重建 mermaid 图源再重画：把「整张图 → mermaid
+      源文本」抽成一个零闭包、 不引用外部变量的纯函数（净化、折行、状态分色、点击绑定全在函数里）， TypeScript
+      侧和页面侧跑的是同一份源码（渲染时用 Function.prototype.toString 注入页面）。新计数器字段写进 FORMAT.md。
+    why_this_way: >
+      取号计数器进图文件而不是让页面算：编号永不复用是格式的硬规定，而页面看不见历史 ——本仓库自己就是反例（旧图 I-001~I-040
+      已退役，页面按当前图算 max 会撞上它们）。 共享函数用 toString 注入而不是手抄两份：手抄的第二份一定漂移；对抗审查还抓到
+      现状代码里这段逻辑引用了函数外的变量（ends），不先提取成零闭包注入了也是白注入。
+      净化必须在共享函数内而不是调用处，否则页面侧重建时漏掉净化，一个含引号的想法名 就让整张图消失。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: buildMermaidSource
+      - file: claude-companion/ideas.ts
+        symbol: render
+      - file: claude-companion/FORMAT.md
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_render_edit.test.ts"
+      pass: "exit 0"
+    future: >
+      拆分节点、补漏边这类结构修改从此也走网页，不再需要人打开 YAML。
+
+  - id: I-064
+    name: "网页上的「提交」按钮：把本次所有改动落成磁盘上的一个改动文件"
+    status: todo
+    needs: [ I-062, I-063 ]
+    what: >
+      网页上有一个「提交」动作，把人这一次做的全部改动（改文字、改状态、 新建删除想法、增删前置关系）打包成一个机器可读的改动文件， 落到项目的
+      ideas/ 目录里。
+    why: >
+      浏览器里的静态网页写不了项目里的文件 —— 这是整条链路里唯一跨不过去的墙。 必须有一个把改动从浏览器送到磁盘的口子，后面的写回指令才有东西可读。
+    expected: >
+      点「提交」后，磁盘上出现一个改动文件，逐条完整描述人在网页上做的每一处修改； 什么都没改时提交会被阻止，或产生一个明确说明「没有改动」的空文件。
+    how: >
+      「提交」把改动打包成一个 JSON 文件：版本、项目、baseDigest（页面嵌的图指纹， 原样带回，页面绝不自己算）、逐条改动（操作类型 set
+      / add / remove / link / status、 想法编号、字段、编辑前的旧值、新值）。落盘走三级降级：Chromium 的
+      showSaveFilePicker（file:// 下实测可用，预填文件名 changes.claude.json， 会话内可静默覆盖保存）→
+      触发下载并在页面上显示「移动到 <ideas/ 的绝对路径>」 （路径由 render 时嵌入，第一次保存前也显示）→
+      复制到剪贴板。保存成功不清草稿， 只标记「已提交」——等改动真正落图后再由人丢弃。没有改动时提交按钮不可用。
+    why_this_way: >
+      三级降级链照 Excalidraw / tldraw / drawio 收敛出的行业模式（browser-fs-access） 手写内联，不引
+      npm 依赖，保住单文件自包含。每条改动带旧值，是给写回指令在 图已变时做逐条比对和冲突展示用的——只带新值的改动文件一遇冲突只能整体作废。
+      保存成功不清草稿是对抗审查的修正：清了之后一旦写回被拒（图在编辑期间被别的会话 改过——本次调研当天就真实发生了一次），人的改动就一份都不剩了。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: render
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_render_edit.test.ts"
+      pass: "exit 0"
+    future: >
+      改动文件是网页和写回指令之间的唯一接口；将来换一种编辑界面， 只要产出同样格式的改动文件就能接上同一条链路。
+
+  - id: I-065
+    name: "一条指令把改动文件写回想法图，注释原样保留"
+    status: todo
+    needs: [ I-064, I-044 ]
+    what: >
+      引擎新增一个子命令：读改动文件，把每一处修改写进 ideas/graph.claude.yaml —— 文字改动定点写入，状态改动走既有的「set
+      + 自动留记录」逻辑， 新建删除想法和边按格式规则执行；写完自动校验并重新渲染网页，改动记进记录文件。
+    why: >
+      写回如果靠 agent 手工编辑 YAML，注释会被抹掉、状态可能绕过 set、格式可能写坏 ——
+      这些正是这套工具当初要防住的事。写回必须是一条确定性的指令，不是一次自由发挥。
+    expected: >
+      对一个带注释的图应用改动文件之后：每处改动都生效，注释和没动过的部分逐字保留， 校验通过，记录文件里多了对应条目，网页已重新渲染；
+      同一个改动文件应用第二次不会再产生任何变化。
+    how: >
+      引擎新增 apply 子命令，核心是一个可单独测试的纯函数：读改动文件 → 在内存里 应用全部改动并跑完整
+      check，任何一步失败整体放弃、磁盘不动 → 才原子写盘、 重新渲染、记录日志。要点：baseDigest 不等于当前图指纹时整体拒绝（乐观锁）；
+      操作按「先改字段、后删节点」排序，每个结构操作后重建内存快照——否则按旧下标写
+      会把状态落到错误的想法上（对抗审查实测过这个静默污染）；状态操作转调既有 setStatus 的证据校验，说明文字也从那里进
+      log，不重复记；新增操作强制 status 为 todo、剥掉 payload 里的 log 和人工签字字段——否则改动文件能凭空造出
+      「已完成已签字」的想法；删除操作要求已没有别的想法依赖它，并把挂在被删节点上的 分节注释搬给下一个节点；新增节点用 doc.createNode
+      且散文字段设块折叠样式 （裸对象塞进 yaml 文档后续就改不动了，实测）；凡是被改了行为字段 （what / expected / how /
+      why_this_way / verify）的已完成想法，自动降回 doing 并留
+      log——让测试先行、想清楚、人批准三条规则对它重新生效。成功后把改动文件 改名为
+      changes.applied-<日期>.json，输出末尾固定提醒「回浏览器刷新页面再做 下一轮」；set
+      子命令落盘后也顺手重新渲染，让磁盘上的网页永远新鲜。
+    why_this_way: >
+      写回必须是确定性指令而不是 agent 自由发挥——注释、格式、校验都会在自由发挥里丢。 全部校验内置在引擎里而不是指望 hook：apply 走
+      Bash，hook 根本看不见它。这条 信任边界要诚实写明：apply 守住的是「状态有证据、图不写坏、改动有记录」，
+      守不住「改动一定来自人」（那是 I-066 的事）。check 挪到写盘之前，因为这套工具
+      自己的底线就是坏图不落盘；「已完成想法自动降级」是对抗审查发现的最大流程漏洞的 最小修法——guard
+      对已完成想法的代码文件直接放行，不降级的话改了图之后代码 不经批准就能改。改动格式不借 JSON Patch（RFC
+      6902，按下标定位不认编号）也不借 JSON Merge Patch（RFC 7396，数组只能整体替换）：保注释要求应用端逐条走 yaml 的
+      Document 接口，任何现成补丁库的应用引擎都是死重；自定义按编号的操作清单， 语义对齐 Kubernetes strategic merge
+      patch 的 merge-by-key 先例。
+    code:
+      - file: claude-companion/ideas.ts
+        symbol: applyChanges
+      - file: claude-companion/ideas.ts
+        symbol: main
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_apply.test.ts"
+      pass: "exit 0"
+    future: >
+      agent 对齐代码之前跑的就是这条指令；它也是以后任何「机器改图」场景的唯一入口。
+
+  - id: I-066
+    name: "人批准自己在网页上做的修改，而批准机制不被削弱"
+    status: todo
+    needs: [ I-065, I-048 ]
+    what: >
+      设计并实现：改动写回之后，这张新图如何获得「人已批准」的地位 —— 同时保持既有底线：批准只能来自人亲手的动作，agent 自己造不出来。
+    why: >
+      图一改，旧批准就失效，这是刻意的特性；但这次改图的人恰恰就是批准人自己。 如果网页上改完还要按原样再走一遍全图审查和批准，这个功能就没有省下任何步骤。
+    expected: >
+      人在网页上改完、改动写回之后，用一步人亲手的动作（不是 agent 的动作） 就能让新图进入已批准状态；agent 依然没有任何办法伪造这一步。
+    how: >
+      三件事。一，先堵已有的旁路：guard 新增一条对 Bash 的规则——命令文本触及
+      .approved、.scan-todo、.applied、图文件或改动文件、或直接调用 guard.ts 的一律 拦下，只放行 ideas.ts
+      子命令形式的调用；同时把设置里的 Bash 允许列表从 「任何 npx tsx」收窄到「npx tsx <引擎路径>」。二，apply
+      写盘后把（写盘前指纹、 写盘后指纹、改动文件的哈希、逐字段改动清单）写进受同等保护的 ideas/.applied 回执，并把逐字段 diff
+      打印给人看。三，批准词扩展：整句「批准 <12位指纹>」只在 参数 == 当前图指纹 == 回执里的写盘后指纹 时生效——apply 之后
+      agent 对图的任何 一次改动都让三者失配，快速通道自动失效、退回全图审查；指纹不符时当场明确报错
+      拒绝这条消息，不许静默失败——静默失败会训练人不看内容只粘指纹。
+    why_this_way: >
+      对抗审查推翻了原设计的两个假设。其一「agent 造不出批准」现状就是假的：guard 只挂 在 Edit / Write 上，Bash
+      从来不经过它，而允许列表放行任何 npx tsx——agent 写个 脚本跑一下就能直接写
+      .approved。先堵这扇门，别的都谈不上；堵门顺带关掉 README 里如实记录的「用 Bash 喂假事件给
+      guard.ts」的已知天花板。其二「指纹相等 = 人看过 这张图」不成立：指纹证明新鲜度不证明来源，agent 可以在 apply
+      之后夹带私货再打印 真实指纹——所以快速通道必须绑定 apply 的受保护回执，不能只绑指纹。诚实的边界：
+      这套机制把伪造成本提高到「必须经过人的权限提示」，不是数学上不可伪造。 明确否决的方案：headless 管道喂「批准」（claude
+      -p），任何脚本都能跑，等于把门拆了。
+    code:
+      - file: claude-companion/guard.ts
+        symbol: decide
+      - file: claude-companion/guard.ts
+        symbol: isApproval
+      - file: claude-companion/guard.ts
+        symbol: recordApproval
+      - file: .claude/settings.json
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
+      pass: "exit 0"
+    future: >
+      任何「人自己发起的修改」以后都能用同一条通道快速获得批准。
+
+  - id: I-067
+    name: "提交之后，人敲一条指令，agent 就把代码对齐到新图"
+    status: todo
+    needs: [ I-065, I-066, I-049 ]
+    what: >
+      人敲一条指令，agent 读当前的想法图，找出「想法说的」和「代码做的」不一致的地方，
+      按测试先行的纪律把代码调整到符合图：先写测试、确认失败、再实现、验证通过才标完成。
+    why: >
+      完整诉求是「改图即改项目」：改动写回 YAML 只是中转，最终交付物是符合新想法的代码。 这一步不接上，人还是要自己去发起实现，链路就断在最后一米。
+    expected: >
+      图里某个想法被改过之后敲这条指令，agent 自动开始工作； 结束时被改想法的验证命令通过、代码与八个问题的回答一致； 图里没被改过的部分不被乱动。
+    how: >
+      新斜杠命令 /ccapply（命令文件正文含 ideas.ts 字样——安装器靠这个字样识别自家 文件，缺了会被判为外来文件、永不更新；用
+      install.ts --update 分发到已装仓库）。 流程：在 ideas/ 里找 baseDigest
+      等于当前图指纹的改动文件（陈旧的逐个报出并忽略； 一个都找不到时提醒「检查是否存进了下载目录」）→ 跑 apply → 把逐字段 diff、
+      check 结果、新指纹、以及「哪些想法八问未齐、本轮不实现（网页新建的三问想法都在 此列，先跑 /ccthink
+      补齐再批准可省一次重复批准）」逐项报给人 → 人敲「批准」或 「批准 <指纹>」→ agent 只对本次改动触到、且八问齐全的想法按
+      /ccbuild 纪律实现 （测试先行、状态走 set、verify 通过才标完成）→ 结束报告固定提醒刷新浏览器页面。
+      指纹失配的改动文件有明确重放路径：agent 把每条改动（含旧值）对着新图逐条向人 确认，确认后以当前指纹重新生成改动文件再 apply。
+    why_this_way: >
+      交互式斜杠命令而不是 headless 管道：人敲 /ccapply 本身就是真实的 UserPromptSubmit 事件，hook
+      全部照常生效，批准环节留在人手里。实现范围限定在本次改动触到的想法， 全图对齐是 /ccfix
+      的事——一次提交不该引发全仓库漫游。轻量修改的分工也写进命令： 改一个错别字直接在对话里说更快（改散文字段本来就允许 agent 用 Edit
+      做）， 网页链路的价值在批量散文修改和增删节点边的结构变更。
+    code:
+      - file: claude-companion/commands/ccapply.md
+    verify:
+      manual: "真实走一遍：网页改字段 + 新建一个三问想法、提交、/ccapply——报告里 diff
+        完整、新想法被列为「未齐不实现」、批准后被改想法实现完成且 verify 通过"
+      signed_off: null
+    future: >
+      「网页上改一句话，代码跟着变」从此是一条指令的事。
+
+  - id: I-068
+    name: "终点：在网页上改一处想法，全程不碰 YAML，代码最终符合新图"
+    status: todo
+    needs: [ I-066, I-067 ]
+    what: >
+      整条链路的验收：在一次真实的想法修改上，从打开图的网页，到编辑、提交、 写回、批准、agent 对齐代码、验证通过，完整走一遍。
+    why: >
+      每一环单独可用不等于链路可用；改动文件放在哪、批准插在哪一步、指令之间怎么衔接， 这些接缝只有整条走通一次才会暴露。
+    expected: >
+      一次真实修改中，人做的只有四件事：网页上编辑、点「提交」、敲一条指令、 亲手输入「批准」；全程没有打开过 YAML
+      文件，结束时被改想法的验证命令通过。
+    how: >
+      用一次真实的小改动验收整条链（比如改某个已完成想法的实现方式描述），从打开网页
+      到代码验证通过完整走一遍；再连续做第二轮修改（改完再改）——对抗审查发现 「刷新页面」这一步最容易断，第二轮才暴露。每一处卡住的地方记进 log。
+    why_this_way: >
+      终点定成「走通一次」而不是「功能齐全」：四件事的承诺只有真走一遍才知道数得对不对
+      ——审查已经数出真实交互约八次（四件事是四类动作，不是四次点击），验收时如实记录， 不替流程说好话。
+    verify:
+      manual: "一次真实修改 + 紧接着的第二轮修改，全程没打开 YAML，结束时被改想法的 verify 通过；卡住的地方全部记录在案"
+      signed_off: null
+    future: >
+      跑通之后，这条链路就是这套工具的日常用法：图是控制面板，YAML 退成实现细节。
+
+  # ─────────────────────────────────────────────────────────────
+  # 共同基座：一份核心，三个 agent 各留薄接入层
+  # （2026-08-29 /ccthink 第二条线；人已确认对齐并批准调研后的计划）
+  # ─────────────────────────────────────────────────────────────
+
+  - id: I-069
+    name: "把三套实现的分歧逐条裁决，写成一份共同规范"
+    status: doing
+    needs: []
+    what: >
+      一份唯一的规范文件（companion/FORMAT.md），用 D1～D34 逐条裁决三套实现
+      的格式、审批、验证、路径、hook、分发和共享状态。共同基座必须让三边共用
+      一张项目图，并保留三边已有的最强可验证保证，而不是退化成最小公分母。
+    why: >
+      初稿只裁决到 D15，完备性审计又发现 19 个真实分歧；其中旧裁决还会删除
+      Codex 的 RED→GREEN 证据并放松 Cursor 的 fail-closed，和「现有功能不回退」
+      矛盾。分歧不先裁决就合并代码，只会把三套矛盾藏进一份文件。
+    expected: >
+      D1～D34 每一项都有三边现状、裁决和理由；规范明确一张项目图、两次常规
+      审批、当前 RED/GREEN 证据、严格路径范围、共同 Skill 与 hook 归一化。
+      一个陌生 agent 只读这份文件就知道什么可写、何时可做、怎样验证。
+    how: >
+      保留 YAML、四状态、needs、endpoints 与短版八问；修订 D7/D8/D9/D10，
+      吸收 Codex 的内容绑定审批、RED/GREEN 和路径证据，吸收 Cursor 的默认拒绝、
+      doing readiness 与重叠检查。新增 D16～D34，覆盖 shell 旁路、未知路径、
+      runtime 保护、原子写、共同 CLI/Skill、单文件发布和显式遗留迁移。
+    why_this_way: >
+      先裁决保证，再裁代码形状；共享核心不等于选最弱交集。基座仍放顶层
+      companion/，而平台差异只留在输入输出映射与三个 manifest，避免重新造
+      一套抽象框架。
+    code:
+      - file: companion/FORMAT.md
+      - file: CLAUDE.md
+    verify:
+      manual: "人读 D1～D34：每项都有三边现状、裁决和理由；确认一张共享图、严格写前失败、两次常规审批和 RED→GREEN 是共同基线"
+      signed_off: "Zijia Tang 2026-08-30 —— 人在会话中逐条追问 D7/D8 后答复「全留」并回复「通过」；由 ccbuild 代录，原话见 ideas/log.claude.md"
+    future: >
+      以后任何概念性调整都只改这一份规范；第四个 agent 接入时读它就够了。
+    log:
+      - date: 2026-08-29
+        by: ccbuild
+        note: 规范初稿与裁决表已写入 companion/FORMAT.md；40 条事实断言核查完毕（38 确认 2 修正），完备性审计发现 19
+          个缺失维度待补入表中；等人签字
+      - date: 2026-08-29
+        by: codex
+        note: 补齐 D16-D34，并修订 D7/D8/D9/D10/D12/D14/D15；共同基线改为一张项目图、两次常规审批、严格写前和当前 RED/GREEN 证据，等待人审
+
+  - id: I-070
+    name: "把三份图引擎合成一份，并把遗留状态显式迁入同一张项目图"
+    status: todo
+    needs: [ I-069 ]
+    what: >
+      companion/ideas.ts 成为唯一图引擎，只读写项目级 ideas/graph.yaml；合并
+      Claude 的扫描/渲染、Cursor 的 readiness/new/paths/allow/log，以及 Codex 的
+      审批摘要、RED/GREEN runtime、路径与行号验证。migrate 显式导入旧后缀 YAML
+      或 Codex JSON，不自动选择胜者。
+    why: >
+      当前三边不仅代码重复，状态也分叉；只共享实现、仍各写一张图，换 agent
+      仍然无法接手。迁移必须先把项目真相收敛，再退役旧引擎。
+    expected: >
+      原有 6 个 Vitest 与 14 个 Codex unittest 表达的保证全部迁成共享测试并全绿；
+      三种遗留输入各有迁移 fixture；迁移后只有 graph.yaml 是可写真相，冲突输入
+      会停下要求人选择，绝不覆盖。
+    how: >
+      以 Claude TypeScript 为解析和渲染基体，逐项移植测试先于代码；使用
+      ideas/.runtime 保存审批与验证证据，图 mutation 用 digest 做并发检查；新增
+      paths/migrate/new/status/allow/request-approval/run-check/log。旧引擎保持只读，
+      直到各平台验收完成。
+    why_this_way: >
+      复用现有 TypeScript 最大公共代码面，但以行为测试决定保留什么，不按文件
+      行数投票。显式 migrate 比安装器猜测安全；一份项目图比 agent 后缀更符合
+      「项目记录」的定义。
+    code:
+      - file: companion/ideas.ts
+    verify:
+      command: "npx vitest run --dir .devcompanion/tests && python -B -m unittest discover -s codex-companion/tests -v"
+      test_files:
+        - .devcompanion/tests/*.test.ts
+        - codex-companion/tests/test_*.py
+      pass: "exit 0"
+    future: >
+      新 agent 直接接手同一图；遗留格式迁一次后不再参与日常读写。
+
+  - id: I-071
+    name: "把三套强制规则合成一个策略核心，并在三种 hook 输入之间做薄映射"
+    status: todo
+    needs: [ I-070 ]
+    what: >
+      companion/guard.ts 把三家事件归一化后执行同一套策略：未认领文件默认拒绝、
+      doing readiness/前置/路径范围、两次审批、RED→GREEN、状态和 runtime 保护、
+      shell mutation 与 Stop 完成检查。写前/批准/Stop 崩溃时拒绝，写后记录崩溃
+      时放行告警；各平台只编码输入输出协议。
+    why: >
+      直接搬 Claude guard 会漏掉 Codex apply_patch、MCP 与 Bash，也会把 Cursor
+      的默认拒绝改成默认放行。共同守卫必须共享“决定”，不能假装原始 JSON 完全相同。
+    expected: >
+      三组真实事件 fixture 对相同行为产生相同 allow/deny；未知写路径、未批准、
+      无 RED、越界文件和 shell 旁路均被拒绝；PostToolUse 记录失败不会阻断已经
+      完成的写；AIDEV_GUARD=off 会显示并记录警告。
+    how: >
+      同一文件里保留三个小 normalize 函数与三个 output encoder，不建 adapter
+      类层级；策略函数只接收 normalized event。移植 Cursor gate 和 Codex hook
+      测试，覆盖 apply_patch 多文件解析、MCP、本地编辑与 Stop continuation。
+    why_this_way: >
+      三家 hook 已足够接近，可以共享策略；又没有接近到可安全删除归一化。
+      几个纯函数是最小薄层，比复制三份规则或引入通用 adapter framework 都短。
+    code:
+      - file: companion/guard.ts
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts
+        .devcompanion/tests/test_companion_gate.test.ts .devcompanion/tests/test_companion_record.test.ts"
+      test_files:
+        - .devcompanion/tests/test_ideas_guard.test.ts
+        - .devcompanion/tests/test_companion_gate.test.ts
+        - .devcompanion/tests/test_companion_record.test.ts
+      pass: "exit 0"
+    future: >
+      新规则写一次；新平台只新增事件 fixture 和两段映射。
+
+  - id: I-072
+    name: "用一套标准 Skills、一个单文件运行产物和三个小 manifest 分发共同基座"
+    status: todo
+    needs: [ I-070, I-071 ]
+    what: >
+      companion/skills/ 只保留五个 Agent Skills（onboard/discuss/build/debug/graph），
+      Claude、Cursor、Codex manifest 直接指向同一目录。TypeScript 在发布时打成
+      dist/companion.mjs，运行不需要 npx 或目标仓库 npm install。install.ts 只负责
+      本地开发、旧安装迁移和隔离的 status/update。
+    why: >
+      三家都原生支持 SKILL.md；继续生成三份命令只是把复制藏进安装器。当前 npm
+      测试还会读取真实 .installs.json 并尝试改其它仓库，分发前必须隔离。
+    expected: >
+      三个 manifest 校验通过并加载同一批 Skill；单文件产物离开源码仓库也能运行；
+      安装测试只写临时目录和临时注册表；本机七个旧安装可预览迁移，未经显式
+      update 不写入。
+    how: >
+      把现有 Claude/Cursor workflow 文本合并成标准 Skill，平台名字和绝对路径
+      改为中性 CLI 调用；打包时 bundle yaml 依赖；保留三份只有 metadata/hook
+      路径差异的 manifest。updateAll 接收 registry path 参数，测试永不使用默认值。
+    why_this_way: >
+      直接共享标准文件比模板生成更少；manifest 才是平台差异的天然位置。
+      单文件 JS 是一份源码、一份运行时，不会重演 TypeScript/Python 双实现。
+    code:
+      - file: companion/install.ts
+      - file: companion/skills/idea-onboard/SKILL.md
+      - file: companion/skills/idea-discuss/SKILL.md
+      - file: companion/skills/idea-build/SKILL.md
+      - file: companion/skills/idea-debug/SKILL.md
+      - file: companion/skills/idea-graph/SKILL.md
+    verify:
+      command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
+      test_files:
+        - .devcompanion/tests/test_ideas_graph.test.ts
+      pass: "exit 0"
+    future: >
+      接入新 agent 只加 manifest/hook 映射；workflow 正文和运行代码不复制。
+
+  - id: I-073
+    name: "Cursor 用原生 hook 薄层接入共同基座，并迁入同一张项目图"
+    status: todo
+    needs: [ I-072 ]
+    what: >
+      Cursor manifest 加载共同 Skill；原生 .cursor/hooks.json 调同一个守卫入口，
+      不依赖用户是否开启第三方 Claude 配置。显式 migrate graph.cursor.yaml，
+      真实验收后才把复制引擎标为退役。
+    why: >
+      Cursor 的 Claude hook 兼容需要账户能力和设置开关，不能作为插件正确运行的
+      唯一路径；原生配置更可测，同时规则仍完全共享。
+    expected: >
+      在真实 Cursor 里，未批准、无 RED、越界写和 shell 旁路被拒绝；合法 doing
+      写入后证据过期；读取和修改的是同一 graph.yaml。关闭 third-party Claude
+      configs 后仍然工作。
+    how: >
+      用 Cursor 原生事件 fixture 验证 preToolUse/postToolUse/beforeSubmitPrompt/stop
+      和 Shell/Read/Write；hook 命令只加 platform=cursor 参数。迁移和回滚路径先在
+      临时仓库验证，再处理本仓库 .cursor/ 产物。
+    why_this_way: >
+      原生薄配置比要求用户打开兼容开关可靠；不复制策略代码。旧实现先保留，
+      真实 Cursor 验收通过后再删除，避免不可逆迁移。
+    code:
+      - file: companion/install.ts
+        symbol: cursor manifest 与 hook 配置
+    verify:
+      manual: "关闭 Cursor 第三方 Claude 配置后走一遍：迁入共享 graph.yaml，未批准/无 RED/越界写被拦，合法写入与记录成功"
+      signed_off: null
+    future: >
+      Cursor 侧只保留 manifest 与 hook 传输配置，概念调整自动跟进。
+
+  - id: I-074
+    name: "Codex 用 apply_patch/MCP hook 薄层接入共同基座，并保留严格证据"
+    status: todo
+    needs: [ I-072 ]
+    what: >
+      Codex manifest 加载共同 Skill；hook 薄层规范化 apply_patch 多文件补丁、Bash、
+      MCP、UserPromptSubmit 与 Stop。migrate 把节点 JSON、审批与验证事实转换到共享
+      YAML/runtime；RED/GREEN、manual receipt 和严格路径保证不得丢失。
+    why: >
+      Python 是最大重复实现，但也是最强证据来源。直接删除会把已经通过 14 个测试
+      验证的安全属性一起删掉；正确迁移是先把属性移入共同测试，再退役语言副本。
+    expected: >
+      当前 Codex hook trust 完成后，apply_patch、exec、code-mode 嵌套工具与 MCP 的
+      支持路径都执行共同策略；写的是同一 graph.yaml；14 个 Python 测试对应的
+      approval freshness、RED/GREEN、scope、protected state 与 Stop 保证全部有共享回归测试。
+    how: >
+      按 OpenAI Hooks 当前 wire format 建 fixture；在 Windows 完成 /hooks trust
+      后真实测试 apply_patch、Bash 和一个 MCP 文件写。每移植一个 Python 保证先写
+      Vitest，再实现共享逻辑；迁移报告列出不能无损转换的字段供人确认。
+    why_this_way: >
+      一份 TypeScript 核心仍是目标，但以行为迁移而非删文件完成。Codex 官方也明确
+      hooks 是 guardrail、部分特殊路径可绕过；真实测试和文档边界都必须保留。
+    code:
+      - file: companion/install.ts
+        symbol: codex manifest 与 hook 配置
+    verify:
+      manual: "在真实 Codex 里迁入共享 graph.yaml，并用 apply_patch/Bash/MCP 走一遍：未批准、无 RED、越界写被拦，GREEN 与 Stop 证据有效"
+      signed_off: null
+    future: >
+      Codex 侧只保留 manifest 与 hook 传输配置，严格保证由共同核心继续维护。
+
+  - id: I-075
+    name: "终点：三个 agent 接力使用同一张图，基座改一处便同时生效且保证不回退"
+    status: todo
+    needs: [ I-073, I-074 ]
+    what: >
+      在一个真实项目里由 Claude 建图和批准拆分、Cursor 接着计划或实现、Codex
+      完成验证；三边只使用同一 graph.yaml。随后在基座改一条真实规则，更新一次，
+      三边无需改专属逻辑便同时生效，且严格保证矩阵全部通过。
+    why: >
+      共同代码不等于共同 workflow；只有状态能接力、规则能一次更新、原有保证不回退，
+      共同基座才真正成立。
+    expected: >
+      一张图、一次迁移、一处规则修改、一次更新、三边生效；共享测试全绿；
+      未批准、无 RED、越界写、手改状态/证据、过期 GREEN 在三边都被拒绝；
+      过程中的兼容缺口全部记录。
+    how: >
+      先在临时真实仓库完成三边接力与故障矩阵，再挑一条可见规则改共同基座并
+      更新三边插件。验收后用 dry-run 查看本机七个旧安装，逐个显式迁移；任何
+      有多份遗留图的仓库停下让人选择。
+    why_this_way: >
+      终点是可观察行为而不是目录重排；先临时仓库再真实安装，避免测试和迁移
+      再次误改用户项目。
+    verify:
+      manual: "人看三边接力同一 graph.yaml 与故障矩阵；共同规则改一次后三边生效，且没有修改任何平台专属策略代码"
+      signed_off: null
+    future: >
+      共同基座成为唯一日常入口；新 agent 只接传输层，不复制 workflow、状态或规则。
