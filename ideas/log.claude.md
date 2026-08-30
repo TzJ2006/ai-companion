@@ -311,3 +311,90 @@ Append-only. Every code, doc, and idea change goes here.
 - 新建 19 个想法 I-041~I-059，新 id 不复用旧号；终点三个：I-057 / I-058 / I-059
 - check：0 errors / 5 warnings；前沿：I-055、I-056
 - 未答：I-054.how、I-054.why_this_way、I-055.why_this_way、I-056.why_this_way、I-053 两侧失败方向相反的原因
+- 2026-08-27 17:49  Edit claude-companion/ideas.ts  → I-042 图的解析与校验
+- 2026-08-27 17:49  Edit .devcompanion/tests/test_ideas_graph.test.ts
+- 2026-08-27 修 bug：图上点节点跳不到详情卡片。pointerdown 就 setPointerCapture 会把整串兼容鼠标事件（含 click）重定向到 .viewport，mermaid 绑在节点上的 handler 永不触发。改成移动超过 4px 才捕获；测试 test_ideas_graph.test.ts "captures the pointer only after the drag threshold"
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:41  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:42  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:43  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:43  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:43  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:43  Edit ideas/graph.claude.yaml
+- 2026-08-28 03:43  Edit ideas/graph.claude.yaml
+- 2026-08-29 01:25  人工批准想法图 379f79e98fe0
+- 2026-08-29 01:25  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-29 01:25  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-29 01:25  Edit claude-companion/commands/ccscan.md  → I-049 五个斜杠命令，覆盖从建图到实现的完整工作流
+- 2026-08-28 固化图的写作规范：规则蒸馏自 2026-08-28 03:41 对 graph.claude.yaml 的整轮重写。FORMAT.md 新增「How to write the graph」一节（四条规则：一句人话写它做什么、不用未解释的行话、终点加「终点：」前缀、写明动作主体），节点模板示例同步换成新风格；ccscan.md 第 3 步的旧示例（"函数级变更追踪" 式短名）替换为新规则。ideas.ts 不改 —— wrapLabel 已支持长名称换行。
+- 2026-08-29 01:25  Edit ideas/log.claude.md
+- 2026-08-29 20:43  Write CLAUDE.md
+- 2026-08-29 20:43  Edit C:/Users/tongt/.claude/projects/D--GitHub-ai-companion/memory/feedback_vitest_watch_trap.md
+- 2026-08-29 20:59  Write C:/Users/tongt/.claude/plans/rosy-conjuring-cookie.md
+- 2026-08-29 21:03  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:03  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:09  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/fsa-test.html
+- 2026-08-29 21:09  Write C:/Users/tongt/.claude/plans/immutable-yawning-trinket.md
+- 2026-08-29 21:11  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/fsa-test.html
+- 2026-08-29 21:13  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:13  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:13  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:13  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:15  Edit ideas/graph.claude.yaml
+- 2026-08-29 ccthink 共同基座：提取三个 companion 的共同部分，概念改一次三边生效，新 agent 只写薄接入层。人批准推翻 I-059 的旧决定（「不做统一抽象层」——三家 hook 生态已趋同，旧前提不再成立）。新增 I-069（裁决规范）、I-070（共享引擎）、I-071（共享守卫）、I-072（接入说明安装器）、I-073（Cursor 接入）、I-074（Codex 接入）、I-075（终点：改一处三边生效）；I-053/I-054 置 blocked（被取代）；I-059 前置与实现手段改写。借用：spec-kit 的接入说明模式、Taskmaster 的单引擎模式、Cursor 官方对 Claude 格式 hook 的原生加载、Codex hook 与 Claude 同构的事实、既有 claude 引擎（764 行）与 cursor 增量（约 170 行）、六个既有测试文件当回归网。自建仅两样：分歧决策表、安装器的接入说明层。计划四周（第 3、4 周是猜测）。
+- 2026-08-29 21:17  人工批准想法图 e9d8701ca3b4
+- 2026-08-29 21:23  Write companion/FORMAT.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-08-29 21:24  Edit CLAUDE.md
+- 2026-08-29 21:24  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/probe-yaml.ts
+- 2026-08-29 21:24  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/probe-yaml.ts
+- 2026-08-29 21:25  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/probe2.ts
+- 2026-08-29 21:26  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/probe3.ts
+- 2026-08-29 21:27  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/4ac34e39-cbee-4c5e-8c6b-adb410c67fa8/scratchpad/probe4.ts
+- 2026-08-29 21:36  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:36  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:36  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:36  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:36  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:37  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:37  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:37  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:41  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:41  Edit ideas/graph.claude.yaml
+- 2026-08-29 21:41  Edit CLAUDE.md
+- 2026-08-29 ccbuild I-069（进行中）：写入 companion/FORMAT.md（统一规范 + 分歧裁决表 D1-D15）；更新 CLAUDE.md（解除「绝不修改另两个 companion」禁令、修正不存在的 paths 子命令宣传）。验证工作流（8 个 agent）核查 40 条事实断言：38 确认、2 驳倒已修正（Cursor 措辞矛盾在规范与引擎之间而非三处各异；安装注册表本机 7 个而非 12 个），完备性审计另发现 19 个缺失分歧维度（D16-D34：Bash 不在闸门内、未认领文件默认放行 vs 拒绝、逃生口可审计性、守卫自保护、前置完成从未被强制、标 done 是否跑验证等），待补入裁决表后请人签字。人工验证未签，I-069 不能标 done。
+- 2026-08-29 ccbuild I-069（规范补完，仍待人工签字）：把 19 个遗漏维度写成 D16-D34，并修订 D7-D10、D12、D14-D15。共同基线改为一张项目级 graph.yaml、两次常规批准、RED→GREEN 证据、默认拒绝越界写、Shell/MCP/apply_patch 同策略、原子并发写与可审计逃生口；共享的是标准 Agent Skills 和归一化后的守卫决定，三边只保留 manifest 与事件映射。I-070-I-075 同步改写为显式迁移旧后缀状态、逐端保留既有保证、最后做真实三端接力验收。未移动引擎、未删除旧实现、未伪造新批准。
+- 2026-08-29 ccbuild I-069（交付待签字）：核对规范已含 D1-D34 + 被弃用列表；`check` 35 想法 0 错误 13 警告；`npx vitest run --dir .devcompanion/tests` 6 文件 82 测试全绿；已重新渲染 graph.claude.html。人工验证仍未签字（`signed_off: null`），I-069 不能标 done。图哈希 7eae8c98ded9 与已批准的 e9d8701ca3b4 不一致，I-070 之后的产品文件在人重新批准前被守卫拦住。注意：D16-D34 与 D7-D15 的修订由另一个 codex 会话写入（节点 log 记为 by codex），其中四处推翻了人当初批准的计划推荐（守卫失败方向、RED/GREEN 是否保留、图是否按 agent 分文件、批准关卡数量），签字前需人确认。
+- 2026-08-30 01:36  人工批准想法图 7eae8c98ded9
+- 2026-08-30 ccbuild I-069（人已定裁决）：人重新批准图 7eae8c98ded9；就四条被 codex 会话推翻的裁决（D7 批准关卡、D8 测试先行、D9 守卫崩溃方向、D10 图归谁）答复「全留」—— D1～D34 按当前表定稿，不做降级，agent 建议的「留想法砍机器」折中未被采纳。规范文件不再改动，只差人工签字。
+- 2026-08-30 02:01  人工批准想法图 7eae8c98ded9
+- 2026-08-30 02:01  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccbuild I-069（签字已录，状态待人手动置 done）：人回复「通过」，签字代录进 I-069 的 signed_off（注明由 ccbuild 代录、原话在本文件）。`ideas.ts set I-069 done` 连续两次被本机权限分类器拦下，未执行；按 R2「状态只能用 set 改，不能手改 yaml」的规则，agent 不绕过，改由人手动跑该命令。当前 I-069 仍是 doing，check 35 想法 0 错误。
