@@ -194,6 +194,15 @@ ideas:
     expect(html).toMatch(/await mermaid\.run/);     // fit runs after the diagram exists
   });
 
+  // Capturing the pointer on pointerdown retargets click to .viewport, so a tap
+  // on a node never reaches mermaid's handler and no detail card opens.
+  it("captures the pointer only after the drag threshold, so node clicks survive", () => {
+    const script = render(graphOf()).slice(render(graphOf()).indexOf("<script"));
+    const down = script.slice(script.indexOf('addEventListener("pointerdown"'), script.indexOf('addEventListener("pointermove"'));
+    expect(down).not.toMatch(/setPointerCapture/);
+    expect(script).toMatch(/moved > 4 && !viewport\.hasPointerCapture/);
+  });
+
   // Zoom must resize the SVG itself. A CSS scale() on the wrapper rasterises
   // the layer once and stretches that bitmap — which is what looked blurry.
   it("zooms by resizing the SVG, never by scaling a layer", () => {

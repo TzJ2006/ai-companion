@@ -31,10 +31,13 @@ level** — this step is about the overall shape, not the details:
 3. **为什么要做这个** — what problem does it solve?
 
 Ask them one at a time with AskUserQuestion, offering your best guess as an
-option. Then write the three answers back in your own words and get an explicit
-confirmation that you understood. **Do not proceed on silence.** If your
-restatement is wrong, this is the cheapest moment in the whole project to find
-out.
+option. Then restate the three answers in your own words **as a message the
+human actually sees: end your turn with the restatement as plain text — no
+AskUserQuestion after it, no tool call after it.** Text written just before a
+tool call may never be shown, so a restatement delivered that way was not
+delivered at all. Confirmation is the human's reply to that message, in the
+conversation. **Do not proceed on silence.** If your restatement is wrong, this
+is the cheapest moment in the whole project to find out.
 
 Before you ask, check the existing graph: `npx tsx claude-companion/ideas.ts check`
 and read `ideas/graph.yaml`. If this idea already exists, or conflicts with one
@@ -59,8 +62,11 @@ npx tsx claude-companion/ideas.ts render
 
 Show the human the graph and ask directly: *is this the right decomposition?*
 Point at the three things a picture makes judgeable — nodes that do too much,
-edges that are missing, and nodes that lead nowhere. Wait for approval or edits.
-Do not start research on a decomposition nobody has agreed to.
+edges that are missing, and nodes that lead nowhere. The stop is a real one:
+the graph path, the node list and the question go in a plain-text message that
+**ends your turn** — never in text before a tool call, which the human may not
+see. Wait for approval or edits. Do not start research on a decomposition
+nobody has agreed to.
 
 ---
 

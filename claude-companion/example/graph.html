@@ -490,13 +490,16 @@ click n_I_012 call nodeClick("I-012")</pre></div></div>
   let dragging = false, lastX = 0, lastY = 0, moved = 0;
   viewport.addEventListener("pointerdown", (e) => {
     dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY;
-    viewport.setPointerCapture(e.pointerId);
     viewport.classList.add("dragging");
   });
   viewport.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     const dx = e.clientX - lastX, dy = e.clientY - lastY;
     moved += Math.abs(dx) + Math.abs(dy);
+    // Capture only once it is really a drag. Capturing on pointerdown retargets
+    // the whole compatibility mouse sequence — including click — to .viewport,
+    // so mermaid's per-node handler never fires and nodes stop opening cards.
+    if (moved > 4 && !viewport.hasPointerCapture(e.pointerId)) viewport.setPointerCapture(e.pointerId);
     tx += dx; ty += dy; lastX = e.clientX; lastY = e.clientY;
     apply();
   });

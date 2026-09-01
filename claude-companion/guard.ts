@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { argv, exit, env, platform } from "node:process";
 import { parse } from "yaml";
 import {
-  check, strike, readWorklist, graphPath, worklistFile, logFile, agentName,
+  check, strike, graphPath, worklistFile, doneFile, logFile, agentName,
   type Graph, type Idea,
 } from "./ideas.js";
 
@@ -180,6 +180,7 @@ export function decide(input: HookInput, projectDir: string): Decision {
   for (const [path, rule] of [
     [approvalFile(projectDir), "R6：批准只能由人发一条「批准」消息产生，不能写文件"],
     [worklistFile(projectDir), "R7：扫描清单只能由真的 Read 划掉，不能手改"],
+    [doneFile(projectDir), "R7：已读记录只能由真的 Read 追加，不能手写"],
   ] as [string, string][]) {
     if (samePath(filePath, path)) {
       return { block: true, message: `${rule}。\n\n拒绝写入 ${short(projectDir, filePath)}。` };
@@ -292,9 +293,11 @@ function ruleRecord(input: HookInput, projectDir: string): Decision {
   // R7 — a scanned file is crossed off only by an actual Read. The agent cannot
   // claim coverage it did not take: no Read, no strike.
   if (input.tool_name === "Read") {
-    const struck = strike(projectDir, filePath);
-    if (!struck) return OK;                                    // not on the list, or no scan running
-    const left = readWorklist(projectDir).length;
+    // strike returns the remaining count from its own snapshot, so there is no
+    // second read here. Two processes that both re-read the list would both
+    // print the same number — that is the symptom I-055 started from.
+    const left = strike(projectDir, filePath);
+    if (left < 0) return OK;                                   // not on the list, or no scan running
     return { block: false, log: `读 ${short(projectDir, filePath)}  (扫描还剩 ${left})` };
   }
   const graph = loadGraph(projectDir);
