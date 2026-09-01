@@ -21,15 +21,6 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node packages/hook/dist/index.js"
-          }
-        ]
-      },
-      {
         "matcher": "Edit|Write|NotebookEdit|Read",
         "hooks": [
           {
@@ -40,15 +31,6 @@
       }
     ],
     "PreToolUse": [
-      {
-        "matcher": "Edit|Write|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"D:/GitHub/ai-companion/packages/hook/dist/pre-tool-use.js\""
-          }
-        ]
-      },
       {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [

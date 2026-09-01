@@ -1,5 +1,7 @@
 .scan-todo
 .scan-todo.claude
+.scan-done
+.scan-done.claude
 .approved
 .approved.claude
 graph.html

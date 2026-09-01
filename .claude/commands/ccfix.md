@@ -47,8 +47,10 @@ src/resolver.ts:41-53              no cache — resolves on every call
 File, line range, what the idea says, what the code does, one line on the gap.
 A finding without a line reference is not a finding.
 
-Then **stop and show the human the full list.** Ask, per finding, which side is
-wrong:
+Then **stop and show the human the full list.** The list reaches the human as a
+plain-text message that **ends your turn** — content written just before a tool
+call may never be shown. Ask which side is wrong in that same message, and wait
+for the reply. Per finding, the two possible answers:
 
 - **The code is wrong** → fix the code to match the idea.
 - **The idea is stale** → update `ideas/graph.yaml` and log it. The code was

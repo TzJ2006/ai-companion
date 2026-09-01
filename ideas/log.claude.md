@@ -398,3 +398,279 @@ Append-only. Every code, doc, and idea change goes here.
 - 2026-08-30 02:01  人工批准想法图 7eae8c98ded9
 - 2026-08-30 02:01  Edit ideas/graph.claude.yaml
 - 2026-08-30 ccbuild I-069（签字已录，状态待人手动置 done）：人回复「通过」，签字代录进 I-069 的 signed_off（注明由 ccbuild 代录、原话在本文件）。`ideas.ts set I-069 done` 连续两次被本机权限分类器拦下，未执行；按 R2「状态只能用 set 改，不能手改 yaml」的规则，agent 不绕过，改由人手动跑该命令。当前 I-069 仍是 doing，check 35 想法 0 错误。
+- 2026-08-30 18:04  Write .devcompanion/tests/test_render_edit.test.ts
+- 2026-08-30 21:47  人工批准想法图 f27cddae2821
+- 2026-08-30 21:49  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:49  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:49  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:49  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:50  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:50  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:51  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:52  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-30 21:52  Edit .devcompanion/tests/test_render_edit.test.ts
+- 2026-08-30 21:56  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccbuild I-062（done）：网页详情卡片从只读变成可编辑。改动文件 `claude-companion/ideas.ts`（新增 `attr` 属性转义、导出 `fingerprint`、`PROSE` 字段表；`render(g, source, projectDir)` 加两个可选参；每张卡片加编辑开关、名称输入框、状态下拉和六个多行输入框；新增 `<script type="application/json" id="graph-data">` 数据模型带 12 位指纹与按项目路径哈希的草稿键；新增独立的编辑 module script）。新增测试 `.devcompanion/tests/test_render_edit.test.ts`（12 个）。验证：先红（11 失败）后绿；全套 7 文件 94 测试全绿。浏览器实测（起了个临时 http 服务拿到真实 origin）：编辑开关、脏标记、改回原值取消标记、localStorage 不可用时降级为纯内存并显示「关页即丢」、草稿逐条恢复/丢弃都按设计工作，重开页面不自动套用任何改动。
+- 2026-08-30 ccbuild 两处发现：(1) 测试里有一条断言 `not.toContain("</textarea><")` 是不可能满足的——textarea 的闭合标签后面永远跟着别的标签，而同一个测试文件三条之前才刚要求必须有 textarea；已换成 `not.toContain("</textarea><script")` 加一条检查转义结果的正则，改动已在本轮报告里说明。(2) I-062 / I-063 / I-064 三个想法的 verify 指向同一个测试文件 `test_render_edit.test.ts`，I-062 做完之后这个文件是绿的，于是 R3「测试先行」对 I-063 和 I-064 形同虚设——它们会在从未红过的情况下被放行。建议给 I-063 / I-064 各自换一个测试文件。
+- 2026-08-31 00:40  人工批准想法图 c9d1883763e8
+- 2026-08-31 00:52  Write C:/Users/tongt/.claude/plans/glistening-squishing-locket.md
+- 2026-08-31 00:53  Edit C:/Users/tongt/.claude/plans/glistening-squishing-locket.md
+- 2026-08-31 00:53  Edit C:/Users/tongt/.claude/plans/glistening-squishing-locket.md
+- 2026-08-31 00:53  Edit C:/Users/tongt/.claude/plans/glistening-squishing-locket.md
+- 2026-08-31 00:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 00:56  Edit ideas/graph.claude.yaml
+- 2026-08-31 00:56  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccthink I-055 / I-056 / I-060：补完三个已有节点的第 4/5/6/7 问，图上没有新增或删除任何节点、任何边（人在第 1 步选定「只补完，不动范围」）。三个都是「借」不是「造」：I-055 借 `guard.ts:324-330` 自己的 `appendLog`（同一批并行进程写 log.claude.md 零撕裂，而 writeFileSync 的清单在同一场会话里写坏了）+ codex `companion.py:114-118` 的 pid 作用域临时文件名 + D30 的裁决；I-056 借 `install.ts:49-52` 的按命令子串撤销（生态同解：claude-code-docs 的 jq contains|not）+ 归档在 `ca7e956^:scripts/uninstall.ts` 的设计 + D14 的职责边界；I-060 借 codex `companion.py:487-507` 的 Kahn 形状。否掉 proper-lockfile / write-file-atomic / atomically / steno / lockfile / toposort / graphlib / jsonc-parser，共同理由是 `ideas.ts:7-8` 的零依赖前提加上「守卫每次 Read 新起一个进程」，各自另有硬伤（原子写包只在单进程内串行化，而这里五个写者在五个进程里；锁包多年未维护且过期锁会卡死一个必须 fail open 的守卫）。排期两周：第 1 周 I-056 → I-060，第 2 周 I-055（I-055 和 I-060 都改 ideas.ts，不能同时 doing）。
+- 2026-08-30 ccthink 三处调研结论与节点原文相左，已按调研改写：(1) I-055 原来的 how 说「对齐 save 的临时文件 + rename」，那只修撕裂不修丢写——rename 让写变原子但不串行化读，证据是 log.claude.md:301/302 两行都写「还剩 7」且那个文件至今还在清单第一行；改成只追加。(2) I-056 的 how 说「README 说卸载=删五个命令文件」，README 其实从没提过卸载，那句话在 `install.ts:9-10` 的头部注释里；已改写。(3) 仓库内与联网两路在 I-060 上打架：仓库内说照搬 codex 的 Kahn，联网说它不满足 expected。联网对，我跑了反例——四节点 A B C D 唯一边 C needs A，codex 的先进先出给 A,B,D,C，每步取最小才给 A,B,C,D；借形状但换掉队列。
+- 2026-08-30 ccthink 三个节点的 verify 都换成了新测试文件（原来 I-055 指向已存在的 test_ideas_guard.test.ts，I-056 是人工验证）。原因：R3 只检查 verify.command 里那个文件存不存在，指向一个已经绿的文件等于测试先行被架空——这正是 I-062 那轮发现的 I-063/I-064 陷阱。人另裁定 I-056 的人工验证换成真测试（断言每条 hook 命令指向的脚本真实存在），I-055 的测试真的起 N 个进程。
+- 2026-08-31 00:59  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:00  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:00  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:01  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccthink 完备性审计推翻了本轮三处结论，已按审计改回（三条我都亲手复核过）：(1) **守卫其实没有在保护自己的引擎**。`ideaFor` 返回第一个 code 里含该文件的想法，而 `claude-companion/ideas.ts` 的第一个认领者是 I-042（done）、`guard.ts` 的是 I-047（done），`ruleTestFirst` 对 done 想法立刻 return OK —— 所以 R3/R4/R6 对这两个全仓库改得最多的文件全部短路。这意味着我上一轮说「I-062 的实现被 R6 拦着」是错的，那次编辑本来就不会被拦；批准是对的做法，但不是机器强制的。只有 `.claude/settings.json` 是真的被闸住的（I-056 是第一个认领者且是 todo），所以「填完 → 渲染 → 人批准 → 再改」这条顺序只对 I-056 成立。这个 first-match 遮蔽问题比本轮三个想法都大，值得单独一个节点。(2) **R3 只检查测试文件存不存在**（`guard.ts:261-262` 的 existsSync），从不运行它、也不检查它失败过；CLAUDE.md 写的「exists and fails」是错的。所以「先看着测试红」这件事本轮三个节点都得靠自觉，机器不会要求。(3) **我给 I-055 写的证据说满了**：log.claude.md 里真正能证明并发的只有三处（剩余数 32 三次、19 两次、7 两次），不是 128 行都算数；已改成按扇区大小的论证，并把「先测出来」写进 how。另外补记两条被考虑过的更好做法：I-055 可以用 PostToolBatch（一整批并行调用结束后只触发一次，并发从源头消失，已核实该事件真实存在），I-056 可以把 installHooks 的过滤条件从只认 guard.ts 放宽到也认 packages/hook/ —— 两条都要改安装器，超出本轮「不动范围」，已记进节点的 why_this_way 说明为何不采纳。
+- 2026-08-30 ccthink I-060 的顺序改了：原来写「每步取最小」，审计指出节点原文「同一层内按 id 排」是按层（深度在前、id 在后），和「每步取最小」、和 codex 的先进先出是三种互不相同的顺序。按节点原文选按层，并把两个能分开三者的夹具写进 how（我把三种写法都实际跑过）：I-002 需要 I-001 且 I-004 需要 I-003 抓「每步取最小」；I-003 需要 I-002 且 I-004 需要 I-001 抓「照抄 codex」。一个三节点直链的夹具三种都分不开。
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:55  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:56  Edit ideas/graph.claude.yaml
+- 2026-08-31 01:56  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccbuild 前沿审计（6 个并行 agent 只读复核 I-055/056/060/063/064）推翻了本轮排期，人选定「先建三个、浏览器链另开一轮 ccthink」。图改六处、没有增删节点：(1) I-055 的 how 补上 strike 返回值契约——「不在清单里」返回 -1、「划掉了」返回剩余数，因为裸数字分不开「不在清单」和「还剩 0」，而 `guard.ts:295` 正按真假值分支、两个现存绿测试分别压着这两个方向；(2) I-056 的 how 补一条断言：四个事件各自至少留一条含 guard.ts 的 hook，否则把守卫整段删掉也能让「脚本文件存在」那条断言变绿；(3) I-060 的 why_this_way 作废一个假反例——「A B C D 唯一边 C 需要 A，先进先出给 A B D C」是错的，按层给的也是 A B D C，该夹具只抓得住「每步取最小」，改用 how 里的第二个夹具（I-003 需要 I-002、I-004 需要 I-001：按层给 1,2,3,4，先进先出给 1,2,4,3，三种顺序我逐个手推过）；(4) I-063 的 why_this_way 作废另一个假反例——活着的编号是 I-041～I-075，max+1 得 I-076 撞不上已退役的 I-001～I-040，真正的漏洞是删掉最大编号后 max 退回、下一个新建复用它；(5) I-063 / I-064 的 verify 各换自己的测试文件（test_render_structure / test_render_submit）——两个原来都指向 test_render_edit.test.ts，那文件 12/12 全绿且头部写着「I-062」，而 R3 只查文件存不存在，三个想法共用一个绿文件等于测试先行被架空；(6) I-063 的 needs 加 I-041，I-064 的 code 加 FORMAT.md——`baseDigest` / `changes.claude.json` 这个跨组件格式在两份 FORMAT.md 里一个字都没有，而 I-064 自己称它是「网页和写回指令之间的唯一接口」。
+- 2026-08-30 ccbuild 审计的两条结论已报给人、本轮不动图：(a) I-063 + I-064 修不好「没法提交已有更改」——真正把改动写回 YAML 的是 I-065，不在批次里；而且 next_id 由写回指令维护，没有 I-065 时计数器永不递增，第二轮新建会发出重复编号，把 I-063 的核心设计变成 bug 生成器。(b) I-063 的 how 没定义结构操作的改动记录形状（现在是 `id\0field → 字符串`，前置关系是只读链接、没有输入框），而 I-064 的打包格式完全长在它下面；另有跨模块重画通路缺失（mermaid 在 CDN 模块、编辑器是故意分开的另一个模块，唯一的桥是 window.nodeClick）和 tsx/esbuild 的 `__name` 会破坏 Function.prototype.toString 注入两个实现级坑。三件事留给下一轮 ccthink。
+- 2026-08-30 ccbuild 记一条守卫的实测边界（不是本轮要修的）：`ideaFor` 取第一个认领该文件的想法，`ruleTestFirst` 对 done 想法立即放行，所以本批次里 `claude-companion/ideas.ts`（首个认领者 I-042，done）和 `guard.ts`（I-047，done）上的 R3/R4/R6 全部短路，真正被闸住的只有 `.claude/settings.json`（I-056，todo）和 `FORMAT.md`（I-041，doing）。又因为 `set <id> done` 会写 status + log、指纹立刻变、R6 重新生效，一次批准覆盖不了整批——被闸的文件必须趁批准新鲜时先改完。已如实告知人，不承诺「只批一次」。
+- 2026-08-31 01:57  Edit ideas/log.claude.md
+- 2026-08-31 01:58  人工批准想法图 c47ef49d70e8
+- 2026-08-31 01:59  Write .devcompanion/tests/test_settings_hooks.test.ts
+- 2026-08-31 01:59  Edit .claude/settings.json  → I-056 清理掉指向已删除代码的过期 hook 配置
+- 2026-08-31 01:59  Edit .claude/settings.json  → I-056 清理掉指向已删除代码的过期 hook 配置
+- 2026-08-31 02:00  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:01  Write .devcompanion/tests/test_ideas_toposort.test.ts
+- 2026-08-31 02:02  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:03  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:05  Write .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-08-31 02:06  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-08-31 02:06  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:06  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:07  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:07  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:07  Edit claude-companion/guard.ts  → I-047 七条挂在 hook 上、agent 绕不过去的强制规则
+- 2026-08-31 02:07  Edit claude-companion/guard.ts  → I-047 七条挂在 hook 上、agent 绕不过去的强制规则
+- 2026-08-31 02:07  Edit claude-companion/guard.ts  → I-047 七条挂在 hook 上、agent 绕不过去的强制规则
+- 2026-08-31 02:07  Edit ideas/.gitignore
+- 2026-08-31 02:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:08  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-08-31 02:09  读 .cursor/hooks/gate.mjs  (扫描还剩 3)
+- 2026-08-31 02:09  读 .claude/commands/ccfix.md  (扫描还剩 3)
+- 2026-08-31 02:09  读 .cursor/skills/idea-onboard/SKILL.md  (扫描还剩 1)
+- 2026-08-31 02:09  读 .gitignore  (扫描还剩 0)
+- 2026-08-31 02:10  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 02:10  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccbuild I-056（done）：删掉 .claude/settings.json 里两条指向已删除的 packages/hook/dist 的 hook（PostToolUse 的 `node packages/hook/dist/index.js`、PreToolUse 的 `pre-tool-use.js`）。新增 `.devcompanion/tests/test_settings_hooks.test.ts`（3 条）：每条 hook 命令里的脚本 token 必须指向真实文件；四个事件各自至少留一条含 guard.ts 的 hook（没有这条，把守卫整段删掉也能让第一条变绿）。先红（自己找出那两条）后绿。文件形状核对过：`JSON.stringify(parse(t),null,2)+"\n" === t`，安装器不会因此产生整文件 diff。顺序说明：本条没走 `doing`——`set` 会立刻改指纹让刚拿到的批准失效，而 settings.json 正是本批唯一真被 R6 闸住的文件；`ruleTestFirst` 只对 done 想法放行、并不要求 doing，所以 todo → done 是通的。
+- 2026-08-30 ccbuild I-060（done）：新增 `topoOrder`（claude-companion/ideas.ts:157-213），分层 Kahn——层内按 id 排、悬空边按入度 0 处理、环里的节点按 id 接在末尾一个不丢、按数组下标取不经 id 查找表（重复 id 必须出两张卡）。用普通比较不用 localeCompare。新增 `test_ideas_toposort.test.ts`（9 条），含两个能分开三种顺序的夹具：I-002 需要 I-001 且 I-004 需要 I-003 抓「每步取最小」；I-003 需要 I-002 且 I-004 需要 I-001 抓「先进先出」。先红（9/9，`topoOrder is not a function`）后绿。
+- 2026-08-30 ccbuild I-055（done）：扫描清单改成只追加。`.scan-todo` 只写一次；新增只追加的 `.scan-done`；「还剩哪些」= 清单减已读（按小写折叠比较，顺序沿用清单）；`strike` 一次 `appendFileSync`、不读不改不重写清单。`writeWorklist` 同时清空 `.scan-done`——新清单配陈旧已读记录会把所有文件算成已读，等于 R7 静默失效。`save` 的临时文件名改成带 pid + 随机后缀，并对 EPERM/EBUSY/EACCES 重试 5 次（Windows 上 rename 覆盖被占用的文件会直接失败）。`.scan-done` 进 guard 的写保护名单（guard.ts decide）和 ideas/.gitignore。`scan` 一次性迁移：清单 = 当前文件列表，已读 = 清单减旧的剩余，并与清单对账。真实仓库迁移结果：49 个文件、45 个此前已读，卡在清单里的残缺行 `n` 因对账自动消失。新增 `test_ideas_scan_concurrency.test.ts`（9 条），第一条真起 8 个操作系统进程、各自自旋等到同一墙钟时刻再动手。先红（8/9，`doneFile is not a function` / `expected false to be -1`）后绿。
+- 2026-08-30 ccbuild I-055 过程中两处修正，都记在这里：(1) **既有的绿测试抓到了我的实现错误**——`test_ideas_guard.test.ts:261`「never strikes twice」要求同一个文件 Read 两次、第二次不记日志；我第一版让 strike 在已划过时仍返回剩余数，于是第二次又记了一条。按「绝不改测试让它过」的规矩，改的是实现（已划过返回 -1），并把我自己那条与之冲突的新测试改正——它比这条既有契约新、也考虑得少。(2) 真实并发跑完之后日志里仍有两行都写「扫描还剩 3」，而 how 明说改返回值就是为了消掉这个症状：原因是 strike 在 append **之前**读已读集，两个进程各自算出同一个数（两次 append 都落盘，不丢数据，但数字不准）。改成 append 之后再读一次算数——只读不写，不会重新引入被删掉的那个 race。真实验证：并行 Read 4 个文件 → 4 个 guard 进程 → `.scan-done` 45→49，一条没丢，扫描 49/49 完成。
+- 2026-08-30 ccbuild 本轮明确划到范围外、留给人决定的一条：`install.ts:104-111` 给新仓库播的 `ideas/.gitignore` 只写了 `.scan-todo`，没有 `.scan-done`，而且它只在文件不存在时写、`updateAll` 也只是再调一次 install，所以已装的仓库永远补不上这一行——新装或已装的仓库都会把自己的 `.scan-done` 提交进 git。没有顺手改的原因有两条：`install.ts` 由 I-051（doing）首个认领，是真受 R6 闸的文件而批准已在第一次 `set done` 时失效；而且 I-055 的 code 里没有它，顺手建前置正是「让图不再描述项目」的做法。本仓库自己的 ideas/.gitignore 已补。
+- 2026-08-31 02:11  Edit ideas/log.claude.md
+- 2026-08-31 02:37  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:48  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:49  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:50  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:51  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:52  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:52  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:53  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:53  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:54  Edit ideas/graph.claude.yaml
+- 2026-08-31 02:54  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccthink I-063/I-064/I-065 补完并重新拆分。第 1 步人选定范围「可以重新拆分节点」+「做到『改完能落进 graph.yaml』为止」（I-066/I-067 不在本轮）。第 2 步展示拆分后，**人提出改用本地小服务架构**（原话：做成类似 npm run 的那种小程序，前后端能交互，但要像 HTML 一样双击就能打开），并在第二轮问答里选定「静态那份保留可编辑」+「服务器直接写但落盘前显示逐条 diff 让人确认」。新增 5 个节点，图从 35 涨到 40：I-076（把画图算法抽成网页和引擎共用的一份源码）、I-077（改动记账信封，字段改动和结构操作同一格式）、I-078（取号计数器和改动文件格式写进两份 FORMAT.md）、I-079（本地小服务：当场渲染 + 接住改动 + 调 apply 落盘）、I-080（根目录双击入口）。I-063 缩成纯 UI 层。关键重排：I-063 **不再依赖**取号计数器（页面只发临时号，真编号是写回时发的），所以只有 I-065 那一支等 I-041，网页那一支不用等；I-065 从依赖 I-064 改为依赖 I-077+I-078（apply 消费的是信封格式，不是传输方式），于是 apply 可以和 UI 并行开发。I-068 终点补上 I-064 和 I-080 两条边，新节点全部能通到终点（check 无新增孤儿警告）。
+- 2026-08-30 ccthink 调研（6 个 agent，仓库内 3 路 + 联网 3 路，175 次工具调用）推翻了三个节点里原本写死的四处设计，全部是在本仓库实测出来的，不是查文档：(1) **Function.prototype.toString 注入是坏的**——tsx 把 esbuild 的 keepNames 硬编码成开启且无环境变量可关，函数体里任何具名 const 都编译成 __name(...)，而 __name 正是编译器注入的自由变量，「零闭包」这个前提被编译器亲手破坏；拿真 tsx 跑同形状函数求值报 `__name is not defined`。更要命的是跑测试那套转换不依赖 esbuild，所以测试全绿而双击打开的页面报错——一个测试永远抓不到的失败方式。改成把函数体写成字符串常量（render 本来就是模板字符串手写页面脚本），代价是失去类型检查，靠「两边输出逐字相同」那条测试兜底。(2) **showSaveFilePicker 在 file:// 下打不开**——规范里「检查环境是否允许弹出文件选择器」第一步就拒绝 opaque origin，而 file:// 文档正是 opaque origin；原文「file:// 下实测可用」很可能是在别的上下文测的。已从第一级降为「探测到就顺手用」，兜底改成可全选的文本框（剪贴板在 file:// 下同样常不可用）。待人复测。(3) **改动账本扩不动只能重建**——现有比较用 String(旧)===String(新)，而单元素数组转字符串等于该元素本身，所以「把两条前置删成一条」会被判成没有改动然后从账上删掉；裸字符串也表达不了「不存在」。这是 I-077 存在的理由。(4) **编号不能让网页算**——原文那条反例是错的（活着的编号 I-041~I-075，max+1 得 I-076，撞不上退役的 I-001~I-040），真正的漏洞是删掉最大编号后 max 退回、下一次新建复用它，以及两份网页同时算出同一个号。
+- 2026-08-30 ccthink 借 vs 造：写回那端**几乎全借**——在真实的 50,352 字节 graph.claude.yaml 上实测 `String(parseDocument(src)) === src` 逐字节相同，改一个 status 只动 1 行，所以 I-065 不需要任何新 YAML 机器。否掉 yaml-diff-patch（它自己就是搭在同一个 yaml 库上的，装它只是把已有的东西再要一遍，还多带「差异太大就打不上」的失败方式，而这里编号就是精确地址、不需要模糊匹配）、RFC 6902（按下标定位，一加节点就全错）、RFC 7396（数组只能整体替换，且 null 表示删除与图里真实存在的 `signed_off: null` 冲突）、browser-fs-access、以及本地服务器框架。借形状：按编号寻址 + 写回时解析成下标（照 setStatus）、指纹乐观锁（照 Terraform saved plan 和 codex 的 snapshot 校验）、改动文件带版本前缀（照 mermaid-live-editor）、本地服务（照 Decap CMS local_backend，但用 Node 自带 http、不引框架）。三条保 diff 的写法都是量出来的并已写进 I-065 的 how：`String(doc)` 必须不带参数（带 lineWidth:0 动 1274/1301 行、文件缩 291 行）；写 needs 必须 createNode 后标 flow（直接塞数组动 444 行 vs 标了只动 1 行）；删第一个想法时分节标题挂在序列自己身上而非该节点。
+- 2026-08-30 ccthink 顺带收回一句说满了的话：I-065 原文写「状态操作转调既有 setStatus 的证据校验」，而 Claude 的 setStatus 其实只挡「done 缺 code/verify」和「人工验证没签字」两件事，不检查八问齐全、不检查前置、不看批准（Cursor 那版才真按 readiness 闸，规范里已记为分歧）。已改成诚实说法：复用 setStatus 是为了让日志只有一个写入口并继承那两条检查，不是继承一整套 readiness 校验。
+- 2026-08-31 02:56  Edit ideas/log.claude.md
+- 2026-08-31 03:08  人工批准想法图 44e6868c7f2e
+- 2026-08-31 03:09  Write .devcompanion/tests/test_mermaid_source.test.ts
+- 2026-08-31 03:10  Edit .devcompanion/tests/test_mermaid_source.test.ts
+- 2026-08-31 03:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:13  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:13  Edit ideas/graph.claude.yaml
+- 2026-08-31 03:14  Write .devcompanion/tests/test_change_envelope.test.ts
+- 2026-08-31 03:15  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:16  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:17  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:17  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:18  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:18  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:18  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:18  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:19  Edit .devcompanion/tests/test_change_envelope.test.ts
+- 2026-08-31 03:19  Edit ideas/graph.claude.yaml
+- 2026-08-30 ccbuild I-076（done）：画图算法抽成唯一一份源码。做法不是节点原来写的 `Function.prototype.toString` 注入，而是一个字符串常量 `MERMAID_SOURCE_FN`——引擎用 `new Function` 求值它，页面用 `<script id="mermaid-source-fn">` 嵌同一段文本。字符串是数据不是代码，任何编译器都不会碰它，所以 tsx 的 keepNames 往函数体里塞 `__name` 那个坑从根上不存在（那个坑的致命处在于跑测试的转换不注入 `__name`，测试会全绿而双击打开的页面报错）。六个自由变量（编号查找表、终点集合、编号转节点名、状态分类、长名折行、文字净化）全部内联进函数体；`wrapLabel` 因此变成死代码，已删。新增 `test_mermaid_source.test.ts` 10 条，先红（10/10，`buildMermaidSource is not a function`）后绿；正题那条是把页面里嵌的那段文本抠出来、在只看得见全局的作用域里独立求值，再和引擎输出逐字比对——干净作用域顺带把「零闭包」压死了，函数体一旦引用模块里的东西这里当场报错。另在真实的 40 个想法上跑了新旧两套算法对比，逐字节相同（157 行 = 157 行），证明重构无行为改变。
+- 2026-08-30 ccbuild I-077（done）：改动记账本换成六种操作的有序清单（set / status / add / remove / link / unlink）加一个信封（版本号、项目、图指纹），草稿和将来落盘的改动文件用同一个信封。`createLedger` 同样做成共用源码字符串。抵消规则：字段改回原值该条消失；连了又断互相抵消；删掉一个刚新建的临时想法时，连它的 add 和所有引用它的边一起消失（不给写回端留两条互相抵消的指令）。页面的编辑脚本改接这本账，草稿改存信封，并补上一个现存缺陷——原来草稿写进去时存了指纹、读回来却从不比对，一份对着旧图写的草稿会被无声恢复。新增 `test_change_envelope.test.ts`，15 条先红（15/15）后绿。正题那条是「把前置从两条删成一条」：旧账本比较新旧值用 `String(旧)===String(新)`，而单元素数组转字符串等于该元素本身，所以这个改动会被判成「没有改动」然后从账上删掉；现在记的是 `{op:"unlink", from, to}`。
+- 2026-08-30 ccbuild I-077 两处如实记录：(1) **测试先行有一处缺口**——记账本核心那 15 条是严格先红后绿的，但「页面接线」这一小步我先改了代码、之后才补上 2 条断言（页面用 createLedger、草稿存信封并比对指纹）。补的原因是「页面重开能逐条恢复」是 expected 的一部分，没有断言盯着会在下次改动里悄悄退化；但顺序上这两条不是先红的，不该算作测试先行的成果。(2) **现存绿测试的一条脆弱断言逼我改了代码顺序**：`test_render_edit.test.ts` 从 `localStorage.getItem` 切到下一个 `addEventListener`，断言中间不出现 `applyChange(`，意思是「草稿不能不经人点击就进数据模型」。我新写的 `restoreOp` 落在那个区间里——代码满足意图但破坏了这条机械检查。按「绝不改测试让它过」的规矩，把 describeOp / restoreOp 挪到 readDraft 之前，并在代码里留注释说明这个顺序是被那条断言约束的，免得下一个人随手挪回去。
+- 2026-08-30 ccbuild Week 1 收尾：测试 11 文件 115 条 → 12 文件 142 条，全绿；check 40 个想法 0 错误 9 警告（全是既有的）。前沿移到 I-063（Week 2）。
+- 2026-08-31 03:20  Edit ideas/log.claude.md
+- 2026-08-31 03:51  Write .devcompanion/tests/test_render_structure.test.ts
+- 2026-08-31 03:52  Edit .devcompanion/tests/test_render_structure.test.ts
+- 2026-08-31 03:52  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:53  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:53  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:53  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:53  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:55  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:56  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:56  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:57  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:58  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 03:58  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 04:01  Edit ideas/graph.claude.yaml
+- 2026-08-31 ccbuild I-063（done）：网页上增删想法和前置关系。前置从只读链接变成可断的 chip（每条一个 ×）加一个「＋ 连一条前置…」下拉框（选项排掉自己和已连的）；「＋ 新建想法」出一张临时号卡片（clone 现有卡片改属性，避免把卡片模板手抄第二份）并标「前三问还没填齐」；删除是标记待删（卡片留在原地、加删除线），再点一次反悔。结构一变就调 I-076 那份共用画图函数重算图源并重画：建**全新**的 pre 元素替换旧的（画图库会在处理过的元素上盖章，原地改不重画），文字走 textContent，重画后保留人当前的缩放和平移。跨模块：画图模块整块搬到最后（它 import CDN 且有顶层 await，排在前面会让编辑排在一次跨网请求之后才初始化），并在自己就绪后挂出 `window.redrawGraph` 作为唯一的桥（照抄现有 nodeClick 的做法）；编辑模块只特性探测、绝不等待。断网：编辑模块启动时先把 `<pre class="mermaid">` 的源码清空（不清的话画图失败时读者看到的是满屏 flowchart 源码），结构编辑时探测不到重画函数就显示「图暂时不可用（离线）—— 编辑与提交照常」。
+- 2026-08-31 ccbuild I-063 加了一个 devDependency：`happy-dom`。理由：不加的话这个节点的测试只能断言「页面里出现了某个字符串」，功能真坏掉时不会红，等于没有。引擎「装到别的仓库不需要装东西」那条前提说的是运行时（目标仓库只需要 yaml），测试工具是另一回事（vitest 本来就是 devDependency）。加了之后 `test_render_structure.test.ts` 12 条是真把页面装进 DOM、真去点、再看账本和页面变成什么样。先红（10 失败）后绿。
+- 2026-08-31 ccbuild I-063 真浏览器验收（起了个临时 http 服务拿真 origin，做完已清 localStorage、关标签页、杀进程）：点 ×断开 I-041→I-042，**图上边数 66→65**、chip 消失、账本恰好一条 unlink、横幅「1 处未提交的改动」、信封带指纹、离线提示正确隐藏；点「新建想法」，拿到 tmp:1、卡片出现并标未填齐、**图上节点 40→41**、缩放 15% 和平移逐字保留；点「删除」I-042，卡片留在原地并标 removing、**节点 41→40**，再点一次反悔，账本和图都回到原样。
+- 2026-08-31 ccbuild I-063 过程中两处记录：(1) 我第一次做画图模块搬移时改错了——只剪掉了模块开头的 import 和 initialize，把 pan/zoom 留在一个不再 import mermaid 的模块里。跑全套测试发现只有新写的红测试在失败、其余 146 条仍绿，据此确认没有连带破坏，然后把删掉的部分原样补回、再正式整块剪贴。教训是这种大块搬移应该一次剪一整块，不要从中间下刀。(2) 我自己写的测试里有一条断言是不可能满足的：`document.body.textContent` 不含 `classDef done fill:`——而共用画图源码那个 `<script>` 本身就合法地包含这段文字。这和之前 I-062 那轮遇到的 `not.toContain("</textarea><")` 是同一类错误。已改成只查 `.graph` 容器，并在测试里写明为什么。
+- 2026-08-31 ccbuild Week 2 收尾：测试 12 文件 142 条 → 13 文件 154 条，全绿；check 40 个想法 0 错误 9 警告。**Week 3（I-065 写回）现在被挡住**：它需要 I-078（把取号计数器和改动文件格式写进 FORMAT.md），而 I-078 需要 I-041，I-041 还是 doing。这正是排期风险里写明的那条唯一外部阻塞，现在真的撞上了。
+- 2026-08-31 04:02  Edit ideas/log.claude.md
+- 2026-08-31 04:33  Edit .devcompanion/tests/test_render_structure.test.ts
+- 2026-08-31 04:33  Edit .devcompanion/tests/test_render_structure.test.ts
+- 2026-08-31 04:34  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 04:34  Edit ideas/graph.claude.yaml
+- 2026-08-31 04:34  Edit ideas/graph.claude.yaml
+- 2026-08-31 04:34  Edit ideas/graph.claude.yaml
+- 2026-08-31 04:35  Edit ideas/graph.claude.yaml
+- 2026-08-31 04:53  Edit ideas/graph.claude.yaml
+- 2026-08-31 ccbuild **I-041（done）—— 人工签字，原话逐字记录在此**：人回复「八问够用，40 个想法都填进去了，没有填不进去的」。这条是 I-041 的 verify（「拿一个真实想法填一遍八问，看有没有哪个问题填不进去、或者填完还说不清这个想法」）的人工验收答复，已按 I-069 的先例录进 signed_off 并注明由 ccbuild 代录。agent 无法产生这一步：`setStatus`（claude-companion/ideas.ts）对 manual 且 signed_off 为空的想法直接抛错，而共同规范 D27 要求人工签字必须能追溯到人的真实答复。I-041 一 done，I-078 立刻进入前沿，I-065 → I-079 → I-080 → I-064 整条写回链解锁。
+- 2026-08-31 ccbuild 三个 subagent 并行调研（只读，不写；三件事都要动同一个 graph.claude.yaml，而批准绑在图指纹上，并行写只会互相把对方的批准弄失效）。结论：(1) **I-041 只差签字** —— 它承诺的规范文字一个字都不缺，八问已在 40 个想法上用了一整轮；(2) **I-078 那条边两份报告打架** —— 查边的说该拆（`guard.ts` 里根本没有 `needs` 这个词，`ruleTestFirst` 只看 how/why_this_way、批准哈希、测试文件存不存在，从不看前置；那条边是我按 `ideaFor` 的「首个认领者」加的，是文件归属不是工作先后），查 I-041 的说别拆（不该在一份没签字的规范上接着加内容，而且它离 done 只差一个签名）。**采纳后者**：既然一个签名就能解，绕过它不如签掉——少一次图形状改动，少一次 agent 替人做的判断。边保留。(3) **I-061 的第 4/5 问已补完**，关键发现是 `topoOrder` 至今零个生产调用者，这条想法是它的第一个消费者。
+- 2026-08-31 ccbuild 同轮纠正两处写在图里的假话：(1) I-041 的 how 说「三个 companion 各有一份基本一致的副本」——实测 `claude-companion/FORMAT.md` 160 行有「怎么写这张图」一节，`companion/FORMAT.md` 545 行有，`cursor-companion/FORMAT.md` 167 行**缺**（是 08-28 之前的旧版），`codex-companion/FORMAT.md` **根本不存在**；而且共同基座那份压根不在 I-041 的 code 里。已改写。(2) I-061 的 expected 说「卡片从没有前置的地基一路排到终点」——分层拓扑序给不出这个，实测五个终点落在第 29/30/33/34/40 位，只有最后一个恰好是终点。拓扑序保证的是「每张卡片排在它全部前置之后」，不保证「终点在最后」。已改成实际能达到的标准。另修 I-041 的 lines 143→160。
+- 2026-08-31 ccfix **I-063 已交付代码里的一个 bug，由 I-061 的调研 agent 顺手抓到**：网页上「新建想法」是克隆第一张卡片，而清空循环只处理 `textarea/input`、`.ro`、`.iid`、`select.rw`、`.chips` —— 「代码在哪」和「如何验证」那两个 `<dd>` 没有 `.ro` 类，够不着，于是**新建的想法带着上一张卡片的代码路径和验证命令出生**，而那两样正是 /ccbuild 照着去写文件的东西。按测试先行修：先把 test_render_structure.test.ts 的夹具加实（原夹具里那几个想法根本没有 code/verify，抓不到这个 bug）→ 断言变红 → 改成 `dd:not([data-f])` 一律清空这条泛化规则（以后再加只读格也不会漏）→ 155 条全绿。教训记一条：这个 bug 在我做 I-063 的真浏览器验收时没被发现，因为我验的是「新建能不能出卡片」，没验「出的卡片干不干净」。
+- 2026-08-31 04:54  Edit ideas/log.claude.md
+- 2026-08-31 05:07  人工批准想法图 ed5f0b95b2f7
+- 2026-08-31 05:09  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 05:09  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 05:09  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:10  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:19  Edit .devcompanion/tests/test_change_envelope.test.ts
+- 2026-08-31 05:19  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 05:20  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 05:21  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 05:21  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:21  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:22  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:22  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:22  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-08-31 05:23  Edit ideas/graph.claude.yaml
+- 2026-08-31 13:28  Edit ideas/graph.claude.yaml
+- 2026-08-31 ccbuild **I-078（done）—— 人工签字，原话逐字记录在此**：人回复「I-078 验证通过」。这是 I-078 的 verify（「读两份 FORMAT.md：取号计数器的字段名、初值和『只由写回递增』写清楚了；改动文件的信封和六种操作各有一个例子；『网页只发临时号』是一条明写的规矩」）的人工验收答复，已录进 signed_off 并注明由 ccbuild 代录。两份 FORMAT.md 各新增 `next_id` 一条和 `## The change file` 一整节；claude-companion/FORMAT.md 从 160 涨到 240 行，companion/FORMAT.md 从 545 涨到 648 行。
+- 2026-08-31 ccbuild I-078 写完后跑了一轮三 agent 的反向核对（规范 vs 代码 / 两份副本 vs 彼此 / 规范 vs 图上的计划），**推翻了我第一版规范的大半**，逐条改掉：(1) 我用现在时描述了一个只建了四成的系统——页面上根本还没有提交按钮、`apply` 命令也不存在，已改成明写「建成情况」；(2) `ideas/changes.json` 被我列进「Generated files」，而按 I-064 有服务器时全程不落盘，它只是降级产物，已标注；(3) `add` 的例子里 `fields` 填着内容，而页面实际发的 `fields` 全是空串、内容随后由一串 `set` 补上，例子已改；(4) 规范从没说临时号会出现在哪，实际有四个位置（`set`/`status` 的 `id`、`link`/`unlink` 的 `from`/`to`），漏替换一处整份作废，已补；(5) 「`ops` 有序且顺序有意义」说满了——同字段改两次只留最后一条并挪到队尾，而且 I-065 还会重排，已收窄成「引用有先后：add 一定在引用它的 link 前面」；(6) 「读完就改名归档」与 I-065 的「失败整体放弃、磁盘不动」矛盾，照原样写会把被拒的改动文件也归档掉、人的编辑一份不剩，已改成「只在成功时归档，被拒时原文件不动」；(7) 补上「这个文件不是可信输入」的信任边界；(8) 补上「废弃（保留编号置 blocked）」和「删除（remove）」是两件事；(9) D28 的命令面漏了 `apply` 和 `serve`，而且它保留的 `new` 用的正是被否掉的「最大编号加一」，已写明会发编号的只有这两个命令且都必须走 `next_id`。
+- 2026-08-31 ccfix **I-077 已交付代码里的一个 bug，由规范核对顺手抓到**：`removeIdea` 删临时想法时扫掉了 `add`/`set`/`link`/`unlink`，**唯独漏了 `status`**。后果比表面严重——留下的孤儿带着一个没人认领的临时号，而按规范自己的规则「还剩临时号就整体拒绝落盘」，一个被删掉的草稿想法会把同一次提交里所有别的编辑一起拖下水；UI 上两次点击就能触发（新建卡片→动状态下拉框→删除）。先红后绿修掉，drop 判定补上 `status` 分支并留注释说明「每一种，不是大多数种」。156 条全绿。
+- 2026-08-31 ccbuild I-078 的 how 里「本仓库最大编号是 I-075，所以初值是 76」已作废：写下那句话时图还没长到 I-080，照 76 初始化会把 I-076～I-080 重发一遍，正好是这个字段要防的事。改成一条规则：初值 = 这张图里出现过的最大编号 + 1，缺字段时由写回补上。教训：**规范里写死一个数，只要图还在长就一定会过期**。
+- 2026-08-31 ccbuild 人裁定下一步走 B：先把网页编辑链建完（I-065 → I-079 → I-080 → I-064），再做 I-070。背景是核对发现 **I-070 的 how 漏了 `apply` 和 `serve` 两个子命令**，而它同时声明「旧引擎保持只读」——照现在的计划合并出来的 `companion/ideas.ts` 不含写回和本地服务，而唯一有这两样的引擎正好被它退役。人问「什么叫子命令没有 apply」，已用大白话解释：引擎是一个程序、后面跟一个词做一件事，今天认识 check/next/show/set/render/init/scan 七个词，写回会是第八个词 `apply`（I-065 建）、本地服务是第九个 `serve`（I-079 建）。选 B 的理由是不合并半成品、只合一次。I-070 的 how 补 `apply`/`serve`/`next_id` 这件事留到真正开始 I-070 之前做。
+- 2026-08-31 14:54  Edit ideas/log.claude.md
+- 2026-08-31 14:57  人工批准想法图 b32c0c95aeb4
+- 2026-08-31 14:59  Write .devcompanion/tests/test_ideas_apply.test.ts
+- 2026-08-31 15:00  Edit .devcompanion/tests/test_ideas_apply.test.ts
+- 2026-08-31 15:00  Edit .devcompanion/tests/test_ideas_apply.test.ts
+- 2026-08-31 15:00  Edit .devcompanion/tests/test_ideas_apply.test.ts
+- 2026-08-31 15:01  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:02  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:02  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:02  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:03  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:05  Edit .devcompanion/tests/test_ideas_apply.test.ts
+- 2026-08-31 15:05  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:06  Edit ideas/graph.claude.yaml
+- 2026-08-31 15:07  Write .devcompanion/tests/test_ideas_serve.test.ts
+- 2026-08-31 15:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:10  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:10  Edit .devcompanion/tests/test_ideas_serve.test.ts
+- 2026-08-31 15:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:11  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:13  Edit ideas/graph.claude.yaml
+- 2026-08-31 15:14  Write graph.cmd
+- 2026-08-31 15:14  Write graph.sh
+- 2026-08-31 15:14  Edit package.json
+- 2026-08-31 15:14  Edit ideas/graph.claude.yaml
+- 2026-08-31 15:16  Edit .devcompanion/tests/test_ideas_serve.test.ts
+- 2026-08-31 15:17  人工批准想法图 39e1d128b8e5
+- 2026-08-31 15:18  Write graph.cmd  → I-080 根目录放一个双击就能打开想法图的入口
+- 2026-08-31 15:20  Write .devcompanion/tests/test_render_submit.test.ts
+- 2026-08-31 15:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:21  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:21  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:21  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:24  Edit ideas/graph.claude.yaml
+- 2026-08-31 ccbuild **I-065（done）—— 引擎的第八个词 `apply`**：纯函数 `applyChanges(图文本, 信封, 日期)` 返回新文本或拒绝理由、全程不碰磁盘，命令行那层只负责读写。顺序是版本 → 指纹 → 四阶段（新建 / 字段状态 / 边 / 删除，删除排最后所以没有下标会在中途挪位）→ 整图校验 → 才落盘。三条保 diff 的写法都实现了并各有测试：转回文本不带任何参数、写 needs 走 createNode 后标 flow、删第一个想法时分节标题挂在整个序列上而不是那个节点上。临时号在应用前一次性换成真编号（四个位置一起换），剩一个就整体拒绝；新建强制 todo 并剥掉状态/记录/签字；已完成想法被改了行为字段自动降回 doing 并留 log。test_ideas_apply.test.ts 20 条先红后绿，另做端到端真跑：新想法拿到 I-081、`next_id: 82` 落在 endpoints 旁边、改动文件归档成 changes.applied-<日期>.json、页面重渲染。
+- 2026-08-31 ccbuild I-065 过程中修了自己写的两处：(1) `next_id` 被 setIn 追加到文件最末尾（几百行想法之后），先加断言「计数器该排在 ideas: 之前」再改成插到顶层键那一段里；(2) `apply` 的命令行参数解析把 `--project` 当成了改动文件路径，报出「没有找到改动文件：D:\GitHub\ai-companion\--project」这种莫名其妙的错，已改成只在 args[1] 不是 `--` 开头时才当路径。
+- 2026-08-31 ccbuild **I-079（done）—— 引擎的第九个词 `serve`**：Node 自带 http、不引框架（路由只有三条，框架是纯负担，而且引擎的前提是装到别的仓库不需要装东西）。只绑 127.0.0.1；启动时生成一次性令牌、只写进当场渲染出去的那份页面；三条路径是「当场渲染的页面 / 健康检查 / 接收改动」，接收那条分两步：先只算不写回逐条对照，人确认后才调**同一个** applyChanges 落盘——两个写入口意味着两套校验，迟早分叉。端口被占自动往上加一。test_ideas_serve.test.ts 14 条（真起服务、真发 HTTP）先红后绿 + 真浏览器验收。安全边界如实写进代码注释：它没给出 agent 现在拿不到的能力（守卫只挂 Edit/Write，看不见 Bash），是在已经开着的门边加一个好用的把手，不是新开一扇门。
+- 2026-08-31 ccfix I-079 的测试抓到一个真 bug：`server.listen(port, host, callback)` 会把回调注册成一次性的 `listening` 监听器，**而 EADDRINUSE 之后它不会被摘掉** —— 重试成功时第一次那个回调也跟着触发，用旧端口号先把 Promise 结掉了。后果是返回的地址指向一个没人监听的端口，浏览器会打开一个死链接。改成显式的 once("error") / once("listening") 并在任一结局摘掉另一个。同轮修了我自己写错的一条测试（让 I-001 需要 I-002，而 I-002 本来就需要 I-001，那是个环，check 当然拒绝）。
+- 2026-08-31 ccbuild **I-080（doing）—— 根目录双击入口**：`graph.cmd`（Windows 双击）、`graph.sh`、`package.json` 加一条 `npm run graph`。节点原本**没有 code 块**，`set done` 会拒，已补上；补完之后 `graph.cmd` 就变成受管文件，随即被 R6 闸住（这一批四个想法里只有它是真受管的，其余都落在被已完成想法短路的 `claude-companion/ideas.ts` 上），人重新批准后才改完。
+- 2026-08-31 ccfix **`graph.cmd` 第一版是坏的，实测跑出来报错**：`'e-companion' is not recognized as an internal or external command` / `'好让人看见最后一行是什么。' is not recognized...`。原因是 **cmd.exe 读 .cmd 用的是系统 OEM 代码页而不是 UTF-8**，我写在里面的中文注释被按错编码解读、把行拆坏了，注释的一部分被当成命令执行。批处理文件必须纯 ASCII。已改成全英文注释，并**加了一条自动断言**（`graph.cmd` 里出现任何非 ASCII 字符就红，另外检查 `cd /d "%~dp0"` 还在），放在 test_ideas_serve.test.ts 里，因为这个入口唯一的工作就是把那个服务起起来。修完真跑通：`cmd /c graph.cmd --port 8803` 起服务、健康检查返回 {"ok":true}。教训：**这类「只在别人机器上失败」的坑，人工验证清单是抓不住的，得有机器断言。**
+- 2026-08-31 ccbuild **I-064（done）—— 网页上的提交**：探测本地服务（没有令牌、或探测失败，都安静地当作没有——直接双击打开的那一份走的正是这条）。有服务时两步：先 `confirm:false` 拿逐条对照给人看，人点确认才 `confirm:true` 落盘；成功后**不清草稿**只标「已提交」（写回还可能被拒，人的改动不能一份都不剩）。没有服务时同一个信封走下载，兜底是一个能全选复制的文本框（下载可能被拦、剪贴板在 file:// 下常常用不了，而文本框在任何浏览器里都不会失败），并写清放到哪个目录、跑哪条命令。test_render_submit.test.ts 11 条先红后绿。
+- 2026-08-31 ccbuild **整条链的真实验收（真浏览器 → 真本地服务 → 真文件，在一份临时拷贝上做）**：断开一条前置 → 横幅「1 处未提交的改动」→ 点提交 → 面板列出「I-042 去掉前置 I-041」并出现确认按钮 → 点确认 → 「已提交，写回了 1 处改动」。图文件里 `needs: [ I-041 ]` 真的变成了 `needs: []`；**18 条分节注释一条不少**；整份文件**只差 2 行**；服务端日志记下「网页写回 1 处：I-042 去掉前置 I-041」；草稿按设计保留。这一批（I-065 → I-079 → I-080 → I-064）到此建完，测试从 190 涨到 16 文件 202 条全绿。I-080 还差人在文件管理器里真双击一次并签字。
+- 2026-08-31 15:26  Edit ideas/log.claude.md
+- 2026-08-31 15:40  Edit .devcompanion/tests/test_ideas_serve.test.ts
+- 2026-08-31 15:40  Edit .devcompanion/tests/test_ideas_serve.test.ts
+- 2026-08-31 15:40  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:40  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 15:46  Edit ideas/graph.claude.yaml
+- 2026-08-31 15:47  Edit ideas/graph.claude.yaml
+- 2026-08-31 17:18  人工批准想法图 d238aa155b37
+- 2026-08-31 17:19  Write .devcompanion/tests/test_render_sign.test.ts
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:20  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:21  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-08-31 17:21  Edit .devcompanion/tests/test_render_sign.test.ts
+- 2026-08-31 17:22  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 17:22  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 17:22  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-08-31 17:25  Edit ideas/graph.claude.yaml
+- 2026-08-31 17:25  Edit ideas/graph.claude.yaml
+- 2026-08-31 22:05  Edit ideas/graph.claude.yaml
+- 2026-09-01 02:40  Edit ideas/graph.claude.yaml
+- 2026-09-01 02:49  Edit ideas/graph.claude.yaml
+- 2026-09-01 02:50  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:50  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:51  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:51  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:51  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:52  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 02:55  人工批准想法图 9a336c6800b7
+- 2026-09-01 ccthink 网页三处小改动 → 六个新节点（I-082～I-087），图从 41 涨到 47。人的原始诉求是三件事：图下面加一个可折叠的「等人工验收」索引、同样一个「进行中」索引、标题和图之间加一段 very high level 的分步概览（要求最清晰最直白最简洁、不创造新词汇不缩写）。**第 1 步人先选了「用图里现有的分节标题」当概览的来源，调研之后否掉、人改选「写成一条规矩」**——所以第三件事从「往这个图里写十句话」变成了「规范里定下概览怎么写，引擎校验它，命令执行它」，一个节点拆成四个（I-082 规矩 / I-085 引擎校验 + 本仓库归步 / I-086 网页渲染 / I-087 两条命令）。索引那两个是 I-083、I-084。三周排期，第 3 周（在陌生仓库真跑一遍）是猜的。
+- 2026-09-01 ccthink 人在中途纠正了两次方向，都记下来：(1) 我一开始把「十句大白话」理解成给这个仓库手写十句，人指出**这应该是一条 instruction，之后 follow 它就能在其他仓库也获得类似的东西** —— 于是整件事从「写内容」变成「定规矩 + 让实现执行规矩」，这也和这套工具「概念性的东西只写在规范里一处」的一贯做法对上了。(2) 人问「为什么是十句」，我如实答：十不是设计出来的，是这个文件恰好长成了十段，而且其中三段（已知缺陷 / 终点 / 阅读顺序）根本不是项目的步骤，是给写图的人分类用的筐 —— 这条后来变成了规矩里的第五条，连反例一起写进规范。步数范围人定为三到七。
+- 2026-09-01 ccthink 调研（4 个 agent，115 次工具调用，仓库内 + 联网两路）结论：**能借的几乎不用造** —— 折叠区页面里已经有了（每张卡片的「修改记录」用的就是浏览器自带的那个元素，19 个实例在跑，零行脚本，键盘/读屏器/页内查找自动展开全都自带）；跳转、转义、状态词、前沿判断式全部现成。**造的只有三样**：按步计数的小函数（现有的图例把整张图的计数拍成了一个字符串，切不开，两处各写各的迟早对不上）、那条规矩本身、以及新增想法允许携带归属字段。
+- 2026-09-01 ccthink 调研推翻了人在第 1 步的选择，理由是实测出来的：用分节注释当数据**会静默说假话** —— 写回功能给新想法的落点是追加到列表末尾（`doc.addIn(["ideas"], node)`），所以**每一个从网页新建的想法都会自动归到最后一段**，改动记录里看不出、页面上看不出，只是那句「这一段有几个想法」悄悄变错；而网页新建想法这条路我们上一轮才刚建好。另外三条：删掉某段唯一的想法会留下孤儿标题；yaml 库自己的文档说注释处理「并不完全稳定」；十个标题里有两个夹带着维护记录（`（2026-08-29 /ccthink：第 2 步拆分经人批准…）`），照搬会把内部记账印在第一屏。还有一条决定性的：**新建出来的空图里根本没有分节注释，两份规范里也从没提过这个约定** —— 装到别的仓库就是一片空白，而「别的仓库也能有」正是这件事的全部意义。
+- 2026-09-01 ccthink 调研另外抓到三个必须避开的坑，全部写进了对应节点的 how：(1) **索引行上不能放签字按钮** —— 现有签字测试有五处用 `[data-sign="…"]` 定位元素，索引在卡片上面，多出来的那个会先被找到，于是五条断言全部在测另一个东西**而且仍然是绿的**；(2) **每一行必须带真正的锚点地址** —— 那个平滑滚动的跳转函数住在需要联网取画图库的模块里，双击打开又没网时整个模块不执行，锚点才是四种情况下都管用的那条路；(3) **默认收起要靠「不写 open 属性」**，写成 `open="false"` 反而是展开的。另外新标签不能用 idea/mermaid/graph 这几个类名、属性名不能以 id 结尾，否则会撞上已有测试定位卡片的字符串。
+- 2026-09-01 ccthink 调研还改正了两个节点自己写错的地方：(1) **I-083 原文的判断条件和页面实际用的不是同一个** —— 原文写「验证是人工检查且签字栏为空」，而签字按钮实际用的判断里没有「必须是人工检查」这一条；两者在今天这张图上恰好都命中十二条，正因为凑巧一致才更容易漏掉，已改成「复用签字按钮那一个，一个字都不改」。(2) **I-084 原文的推断是错的** —— 它写「一个前置都不等，说明它是真的在做，不是卡着」，实测三个进行中的想法有两个一个前置都不等，而这两个恰恰都卡在等人签字；已改成只说「没有别的想法挡路」，不暗示有人在做。另加一条实现要求：「还没做完」必须写成「不等于已完成」而不是「等于待办」，否则受阻的前置会被当成不挡路。
+- 2026-09-01 02:56  Edit ideas/log.claude.md
+- 2026-09-01 03:00  Write .devcompanion/tests/test_render_worklist.test.ts
+- 2026-09-01 03:01  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:01  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:01  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:06  人工批准想法图 bb09a701e907
+- 2026-09-01 03:07  Write .devcompanion/tests/test_render_ongoing.test.ts
+- 2026-09-01 03:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:08  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:08  Edit .devcompanion/tests/test_render_ongoing.test.ts
+- 2026-09-01 03:11  Write C:/Users/tongt/.claude/plans/memoized-cuddling-pony.md
+- 2026-09-01 03:14  Edit C:/Users/tongt/.claude/plans/memoized-cuddling-pony.md
+- 2026-09-01 03:14  Edit claude-companion/README.md
+- 2026-09-01 03:14  Edit claude-companion/README.md
+- 2026-09-01 03:19  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:19  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:19  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:19  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:20  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:20  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:20  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:24  人工批准想法图 9af677216993

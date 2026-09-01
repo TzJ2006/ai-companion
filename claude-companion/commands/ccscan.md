@@ -62,8 +62,10 @@ An idea is a chunk of intent that produces something you would ship, demo, or
 point at. Not a file. Not a function. If your node list looks like the directory
 tree, you have recorded the structure and none of the thinking.
 
-Give each an `I-NNN` id and a short `name` — the name is all the graph shows, so
-it must read as an idea ("函数级变更追踪"), not as a location ("ast package").
+给每个想法一个 `I-NNN` 编号和一个完整人话句子的 `name` —— 图上只显示名称，
+它必须让从没打开过这个仓库的人看懂：写它做什么（「算出现在可以立刻动手做的
+想法有哪些」），不写行话标签（「前沿查询」），也不写代码位置（「ast package」）。
+FORMAT.md 里「How to write the graph」的规则适用于所有叙述字段，不只是名称。
 
 ## Step 4 — Draw the edges
 
