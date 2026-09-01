@@ -674,3 +674,130 @@ Append-only. Every code, doc, and idea change goes here.
 - 2026-09-01 03:20  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
 - 2026-09-01 03:20  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
 - 2026-09-01 03:24  人工批准想法图 9af677216993
+- 2026-09-01 03:31  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 03:33  人工批准想法图 9af677216993
+- 2026-09-01 03:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 03:39  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-08-31 ccthink 共同基座执行轮：人确认「吸收三家优势、三个旧目录原样保留、能像今天的 claude-companion 一样装进其它仓库」就是执行 I-070～I-072，真实产品验收留在 I-073～I-075，本轮不迁移本仓库自己的 graph.claude.yaml。I-070/I-071/I-072 各自太大，拆成 11 个子想法 I-088～I-098（引擎搬家＋paths、Cursor 就绪检查＋next_id 取号、Codex 挑战式批准、RED/GREEN 证据链、显式 migrate、规则核心、三家薄映射、五个 cc 前缀技能、esbuild 单文件、三份接线清单、安装器），三个原节点降为里程碑验收、needs 改指子想法。借用清单：claude 引擎 2221 行做基体；cursor 的 isBuildReady/needsUnmet/fileClash/allow 和 sessionStart 简报；codex 的一次性口令批准、RED/GREEN 证据、三层 shell 正则、apply_patch 多文件解析（Python 行为移植成 TypeScript，其 14 个 unittest 当移植清单）；esbuild + createRequire banner 打单文件（本机实测复现过无 banner 的运行崩溃；tsup 已停维护、bun 有把构建机绝对路径写进产物的缺陷、node SEA 是百兆二进制，均否）；Agent Skills 开放标准（.agents/skills 同时喂 Cursor 与 Codex，Claude 用 .claude/skills 桥接，Windows 上用复制不用符号链接）；Probity 的「一个 TypeScript 程序按 --agent 参数服务三家」架构与其 Codex matcher。调研修正三件事实：Codex hooks 已官方 GA 且刻意兼容 Claude 事件名与 JSON（写前不支持 ask，回 ask 等于放行）；MCP 工具正式触发 hook（mcp__服务名__工具名）；Cursor 会自动加载 .claude/settings.json 里的 hook，但正式接入仍走原生 hooks.json（beforeShellExecution/beforeMCPExecution 正是 D21 的 shell 旁路和 MCP 覆盖需要的事件）。技能名偏离 D33（onboard/discuss/build/debug/graph → ccscan/ccthink/ccbuild/ccfix/ccgraph），人已批准：三家都拿目录名当命令名，/build 太通用会撞车，肌肉记忆已是 cc 前缀；此裁决更新由 I-095 写回 companion/FORMAT.md。排期六周，第 3 周起是猜测。
+- 2026-09-01 03:42  人工批准想法图 7d560acc5cd7
+- 2026-09-01 03:46  Write .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-01 03:48  Write .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:49  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:51  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-08-31 ccbuild I-088 done：新文件 companion/ideas.ts（2217 行，复制 claude-companion/ideas.ts 后删掉 AGENT/agentName/nameIsTaken 整套后缀选择、graphPath 永远指 ideas/graph.yaml、IDEAS_DIR 在边界 resolve 归一反斜杠、seed 不再写 agent: 键、新增 paths()/CanonicalPaths 与 paths 子命令）；新测试 .devcompanion/tests/test_base_engine.test.ts（10 项：后缀图作诱饵放旁边引擎必须无视它、paths 七个规范路径全平名、反斜杠项目目录可用、CLI set 只写平名图和平名 html 且诱饵字节不变、CLI paths 无图也能跑、注释写回原样保留）。verify：先红（模块不存在）后绿 10/10，全套 20 文件 246 测试全绿。三个旧目录零改动（claude-companion/ideas.ts 上有一处本轮之前遗留的未提交改动，未碰）。批准机制说明：实现期间未动图（03:42 的批准 7d560acc5cd7 全程有效），lines/doing/done 三笔图改动集中在实现完成后 —— 图改后批准按设计失效，下一轮 /ccbuild 开工前需人重新「批准」。
+- 2026-09-01 03:52  人工批准想法图 ee42415155e8
+- 2026-09-01 03:55  Write .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 03:56  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:56  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 03:58  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 03:58  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 03:59  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 04:01  Write .devcompanion/tests/test_base_approval.test.ts
+- 2026-09-01 04:01  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:02  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:02  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:02  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:02  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 04:05  Write .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-01 04:05  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:07  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 04:09  Write .devcompanion/tests/test_base_migrate.test.ts
+- 2026-09-01 04:10  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:10  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:11  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 04:11  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 ccbuild I-089/I-090/I-091/I-092 全部 done（每个都先写测试看着它红，再实现到绿）：I-089 就绪检查（isBuildReady/needsUnmet/fileClash/addIdea/allowWrite + set 的四状态转移表，companion/ideas.ts 452-608，测试 test_base_readiness 17 项）；I-090 批准机制（requestApproval/applyApproval/validApproval/approvalSnapshot + request-approval CLI，564-709，test_base_approval 10 项：口令一次性、散文包裹不消费、内容漂移自毁、REJECT 回执、manual-check 签回图、两关卡独立）；I-091 证据链（runCheck/redGateReady/greenCurrent/recordChange + set 的 GREEN 门 + run-check CLI，710-836，test_base_evidence 9 项：真实失败记录、意外先绿要豁免、测试改动作废证据、实现再写 GREEN 过期）；I-092 迁移（migrate/convertCodex/convertLegacyYaml + migrate CLI，837-1004，test_base_migrate 7 项：三种旧格式、双图停下问人、报告列有损项、旧文件字节不变）。全套 20+4=24 文件 289 测试绿；codex-companion 的 14 个 Python unittest 独立跑仍 OK。里程碑 I-070 留 todo：它的预期要求 14 个 Python 测试的保证「全部」迁成共享测试，其中 hook 侧保证（路径范围、apply_patch 解析、shell 反欺骗、Stop 门）属于 I-093/I-094 的范围，等它们落地后再裁 I-070。批准机制说明：本轮四次 set 改图，批准 ee42415155e8 已失效；下一轮要动 companion/guard.ts（I-093 首认领）和 companion/skills/*（I-095 首认领），这两处守卫 R6 真的会拦，开工前需人重新「批准」。
+- 2026-09-01 05:12  人工批准想法图 b32dd1c8e259
+- 2026-09-01 15:13  人工批准想法图 b32dd1c8e259
+- 2026-09-01 15:17  Write .devcompanion/tests/test_base_guard_rules.test.ts
+- 2026-09-01 15:18  Write companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 15:20  Write .devcompanion/tests/test_base_adapters.test.ts
+- 2026-09-01 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 15:23  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 15:24  Write .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-01 15:24  Write companion/skills/ccscan/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:25  Write companion/skills/ccthink/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:25  Write companion/skills/ccbuild/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:25  Edit companion/skills/ccbuild/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:25  Write companion/skills/ccfix/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:26  Write companion/skills/ccgraph/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-01 15:26  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-01 15:27  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 15:27  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 15:27  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 ccbuild I-093/I-094/I-095 全部 done（每个先红后绿）：I-093 规则核心（companion/guard.ts 1-316：纯函数 decide + record，默认拒绝、测试先写永远合法、实现要批准加 RED 双门、status/signed_off 防手改、证据文件 CLI 专写、shell 三层正则、未知目标拒、Stop 校验、写前拦写后放、AIDEV_GUARD=off 大声放行；test_base_guard_rules 19 项）；I-094 三家薄映射（guard.ts 317-612：normalize/encode 各三个 + 入口，apply_patch 逐文件解析缺一整拒、MCP 按名字和路径分类不再旁路、Codex 回包永不 ask、三家人类消息同走 applyApproval；test_base_adapters 12 项含 stdin 进退出码 2 出的端到端）；I-095 五个 cc 前缀技能（companion/skills/，正文无平台专名无绝对路径、引擎调用一律 node .claude/companion/companion.mjs、frontmatter 只用规范字段；FORMAT.md D33 记下命名修订 707-721；test_base_skills 13 项）。全套 333 测试绿。发现三个真实缺口，留给人裁决：(1) 守卫对 ideas/ 整目录放行，旧后缀图 graph.claude.yaml 迁移后按 D10 该只读，现在还能被写；(2) D12 裁的「读过的文件内容一变自动回到未读」没实现，扫描只有 Read 事件划除没有内容哈希；(3) Codex 的「渲染指纹没更新不许收尾」握手没搬。另有一处已在 I-089 记过的：allow 命令只答认领层，没答批准/红门层，和守卫的完整判决有梯度差。建议：下一轮 mini-ccthink 立一个小想法收这几个口，把它加进 I-070 的 needs，然后再裁 I-070/I-071 两个里程碑。
+- 2026-09-01 17:58  网页写回 1 处：I-049 人工验证签字（Thomas T）
+- 2026-09-01 17:58  网页写回 1 处：I-051 人工验证签字（Thomas T）
+- 2026-09-01 17:58  网页写回 1 处：I-054 人工验证签字（Thomas T）
+- 2026-09-01 17:59  网页写回 1 处：I-057 人工验证签字（Thomas T）
+- 2026-09-01 17:59  网页写回 1 处：I-058 人工验证签字（Thomas T）
+- 2026-09-01 18:00  网页写回 1 处：I-080 人工验证签字（Thomas T）
+- 2026-09-01 18:01  Edit .devcompanion/tests/test_change_envelope.test.ts
+- 2026-09-01 18:01  人工批准想法图 2a914fb61aa8
+- 2026-09-01 18:01  Edit .devcompanion/tests/test_change_envelope.test.ts
+- 2026-09-01 18:03  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:03  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:03  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 ccthink（迷你轮）新增 I-099：把裁决表已裁但没落地的三个口子收掉（D10 旧后缀图只读、D12 读过的文件内容一变回到未读、allow 升级成与守卫同源的完整判决）。八问一次答齐（缺口盘点就是调研）。I-070 needs 加 I-099；I-070 expected 补一条有记录的裁量：Codex 渲染指纹握手不单独移植，由「set/apply 自动重渲染 + Stop 必过 check」承接。等人开图回「批准」后 ccbuild 收口，然后裁 I-070/I-071 两个里程碑，再进分发三件套（I-096 打包、I-097 接线、I-098 安装器）。
+- 2026-09-01 18:04  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 18:05  Edit claude-companion/ideas.ts  → I-042 读取想法图，并检查它有没有坏掉
+- 2026-09-01 18:24  人工批准想法图 146f35b86bbb
+- 2026-09-01 ccfix **人报的 bug：恢复草稿的面板永远关不掉。** 原话「无论点击丢弃还是恢复，它都不会提交」，并附了那条「注意：这份草稿是对着另一个版本的图写的」的提示。查出来是两个 bug，都在 I-077 的代码里，都是我埋的：(1) **主因** —— 那条「草稿过期」的提示被 `list.append(warn)` 塞进了 `#restore-list`，而收起面板的条件是 `!list.children.length`；提示是列表的永久成员，所以条件永远不成立，面板不收起、`clearDraft()` 也永不执行，草稿一直躺在浏览器存储里、每次刷新又冒出来。**只在草稿过期时发作**，所以之前的测试全没撞上。改成 `panel.insertBefore(warn, list)`，放进面板不放进列表。(2) **修第一个时暴露的第二个** —— 点「恢复」时 `restoreOp()` 先 `writeDraft()` 写下恢复的改动，紧接着 `done()` 无条件 `clearDraft()` 把它清掉；恢复完立刻刷新，刚恢复的东西就没了。改成按账本当前状态决定：`ledger.isEmpty() ? clearDraft() : writeDraft()`。新增 3 条 DOM 驱动的测试（真塞一份过期草稿进存储、真点按钮）先红后绿。
+- 2026-09-01 ccfix 修这个 bug 的过程里我自己又踩两个坑，记下来免得再犯：(1) **第三次犯同一类断言错误** —— 写 `expect(document.body.textContent).not.toContain("对着另一个版本的图写的")`，而 `body` 的文本内容包含 `<script>` 元素里的源码，那句提示作为字符串字面量就写在页面脚本里，所以这条断言**永远为假**、抓不到任何东西。前两次分别是 `classDef done fill:`（I-063）和 `</textarea><`（I-062 那轮）。**规律是：凡是「页面上不该出现某段文字」的断言，都不能查 body，要查具体的容器元素。** (2) **在页面脚本的注释里写了反引号**（`` `done` ``）—— 那整段嵌在 TypeScript 模板字符串里，反引号直接把模板字符串提前闭合，整个 ideas.ts 语法错误、全部测试无法收集。已改掉并在注释里留了「这里不能用反引号」的警告。
+- 2026-09-01 ccfix **发现另一个会话在并发改同一个仓库**：本轮开始时图是 47 个想法，中途变成 59（多出 I-088～I-099），日志里出现我没写过的记录（I-093/I-094/I-095 建的共同基座 `companion/ideas.ts`、`companion/guard.ts`、8 个 `test_base_*` 测试文件），`.approved.claude` 也被改过两次。两边动的目录不同（那边 `companion/`，我这边 `claude-companion/`）所以没撞车，但那是运气不是设计 —— 两个会话往同一张图上写，会互相把对方的批准弄失效。已如实告知人，建议一次只开一个会话。顺带解释了「测试从 236 跳到 336」：多出的 97 条来自那 8 个 `test_base_*` 文件，不是我加的。
+- 2026-09-01 18:28  Write .devcompanion/tests/test_base_gap_closures.test.ts
+- 2026-09-01 18:28  Edit ideas/log.claude.md
+- 2026-09-01 18:29  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 18:29  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 18:29  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 18:29  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 18:30  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 18:30  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 18:30  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 18:30  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 18:30  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-01 18:31  Write .devcompanion/tests/test_base_bundle.test.ts
+- 2026-09-01 18:32  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-01 18:32  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 18:32  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-01 18:32  Write companion/cli.ts  → I-096 把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑
+- 2026-09-01 18:32  Write companion/build.mjs  → I-096 把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑
+- 2026-09-01 18:33  Edit companion/build.mjs  → I-096 把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑
+- 2026-09-01 18:33  Write .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-01 18:34  Write companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-01 18:35  Write .devcompanion/tests/test_base_install.test.ts
+- 2026-09-01 18:36  Write companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-01 18:36  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:37  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 18:39  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
+- 2026-09-01 ccbuild 收官轮：I-099 + I-096/I-097/I-098 全部先红后绿建成，三个里程碑 I-070/I-071/I-072 收口，全套 26 文件 354 测试绿，codex 的 14 个 Python unittest 仍 OK。I-099：decideProductWrite 一个函数答完认领/批准/红记录三层，落在 ideas.ts（guard 依赖 ideas，放 guard 会循环依赖，与节点原文的出处偏离已记入节点 log）、guard 的 decideOnePath 改为委托、allow 命令与守卫从此同源同答案；旧后缀图只读（理由指向 migrate）；扫描划除带内容指纹（.scan-done 行变成「路径\t哈希」，旧无指纹行宽限为已读，改过的文件自动回未读，strike 对改过的文件允许重划）。I-096：esbuild 打包 companion/dist/companion.mjs（268KB），banner 只放 createRequire 垫片 —— cli.ts 自带的 shebang 被 esbuild 保留在首行，banner 再放一个 shebang 就是第 2 行语法错误（真踩过，修正记录在案）；产物在无 node_modules 的目录里裸 node 跑通 check/paths/guard。I-097：manifests.ts 三份接线 —— Claude 用 exec 形式 + ${CLAUDE_PROJECT_DIR}（终结绝对路径接线）+ UserPromptSubmit 显式 120 秒超时（官方 30 秒默认会静默吞批准）+ SessionStart 用 status 输出作会话简报；Cursor 拦截项全 failClosed；Codex 全事件同一条命令串保信任哈希稳定；ConfigChange 未接：无差别拦会把人自己的配置改动也拦死，留给 I-073/I-074 实测轮。I-098：install.ts 装产物+三份接线（合并不清场，别人的 hook 和配置原样保留）+ .agents/skills 与 .claude/skills 双目录复制（Windows 上符号链接不可靠，注释记了天花板）+ 图种子不碰已有图 + 装完当场冒烟（合成越界写必须退出码 2，否则安装报失败）+ 注册表参数化（测试注入临时表，真名单零接触）。esbuild 以 devDependency 进 package.json。三个旧目录零改动。前沿现在是 I-073（Cursor 真产品接入）和 I-074（Codex 真产品接入），都是人工验收的实测轮。
