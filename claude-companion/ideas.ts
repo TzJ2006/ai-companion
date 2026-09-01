@@ -1091,7 +1091,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   body { font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; margin:0 auto; max-width:1060px;
     padding:28px 22px 80px; background:#0b0f14; color:#e6edf3; }
   h1 { margin:0 0 6px; font-size:22px; }
-  .overview { color:#93a1b0; margin:0 0 18px; max-width:70ch; }
+  .overview { color:#93a1b0; margin:0 0 18px; }
   .legend { font-size:13px; color:#7d8896; margin:0 0 4px; }
   .sw { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin:0 5px 0 12px; }
   .sw:first-child { margin-left:0; }
@@ -1397,12 +1397,26 @@ ${g.ideas.map(card).join("\n")}
     const list = document.getElementById("restore-list");
     document.getElementById("restore-count").textContent = String(draft.ops.length);
     if (draft.stale) {
+      // Into the panel, NOT into the list. The done() helper below hides the
+      // panel once the list is empty, so anything parked in the list that is
+      // not a row keeps the count above zero forever — the panel never closes
+      // and the draft is never cleared, so it returns on every reload.
+      // (No backticks in here: this whole block lives inside a template
+      // literal, and one would close it.)
       const warn = document.createElement("div");
+      warn.className = "restore-warn";
       warn.textContent = "注意：这份草稿是对着另一个版本的图写的，恢复之前请逐条确认它是否还说得通。";
-      list.append(warn);
+      panel.insertBefore(warn, list);
     }
     panel.hidden = false;
-    const done = () => { if (!list.children.length) { panel.hidden = true; clearDraft(); } };
+    const done = () => {
+      if (list.children.length) return;
+      panel.hidden = true;
+      // Persist whatever ended up in the book, rather than wiping it: restoring
+      // a row writes it to the draft, and clearing unconditionally right after
+      // would lose exactly what was just restored on the next reload.
+      if (ledger.isEmpty()) clearDraft(); else writeDraft();
+    };
     for (const o of draft.ops) {
       const row = document.createElement("div");
       const label = document.createElement("span");
