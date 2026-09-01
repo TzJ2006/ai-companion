@@ -708,8 +708,12 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 
 - **现状** — Claude 是五个 commands；Cursor 是五个 Agent Skills；Codex 是一个
   Skill 加 workflows reference。
-- **裁决** — 共同基座保留五个标准 Agent Skills：onboard、discuss、build、debug、
-  graph；共用正文和 references，各平台 manifest 直接指向同一目录，不生成改写版。
+- **裁决** — 共同基座保留五个标准 Agent Skills；共用正文和 references，各平台
+  manifest 直接指向同一目录，不生成改写版。
+  **命名修订（2026-09-01，人批准）**：技能目录名定为 ccscan、ccthink、ccbuild、
+  ccfix、ccgraph，取代本条初裁的 onboard/discuss/build/debug/graph 短名。
+  依据：三家都拿技能目录名当命令名（/build 这种通用词必撞车），且用户肌肉记忆
+  已是 cc 前缀；Agent Skills 规范要求 name 与目录同名，此名即命令名。
 - **理由** — 三家都能承载 SKILL.md；Claude 的 commands 已是兼容旧入口。直接
   共享文件比「生成三份看起来一样的文件」少一层，也避免称谓和步骤再次漂移。
 
