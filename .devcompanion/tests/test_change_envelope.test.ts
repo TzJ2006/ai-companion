@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Window } from "happy-dom";
 import { parse } from "yaml";
 import { createLedger, render, type Graph } from "../../claude-companion/ideas.js";
 
@@ -190,5 +191,78 @@ describe("I-077 改动记账本", () => {
     const script = render(graphOf(), yaml, "D:/p");
     expect(script).toContain("JSON.stringify(ledger.envelope())");
     expect(script).toContain("env.baseDigest !== FINGERPRINT");   // 原来存了却从不比对
+  });
+});
+
+// ── 恢复草稿那个面板 ──────────────────────────────────────────────────────
+// 上面那条「读回一份对着别的图写的草稿会说它过期」只测了账本这一层。
+// 面板本身有一处只在草稿过期时才发作的毛病：那条过期提示被放进了行的列表里，
+// 而「收起面板」的条件是「列表里一个孩子都不剩」—— 提示永远是个孩子，
+// 于是无论点恢复还是丢弃，面板都不消失，草稿也永远不会从浏览器存储里清掉。
+
+/** 把页面装进 DOM，并在脚本跑起来之前先塞一份草稿进存储。 */
+function openWith(draft: (key: string, digest: string) => unknown) {
+  const html = render(graphOf(), yaml, "D:/p");
+  const window = new Window({ url: "file:///D:/p/ideas/graph.html" });
+  const document = window.document;
+  document.write("<!doctype html><html><body></body></html>");
+  document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.lastIndexOf("</body>"));
+
+  const el = document.getElementById("graph-data")!;
+  const key = el.dataset.draftKey!;
+  window.localStorage.setItem(key, JSON.stringify(draft(key, el.dataset.fingerprint!)));
+
+  for (const id of ["mermaid-source-fn", "ledger-fn"]) {
+    (window as any).eval(document.getElementById(id)!.textContent);
+  }
+  const blocks = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  (window as any).eval(blocks.find((b) => b.includes("createLedger"))!);
+  return { window, document, key };
+}
+
+const staleDraft = () => ({
+  v: 1, project: "D:/p", baseDigest: "000000000000",      // 和当前图对不上 = 过期
+  ops: [{ op: "set", id: "I-002", field: "how", old: "H2", new: "上次没提交的改动" }],
+});
+const freshDraft = (_k: string, digest: string) => ({
+  v: 1, project: "D:/p", baseDigest: digest,
+  ops: [{ op: "set", id: "I-002", field: "how", old: "H2", new: "上次没提交的改动" }],
+});
+
+describe("I-077 恢复草稿的面板", () => {
+  it("过期的草稿：点「丢弃」之后面板收起，存储里的草稿也清掉", () => {
+    const { window, document, key } = openWith(staleDraft);
+    const panel = document.getElementById("restore")!;
+    expect(panel.hidden, "有草稿时面板该出现").toBe(false);
+    // 查面板本身，不查 document.body.textContent —— 那句提示作为字符串字面量
+    // 就写在页面脚本里，而 body 的文本内容包含 <script> 的源码，永远「包含」它。
+    expect(document.getElementById("restore")!.textContent).toContain("对着另一个版本的图写的");
+
+    const buttons = [...document.querySelectorAll("#restore-list button")];
+    (buttons.find((b: any) => b.textContent === "丢弃") as any).click();
+
+    expect(panel.hidden, "丢弃完面板还赖着不走").toBe(true);
+    expect(window.localStorage.getItem(key), "草稿没被清掉，刷新又会冒出来").toBeNull();
+  });
+
+  it("过期的草稿：点「恢复」之后面板也要收起，并且改动真的进了账本", () => {
+    const { window, document, key } = openWith(staleDraft);
+    const buttons = [...document.querySelectorAll("#restore-list button")];
+    (buttons.find((b: any) => b.textContent === "恢复") as any).click();
+
+    expect(document.getElementById("restore")!.hidden, "恢复完面板还赖着不走").toBe(true);
+    expect(document.getElementById("draft-count")!.textContent, "恢复的改动没进账本").toBe("1");
+    // 恢复之后账本会立刻写一份新草稿 —— 那是对着当前这张图的，不该再是过期的那份。
+    expect(JSON.parse(window.localStorage.getItem(key)!).baseDigest)
+      .toBe(document.getElementById("graph-data")!.dataset.fingerprint);
+  });
+
+  it("没过期的草稿一样能丢干净 —— 这条以前就是好的，别改坏了", () => {
+    const { window, document, key } = openWith(freshDraft);
+    expect(document.getElementById("restore")!.textContent).not.toContain("对着另一个版本的图写的");
+    const buttons = [...document.querySelectorAll("#restore-list button")];
+    (buttons.find((b: any) => b.textContent === "丢弃") as any).click();
+    expect(document.getElementById("restore")!.hidden).toBe(true);
+    expect(window.localStorage.getItem(key)).toBeNull();
   });
 });
