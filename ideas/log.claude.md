@@ -801,3 +801,697 @@ Append-only. Every code, doc, and idea change goes here.
 - 2026-09-01 18:38  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
 - 2026-09-01 18:39  Edit ideas/graph.claude.yaml  → I-085 引擎认识分步概览，并且校验它 —— 归错步当场报出来
 - 2026-09-01 ccbuild 收官轮：I-099 + I-096/I-097/I-098 全部先红后绿建成，三个里程碑 I-070/I-071/I-072 收口，全套 26 文件 354 测试绿，codex 的 14 个 Python unittest 仍 OK。I-099：decideProductWrite 一个函数答完认领/批准/红记录三层，落在 ideas.ts（guard 依赖 ideas，放 guard 会循环依赖，与节点原文的出处偏离已记入节点 log）、guard 的 decideOnePath 改为委托、allow 命令与守卫从此同源同答案；旧后缀图只读（理由指向 migrate）；扫描划除带内容指纹（.scan-done 行变成「路径\t哈希」，旧无指纹行宽限为已读，改过的文件自动回未读，strike 对改过的文件允许重划）。I-096：esbuild 打包 companion/dist/companion.mjs（268KB），banner 只放 createRequire 垫片 —— cli.ts 自带的 shebang 被 esbuild 保留在首行，banner 再放一个 shebang 就是第 2 行语法错误（真踩过，修正记录在案）；产物在无 node_modules 的目录里裸 node 跑通 check/paths/guard。I-097：manifests.ts 三份接线 —— Claude 用 exec 形式 + ${CLAUDE_PROJECT_DIR}（终结绝对路径接线）+ UserPromptSubmit 显式 120 秒超时（官方 30 秒默认会静默吞批准）+ SessionStart 用 status 输出作会话简报；Cursor 拦截项全 failClosed；Codex 全事件同一条命令串保信任哈希稳定；ConfigChange 未接：无差别拦会把人自己的配置改动也拦死，留给 I-073/I-074 实测轮。I-098：install.ts 装产物+三份接线（合并不清场，别人的 hook 和配置原样保留）+ .agents/skills 与 .claude/skills 双目录复制（Windows 上符号链接不可靠，注释记了天花板）+ 图种子不碰已有图 + 装完当场冒烟（合成越界写必须退出码 2，否则安装报失败）+ 注册表参数化（测试注入临时表，真名单零接触）。esbuild 以 devDependency 进 package.json。三个旧目录零改动。前沿现在是 I-073（Cursor 真产品接入）和 I-074（Codex 真产品接入），都是人工验收的实测轮。
+- 2026-09-01 22:52  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/probe.ts
+- 2026-09-01 22:55  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/claimants.cjs
+- 2026-09-01 22:57  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/probe_apply.ts
+- 2026-09-01 22:57  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/probe_apply.ts
+- 2026-09-01 22:59  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/probe_apply2.ts
+- 2026-09-01 23:37  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/scan-diff.ts
+- 2026-09-01 23:54  Write companion/AUDIT-2026-09-01-whole-repo.md
+- 2026-09-01 23:58  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/32dabd35-ef35-4c0b-8f89-b7480d324e0b/scratchpad/companion-audit.html
+- 2026-09-01 23:58  Write C:/Users/tongt/.claude/projects/D--GitHub-ai-companion/memory/project_claude_companion.md
+- 2026-09-02 14:43  Write .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 14:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:44  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:45  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:45  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 14:45  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 14:46  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 14:46  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 14:46  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 14:46  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe.ts
+- 2026-09-02 14:46  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 14:47  Write companion/skills/ccfix/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:47  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:47  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:47  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:47  Write companion/skills/ccscan/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:47  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:47  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:47  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:47  Edit companion/skills/ccbuild/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:47  Edit companion/skills/ccthink/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:47  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:47  Edit companion/skills/ccgraph/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:48  Edit companion/skills/ccbuild/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit companion/skills/ccthink/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:48  Edit companion/skills/ccgraph/SKILL.md  → I-095 五条工作流写成三家都能加载的标准技能文件，正文只有一份
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:48  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:49  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:49  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:49  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe/.companion/companion.mjs
+- 2026-09-02 14:49  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe/run-posix.sh
+- 2026-09-02 14:50  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 14:50  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe/try-windows.mjs
+- 2026-09-02 14:50  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 14:50  Write .devcompanion/tests/test_base_writeback.test.ts
+- 2026-09-02 14:50  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:50  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe/try-nogit.mjs
+- 2026-09-02 14:51  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:51  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:52  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 14:52  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/inspect.js
+- 2026-09-02 14:52  Write claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-09-02 14:52  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 14:52  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 14:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:53  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 14:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:53  Write .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 14:54  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 14:54  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 14:54  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 14:54  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 14:54  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-09-02 14:54  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 14:54  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 14:55  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 14:55  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 14:55  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 14:55  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:55  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 14:55  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 14:55  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/strip-bom.js
+- 2026-09-02 14:55  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 14:55  Edit cursor-companion/hooks/record.mjs
+- 2026-09-02 14:56  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 14:56  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 14:57  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 14:57  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/skipdir.js
+- 2026-09-02 14:57  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 14:58  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe/endtoend.mts
+- 2026-09-02 14:59  Edit .gitignore
+- 2026-09-02 14:59  Write .devcompanion/tests/test_base_guard_graph_fields.test.ts
+- 2026-09-02 14:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 14:59  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 15:00  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:00  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:00  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:00  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:01  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:01  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:02  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:02  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:03  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:03  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 15:03  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:03  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:03  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:04  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:04  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:04  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 15:04  Write .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:04  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:04  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:04  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:04  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:05  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 15:05  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-02 15:05  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:05  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 15:05  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:05  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:05  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:05  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:05  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:05  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:05  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:06  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:06  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:06  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:06  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:06  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:06  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:06  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:06  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:06  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:06  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:07  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:07  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:07  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:07  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 15:08  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 15:10  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 15:10  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 15:11  Write .devcompanion/tests/test_base_engine_scan_reconcile.test.ts
+- 2026-09-02 15:11  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:11  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:11  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:11  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:13  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:13  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:14  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:14  Edit .devcompanion/tests/test_base_engine_scan_reconcile.test.ts
+- 2026-09-02 15:14  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:14  Edit .devcompanion/tests/test_base_engine_scan_reconcile.test.ts
+- 2026-09-02 15:14  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:14  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:15  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:15  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:16  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:16  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:16  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:16  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:19  Write .devcompanion/tests/test_base_engine_file_flag.test.ts
+- 2026-09-02 15:19  Write .devcompanion/tests/test_base_guard_platform_leaks.test.ts
+- 2026-09-02 15:19  Edit .devcompanion/tests/test_base_engine_file_flag.test.ts
+- 2026-09-02 15:20  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:20  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:20  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:20  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:20  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:20  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:21  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:22  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:22  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:22  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:22  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:23  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:24  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:24  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:24  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:24  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:25  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:25  Edit .devcompanion/tests/test_base_guard_platform_leaks.test.ts
+- 2026-09-02 15:25  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:25  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:27  Write .devcompanion/tests/test_base_engine_legacy_canonical.test.ts
+- 2026-09-02 15:27  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:28  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:28  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:28  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:29  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:30  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:30  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:31  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:31  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:31  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:31  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:32  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:33  Write .devcompanion/tests/test_base_contract.test.ts
+- 2026-09-02 15:33  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 15:33  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/h13probe.mts
+- 2026-09-02 15:34  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/h13probe.mts
+- 2026-09-02 15:34  Write .devcompanion/tests/test_base_engine_draft_panel.test.ts
+- 2026-09-02 15:35  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:35  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:40  Write .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:40  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:40  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:41  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:41  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 15:41  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-02 15:41  Edit .gitignore
+- 2026-09-02 15:41  Edit ideas/.gitignore  → I-055 修复扫描清单被多个进程同时写入时会丢记录的问题
+- 2026-09-02 15:41  Edit .devcompanion/tests/test_base_readiness.test.ts
+- 2026-09-02 15:41  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 15:42  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 15:42  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:42  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 15:42  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:42  Edit .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-02 15:42  Edit .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-02 15:43  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 15:54  Edit .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-02 15:54  Edit .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-02 15:55  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:55  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:55  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:56  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:56  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:56  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:57  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 15:59  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:00  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:01  Write .devcompanion/tests/test_base_engine_cli_surface.test.ts
+- 2026-09-02 16:03  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:03  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:17  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe.ts
+- 2026-09-02 16:18  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/fx/ideas/graph.yaml
+- 2026-09-02 16:19  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack1.ts
+- 2026-09-02 16:19  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack2.ts
+- 2026-09-02 16:20  Write .probe-gates.ts
+- 2026-09-02 16:20  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack3.ts
+- 2026-09-02 16:22  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack4.ts
+- 2026-09-02 16:22  Write .probe-stop.ts
+- 2026-09-02 16:23  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack5.ts
+- 2026-09-02 16:36  Write .devcompanion/tests/test_base_guard_inserted_node.test.ts
+- 2026-09-02 16:36  Edit .devcompanion/tests/test_base_writeback.test.ts
+- 2026-09-02 16:37  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:37  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:37  Edit .devcompanion/tests/test_base_writeback.test.ts
+- 2026-09-02 16:37  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/fix/ideas/graph.yaml
+- 2026-09-02 16:38  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/mkchange.cjs
+- 2026-09-02 16:38  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:38  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:38  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 16:38  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:39  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 16:39  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:39  Edit .devcompanion/tests/test_companion_gate.test.ts
+- 2026-09-02 16:39  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:39  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:39  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 16:39  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 16:39  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 16:39  Edit cursor-companion/gate-lib.mjs
+- 2026-09-02 16:39  Edit .devcompanion/tests/test_base_writeback.test.ts
+- 2026-09-02 16:40  Edit cursor-companion/ideas.ts
+- 2026-09-02 16:40  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:40  Edit cursor-companion/ideas.ts
+- 2026-09-02 16:40  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 16:40  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/fix/ideas/graph.yaml
+- 2026-09-02 16:40  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:40  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 16:40  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/approve.ts
+- 2026-09-02 16:41  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 16:41  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 16:41  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/proj/ideas/graph.yaml
+- 2026-09-02 16:41  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 16:41  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/proj/src/a.ts
+- 2026-09-02 16:41  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 16:41  Write .devcompanion/tests/test_base_guard_smuggling.test.ts
+- 2026-09-02 16:42  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/proj/ideas/graph.yaml
+- 2026-09-02 16:42  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:42  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:42  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:42  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:42  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:42  Edit cursor-companion/ideas.ts
+- 2026-09-02 16:43  Edit .devcompanion/tests/test_base_guard_smuggling.test.ts
+- 2026-09-02 16:43  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:43  Edit cursor-companion/ideas.ts
+- 2026-09-02 16:43  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:43  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:44  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:44  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:44  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 16:45  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:45  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 16:45  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 16:46  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 16:46  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 16:46  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 16:46  Write .devcompanion/tests/test_base_guard_declared_verify.test.ts
+- 2026-09-02 16:46  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 16:47  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 16:47  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:47  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:47  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:47  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:48  Edit .devcompanion/tests/test_base_guard_rules.test.ts
+- 2026-09-02 16:48  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 16:48  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 16:48  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 16:50  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/proj/ideas/graph.yaml
+- 2026-09-02 16:51  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 16:51  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 16:51  Edit .devcompanion/tests/test_base_install.test.ts
+- 2026-09-02 16:52  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:52  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:53  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:53  Write .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-02 16:53  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:53  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:54  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:54  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:54  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:55  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:55  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:55  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:55  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:55  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:56  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:56  Edit .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-02 16:56  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 16:56  Write .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 16:56  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 16:57  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 16:57  Edit .devcompanion/tests/test_base_install_safety.test.ts
+- 2026-09-02 16:57  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 16:57  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 16:57  Edit .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:58  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/fx/ideas/graph.yaml
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:58  Edit companion/install.ts  → I-098 把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新
+- 2026-09-02 16:59  Edit .devcompanion/tests/test_base_engine.test.ts
+- 2026-09-02 17:00  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 17:02  Write .devcompanion/tests/test_base_guard_cli_surface.test.ts
+- 2026-09-02 17:03  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:03  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:03  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:04  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 17:04  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 17:04  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 17:04  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 17:05  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 17:05  Edit .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 17:05  Edit .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 17:06  Edit .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 17:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:06  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 17:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:06  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:07  Edit companion/manifests.ts  → I-097 给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序
+- 2026-09-02 17:07  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:07  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:07  Edit companion/cli.ts  → I-096 把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑
+- 2026-09-02 17:07  Write .gitattributes
+- 2026-09-02 17:07  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:07  Write ideas/.scanignore
+- 2026-09-02 17:07  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:07  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 17:08  Edit .devcompanion/tests/test_base_manifests.test.ts
+- 2026-09-02 17:09  Edit ideas/.scanignore
+- 2026-09-02 17:09  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 17:12  Write .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 17:13  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:13  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:13  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:13  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:14  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 17:16  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 17:24  Write .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 17:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:26  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 17:27  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:27  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 17:28  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 17:34  Edit .devcompanion/tests/test_base_bundle.test.ts
+- 2026-09-02 17:39  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-02 17:40  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 17:45  Edit companion/build.mjs  → I-096 把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑
+- 2026-09-02 17:50  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 17:54  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive.ts
+- 2026-09-02 17:57  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack.ts
+- 2026-09-02 17:57  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack.ts
+- 2026-09-02 17:57  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack.ts
+- 2026-09-02 17:57  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive2.ts
+- 2026-09-02 17:59  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/attack2.ts
+- 2026-09-02 17:59  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive3.ts
+- 2026-09-02 18:01  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive4.ts
+- 2026-09-02 18:10  Write .devcompanion/tests/test_base_guard_duplicate_id.test.ts
+- 2026-09-02 18:11  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:11  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:12  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:12  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:13  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:13  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:13  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:14  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:14  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:14  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:14  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:14  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:15  Write .devcompanion/tests/test_base_engine_runcheck.test.ts
+- 2026-09-02 18:15  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:15  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:15  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:16  Edit .devcompanion/tests/test_base_engine_runcheck.test.ts
+- 2026-09-02 18:16  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:16  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 18:16  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 18:16  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 18:16  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 18:17  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:17  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:18  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:18  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:18  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:18  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:18  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:18  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:18  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/spec-drift-check.mjs
+- 2026-09-02 18:18  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:19  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:20  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:20  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:20  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:20  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:20  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:20  Edit .devcompanion/tests/test_base_evidence.test.ts
+- 2026-09-02 18:21  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:23  Write .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 18:24  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:27  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 18:27  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 18:28  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 18:28  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 18:29  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 18:29  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:29  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 18:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 18:30  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro/check.mjs
+- 2026-09-02 18:38  Write .devcompanion/tests/test_base_guard_overblock.test.ts
+- 2026-09-02 18:41  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:42  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:42  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:42  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:44  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:47  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 18:48  Edit .devcompanion/tests/test_base_guard_overblock.test.ts
+- 2026-09-02 18:48  Edit .devcompanion/tests/test_base_guard_overblock.test.ts
+- 2026-09-02 18:48  Edit .devcompanion/tests/test_base_guard_overblock.test.ts
+- 2026-09-02 18:55  Edit .devcompanion/tests/test_base_guard_rules.test.ts
+- 2026-09-02 19:05  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/fixture.ts
+- 2026-09-02 19:06  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p1_testfiles.ts
+- 2026-09-02 19:06  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive.ts
+- 2026-09-02 19:07  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p2_status.ts
+- 2026-09-02 19:08  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive2.ts
+- 2026-09-02 19:10  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p3_patch.ts
+- 2026-09-02 19:11  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p3b_patch.ts
+- 2026-09-02 19:11  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p3c_chain.ts
+- 2026-09-02 19:13  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p4_lookalike.ts
+- 2026-09-02 19:14  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/p5_writeback.ts
+- 2026-09-02 19:20  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_claudemd.ts
+- 2026-09-02 19:20  Write .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:20  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_claudemd.ts
+- 2026-09-02 19:20  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_claudemd.ts
+- 2026-09-02 19:21  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 19:21  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 19:21  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_check.ts
+- 2026-09-02 19:23  Write .devcompanion/tests/test_base_guard_engine_identity.test.ts
+- 2026-09-02 19:24  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 19:24  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 19:24  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:24  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 19:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:25  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/verify_claudemd.ts
+- 2026-09-02 19:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:25  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:26  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:26  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:26  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:26  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 19:29  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 19:29  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 19:29  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_shell_wall.test.ts
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-02 19:29  Edit .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-02 19:30  Edit .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:31  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 19:31  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 19:31  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:32  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_d21.ts
+- 2026-09-02 19:32  Edit .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:32  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro_d21.ts
+- 2026-09-02 19:33  Edit .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:33  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/probe_d21.mts
+- 2026-09-02 19:34  Edit .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:34  Edit .devcompanion/tests/test_base_engine_round4.test.ts
+- 2026-09-02 19:37  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:38  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 19:38  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:39  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/verify_d21.mts
+- 2026-09-02 19:41  Write .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 19:42  Edit .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 19:42  Edit .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 19:42  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:43  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 19:43  Edit .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 19:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:44  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:48  Edit .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 19:55  Write .devcompanion/tests/test_base_guard_mutating_head.test.ts
+- 2026-09-02 19:56  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:56  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:56  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 19:57  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:02  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:02  Edit .devcompanion/tests/test_base_guard_mutating_head.test.ts
+- 2026-09-02 20:09  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:09  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:09  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:12  Edit .devcompanion/tests/test_base_guard_rules.test.ts
+- 2026-09-02 20:12  Edit .devcompanion/tests/test_base_gap_closures.test.ts
+- 2026-09-02 20:13  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 20:13  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 20:13  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 20:13  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 20:14  Edit .devcompanion/tests/test_base_guard_nested_repo.test.ts
+- 2026-09-02 20:14  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 20:15  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 20:15  Edit .devcompanion/tests/test_base_guard_holes.test.ts
+- 2026-09-02 20:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 20:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 20:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 20:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 20:16  Edit .devcompanion/tests/test_base_guard_patch_scope.test.ts
+- 2026-09-02 20:24  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-shell.ts
+- 2026-09-02 20:25  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-abs.ts
+- 2026-09-02 20:26  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe1.ts
+- 2026-09-02 20:27  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-loop.ts
+- 2026-09-02 20:28  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-codex.ts
+- 2026-09-02 20:29  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-mech.ts
+- 2026-09-02 20:29  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe2.ts
+- 2026-09-02 20:29  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe2.ts
+- 2026-09-02 20:30  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-loop2.ts
+- 2026-09-02 20:30  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-loop2.ts
+- 2026-09-02 20:31  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-loop2.ts
+- 2026-09-02 20:32  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-edge.ts
+- 2026-09-02 20:32  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe3.ts
+- 2026-09-02 20:33  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe4.ts
+- 2026-09-02 20:33  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive-final.ts
+- 2026-09-02 20:35  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe5.ts
+- 2026-09-02 20:36  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/atk/probe6.ts
+- 2026-09-02 20:42  Write .devcompanion/tests/test_base_guard_patch_newline.test.ts
+- 2026-09-02 20:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:43  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:46  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 20:46  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 20:46  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 20:46  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 20:47  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 20:55  Write .devcompanion/tests/test_base_guard_shell_targets.test.ts
+- 2026-09-02 20:55  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 20:55  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 20:55  Edit companion/FORMAT.md  → I-078 把取号计数器和改动文件格式写进格式规范
+- 2026-09-02 20:56  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 20:57  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:58  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:58  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:58  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 20:59  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:01  Edit .devcompanion/tests/test_base_guard_shell_targets.test.ts
+- 2026-09-02 21:04  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:04  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:04  Edit .devcompanion/tests/test_base_guard_shell_targets.test.ts
+- 2026-09-02 21:04  Edit .devcompanion/tests/test_base_guard_shell_targets.test.ts
+- 2026-09-02 21:04  Edit .devcompanion/tests/test_base_guard_shell_targets.test.ts
+- 2026-09-02 21:07  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:07  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:09  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:13  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro.ts
+- 2026-09-02 21:14  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/repro.ts
+- 2026-09-02 21:15  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:15  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:16  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:16  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:16  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:16  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:17  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:18  Write .devcompanion/tests/test_base_guard_message_truth.test.ts
+- 2026-09-02 21:24  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 21:25  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 21:25  Edit .devcompanion/tests/test_ideas_scan_concurrency.test.ts
+- 2026-09-02 21:30  Write C:/Users/tongt/AppData/Local/Temp/e2e-loop-1788384509/ideas/graph.yaml
+- 2026-09-02 21:31  Write C:/Users/tongt/AppData/Local/Temp/e2e-approve.json
+- 2026-09-02 21:32  Write C:/Users/tongt/AppData/Local/Temp/e2e-approve2.json
+- 2026-09-02 21:32  Write C:/Users/tongt/AppData/Local/Temp/e2e-loop-1788384509/test/temperature.test.js
+- 2026-09-02 21:33  Write C:/Users/tongt/AppData/Local/Temp/e2e-prewrite-impl.json
+- 2026-09-02 21:33  Write C:/Users/tongt/AppData/Local/Temp/e2e-loop-1788384509/src/temperature.js
+- 2026-09-02 21:34  Edit C:/Users/tongt/AppData/Local/Temp/e2e-loop-1788384509/ideas/graph.yaml
+- 2026-09-02 21:40  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive.mjs
+- 2026-09-02 21:42  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive2.mjs
+- 2026-09-02 21:47  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/rebuild.mjs
+- 2026-09-02 21:48  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive3.mjs
+- 2026-09-02 21:49  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive4.mjs
+- 2026-09-02 21:50  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/727816da-ec44-4b30-9659-e41a5114d073/scratchpad/drive5.mjs
+- 2026-09-02 21:54  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:54  Edit CLAUDE.md  → I-069 把三套实现的分歧逐条裁决，写成一份共同规范
+- 2026-09-02 21:55  Edit claude-companion/FORMAT.md  → I-041 想法节点的记录格式：每个想法必须回答八个问题
+- 2026-09-02 21:56  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:56  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:57  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:58  Edit companion/guard.ts  → I-093 一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂
+- 2026-09-02 21:59  Edit .devcompanion/tests/test_base_guard_patch_reconstruct.test.ts
+- 2026-09-02 22:00  Write C:/Users/tongt/.claude/projects/D--GitHub-ai-companion/memory/project_claude_companion.md
+- 2026-09-02 22:22  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图
+- 2026-09-02 22:24  Edit .devcompanion/tests/test_base_engine_round2.test.ts
+- 2026-09-02 22:25  Edit companion/ideas.ts  → I-088 把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "node .cursor/hooks/record.mjs"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/session.mjs"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/gate.mjs",
+        "matcher": "Write|StrReplace|Delete|EditNotebook|ApplyPatch",
+        "failClosed": true
+      }
+    ]
+  }
+}

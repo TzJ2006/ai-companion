@@ -7,13 +7,17 @@ description: 想清楚一个新想法 —— 对齐意图、拆成小想法、�
 
 先读引擎旁边的 FORMAT.md。**这条工作流不写任何产品代码**；你只改想法图和记录。
 
+## 参数
+
+要想清楚的那个想法。不带参数就先问人这是什么想法，问到之前什么都不做。
+
 ## 第 1 步 — 高空对齐
 
 问人三个问题，一次一个：**要做什么、预期结果是什么、为什么要做这个**。
 用你的话复述三个答案，作为一条独立可见的消息结束回合，等人确认。
 沉默不是确认。复述错了，现在是全项目最便宜的纠错时刻。
 
-先查现有图（`node .claude/companion/companion.mjs check` 和 `status`）：
+先查现有图（`node .companion/companion.mjs check` 和 `status`）：
 想法已存在或相冲突，就先问人是扩展旧想法还是另立新想法。
 
 ## 第 2 步 — 拆小，请人批拆分
@@ -22,8 +26,8 @@ description: 想清楚一个新想法 —— 对齐意图、拆成小想法、�
 （发号走计数器，绝不自己算编号），先只填前三问。渲染后请人批拆分：
 
 ```
-node .claude/companion/companion.mjs render
-node .claude/companion/companion.mjs request-approval --gate decomposition
+node .companion/companion.mjs render
+node .companion/companion.mjs request-approval --gate decomposition
 ```
 
 把口令原样告诉人：**人看过图，整条消息回复「批准 CC-XXXXXXXX」拆分才算数**。
@@ -57,7 +61,7 @@ node .claude/companion/companion.mjs request-approval --gate decomposition
 按拓扑序排的周计划（说清哪几周是猜的）、风险。然后逐个想法请批：
 
 ```
-node .claude/companion/companion.mjs request-approval --gate plan --node I-0XX
+node .companion/companion.mjs request-approval --gate plan --node I-0XX
 ```
 
 批准后交给 ccbuild。被拒就回到异议落在的那一步。全程记进想法旁的 log。

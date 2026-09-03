@@ -6,3 +6,8 @@
 .approved.claude
 graph.html
 graph.claude.html
+
+# 程序保管的证据：批准回执、测试红绿记录 —— 只由 CLI 产生（D24），只属于这台机器
+.runtime/
+# 从图页面导出、给人审完就用掉的改动文件
+changes.json

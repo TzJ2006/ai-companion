@@ -83,13 +83,36 @@ ideas:
 
   // ── 测试先写永远合法；实现要批准 + RED，一层都不能少 ─────────────────────
 
+  // D8 says the failing test is the legal FIRST move: no RED evidence is asked
+  // for here, and that is what "from the very start" means. What it never meant
+  // is "before a human has seen the plan" — `verify.test_files` is graph prose,
+  // so an unapproved list would hand the agent any path it cared to append
+  // (D7/D17). D17 makes that free: a plan approval is already required to reach
+  // `doing`, so the sanctioned loop always has one by the time it writes a test.
   it("writing the doing idea's test file is legal from the very start", () => {
+    approvePlan();
     const v = decide(ev({ paths: [join(dir, "tests", "a.test.txt")] }), dir);
     expect(v.allow).toBe(true);
   });
 
+  it("but the test file is not a free path either — no approval, no write", () => {
+    const v = decide(ev({ paths: [join(dir, "tests", "a.test.txt")] }), dir);
+    expect(v.allow).toBe(false);
+    expect(v.reason).toMatch(/批准/);
+  });
+
   it("implementation without a plan approval is denied, and the reason says so", () => {
+    // A RED can no longer be recorded with no approval on the table: run-check
+    // refuses to spawn verify.command until the plan has been approved (D7/D21
+    // — the command is graph prose, so nobody's eyes on it means the agent
+    // wrote its own command and then ran it). So the honest way to hold a RED
+    // with no LIVE approval is the plan snapshot's self-destruct: approve, run
+    // red, then edit `how` — the snapshot the receipt was signed against no
+    // longer matches, and the write gate is back to asking for approval even
+    // though the failing-test evidence is still sitting there.
+    approvePlan();
     recordRed();
+    writeFileSync(graphPath(dir), yaml.replace("how: H", "how: 改了实现思路"));
     const v = decide(ev({ paths: [join(dir, "src", "a.ts")] }), dir);
     expect(v.allow).toBe(false);
     expect(v.reason).toMatch(/批准|plan/);
@@ -194,9 +217,10 @@ ideas:
   });
 
   it("read-only commands, the declared verify command, and the companion CLI pass", () => {
+    approvePlan();                              // 验证命令的放行挂在人的计划批准上（D7）
     for (const command of [
       "git status",
-      "node checker.cjs",                       // I-001 声明的验证命令
+      "node checker.cjs",                       // I-001 声明的、人批过计划的验证命令
       "npx tsx companion/ideas.ts check",
       "node companion/dist/companion.mjs next",
     ]) {

@@ -5,14 +5,21 @@ description: 看图 —— 渲染想法图、校验它、报告现在能动手�
 
 # ccgraph — 图长什么样，现在能做什么
 
+## 参数
+
+一个想法编号就只看那一个（`show I-0XX`）；`--check` 只报问题、不渲染。
+不带参数就是校验、渲染、汇总。
+
+## 全都跑一遍
+
 只读命令，按这个顺序跑：
 
 ```
-node .claude/companion/companion.mjs check
-node .claude/companion/companion.mjs render
-node .claude/companion/companion.mjs next
-node .claude/companion/companion.mjs status
-node .claude/companion/companion.mjs paths
+node .companion/companion.mjs check
+node .companion/companion.mjs render
+node .companion/companion.mjs next
+node .companion/companion.mjs status
+node .companion/companion.mjs paths
 ```
 
 报告四件事：
@@ -28,4 +35,4 @@ node .claude/companion/companion.mjs paths
 
 **这条工作流禁止修任何东西** —— 发现问题只报告：图的问题指给 ccthink 或
 ccfix，代码的问题指给 ccbuild 或 ccfix。看单个想法用
-`node .claude/companion/companion.mjs show I-0XX`。
+`node .companion/companion.mjs show I-0XX`。

@@ -119,7 +119,19 @@ ideas:
     }
   });
 
-  it("test files stay writable through decideProductWrite from the very start", () => {
+  // "From the very start" is about the RED, not about the approval: D8 lets the
+  // failing test be the first move, so no evidence is required here. The plan
+  // approval still is — `verify.test_files` is graph prose, and D17 already
+  // spends that approval on the way into `doing`, so this costs the loop nothing.
+  it("test files stay writable through decideProductWrite before any RED exists", () => {
+    const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-001"]);
+    applyApproval(dir, `批准 ${challenge}`, meta);
     expect(decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt")).allow).toBe(true);
+  });
+
+  it("an unapproved plan does not make its test paths writable", () => {
+    const v = decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt"));
+    expect(v.allow).toBe(false);
+    expect(v.reason).toMatch(/批准/);
   });
 });

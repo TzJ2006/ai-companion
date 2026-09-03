@@ -8,8 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const OTHER_LEDGER =
   /(?:^|[/\\])ideas[/\\](log(\.[^/\\]+)?\.md|graph(\.[^/\\]+)?\.html)$/i;
+// The leading `(?:^|[/\\])` already consumes the separator, so the alternatives
+// must not repeat it -- `[/\\]\.git[/\\]` needed a doubled slash and so never
+// matched, and every write inside .git/ and inside the installed companion copy
+// was logged as project work.
 const SKIP_DIR =
-  /(?:^|[/\\])(node_modules|[/\\]\.git[/\\]|[/\\]\.cursor[/\\]companion[/\\])/i;
+  /(?:^|[/\\])(node_modules|\.git[/\\]|\.cursor[/\\]companion[/\\])/i;
 const BINARY = /\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|tgz|exe|dll|wasm|bin|woff2?)$/i;
 const SECRET = /(^|[/\\])(\.env|credentials\.json|secrets?|\.pem|\.key)(\.|$|[/\\])/i;
 

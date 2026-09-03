@@ -7,12 +7,17 @@ description: 按依赖顺序实现已批准的想法 —— 先跑出一次真�
 
 先读引擎旁边的 FORMAT.md。图决定顺序，你不决定。
 
+## 参数
+
+一个想法编号就只做那一个；`--all` 一直做到前沿空了或者卡住为止。
+不带参数就做完当前前沿，然后停下报告。
+
 ## 第 0 步 — 现在在哪
 
 ```
-node .claude/companion/companion.mjs check
-node .claude/companion/companion.mjs next
-node .claude/companion/companion.mjs status
+node .companion/companion.mjs check
+node .companion/companion.mjs next
+node .companion/companion.mjs status
 ```
 
 `check` 不过不许动工。`next` 是前沿：所有前置都完成了的 todo 想法。
@@ -21,13 +26,13 @@ node .claude/companion/companion.mjs status
 ## 第 1 步 — 开工
 
 ```
-node .claude/companion/companion.mjs set I-0XX doing
+node .companion/companion.mjs set I-0XX doing
 ```
 
 进不去 doing 时，拒绝理由会说清缺什么：计划字段没答完 → 回 ccthink；
 前置没完成 → 先做前置；文件和别的进行中想法重叠 → 等它完成。
 计划还没被人批过的，写实现时守卫会拦 —— 先补一道 plan 批准。
-写之前可以自检：`node .claude/companion/companion.mjs allow src/那个文件`。
+写之前可以自检：`node .companion/companion.mjs allow src/那个文件`。
 
 ## 第 2 步 — 测试先行，看着它失败
 
@@ -35,7 +40,7 @@ node .claude/companion/companion.mjs set I-0XX doing
 2. 跑出失败记录：
 
 ```
-node .claude/companion/companion.mjs run-check I-0XX --phase red
+node .companion/companion.mjs run-check I-0XX --phase red
 ```
 
 **失败必须是「东西还没实现」造成的**，读输出确认。意外先绿（unexpected_pass）
@@ -50,7 +55,7 @@ node .claude/companion/companion.mjs run-check I-0XX --phase red
 ## 第 4 步 — 拿绿
 
 ```
-node .claude/companion/companion.mjs run-check I-0XX --phase green
+node .companion/companion.mjs run-check I-0XX --phase green
 ```
 
 通过后再跑整个测试套件 —— 弄坏别的想法不算完成。失败最多修三次，每次说清
@@ -62,7 +67,7 @@ node .claude/companion/companion.mjs run-check I-0XX --phase green
 先把真实行号填进 `code.lines`，然后：
 
 ```
-node .claude/companion/companion.mjs set I-0XX done --note "一句话说清建了什么"
+node .companion/companion.mjs set I-0XX done --note "一句话说清建了什么"
 ```
 
 `set` 会拒绝没有最新通过记录的 done —— 实现每改一笔、测试每变一次，旧的
