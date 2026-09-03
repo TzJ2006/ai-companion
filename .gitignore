@@ -1,8 +1,15 @@
 # dependencies
 node_modules/
 
-# build output (regenerate with `npm run build`)
+# build output (regenerate with `node companion/build.mjs`)
 dist/
+# ...except the shared base's single-file artifact, which is the SHIPPED thing:
+# the installer copies the bundle, not a pointer to this checkout (D34), and a
+# fresh clone with no bundle cannot install at all — install.ts stops at
+# "先构建产物". Re-including the directory first is required; git never looks
+# inside an excluded directory, so a bare `!companion/dist/companion.mjs` after
+# `dist/` would do nothing.
+!companion/dist/
 *.tsbuildinfo
 
 # local runtime state — but keep the test suite tracked
@@ -30,3 +37,4 @@ ideas/graph.html
 
 # per-machine install registry (absolute paths)
 claude-companion/.installs.json
+companion/.installs.json

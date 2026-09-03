@@ -68,9 +68,9 @@ describe("companion single-file bundle (I-096)", () => {
   it("the build is reproducible: building again succeeds and stays runnable", { timeout: 120_000 }, () => {
     const again = spawnSync("node", [join(ROOT, "companion", "build.mjs")],
       { encoding: "utf8", cwd: ROOT, timeout: 120_000 });
-    expect(again.status).toBe(0);
+    expect(again.status, again.stderr).toBe(0);
     const r = spawnSync("node", [BUNDLE, "paths", "--project", tmpdir()],
       { encoding: "utf8", timeout: 60_000 });
-    expect(r.status).toBe(0);
+    expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
   });
 });

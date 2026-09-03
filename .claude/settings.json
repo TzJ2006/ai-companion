@@ -21,22 +21,60 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|NotebookEdit|Read",
+        "matcher": "Edit|Write|NotebookEdit|Read|read|read_file|readfile",
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|NotebookEdit",
+        "matcher": "Edit|Write|NotebookEdit|Bash|bash|PowerShell|powershell|pwsh|shell|local_shell",
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
           }
         ]
       }
@@ -46,7 +84,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
           }
         ]
       }
@@ -56,7 +99,28 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx \"D:/GitHub/ai-companion/claude-companion/guard.ts\""
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ],
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.companion/companion.mjs",
+              "guard",
+              "--platform=claude"
+            ]
           }
         ]
       }

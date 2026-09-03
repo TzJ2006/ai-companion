@@ -1,0 +1,11 @@
+# 行尾归一化。没有这份文件，每台机器按自己的 core.autocrlf 决定入库的是什么，
+# 于是账本这种天天被追加的文件会长成半份 LF 半份 CRLF，diff 里满是没人改过的行，
+# 真的改动就淹在里面。text=auto：入库一律 LF，检出时各人机器爱怎样怎样。
+#
+# 注意：只加这份文件，不要 `git add --renormalize` —— 那会把现存的账本整份重写一遍，
+# 一次假的「全文件改动」比行尾不齐更难查。让归一化随下一次真实改动自然发生。
+* text=auto
+
+# 批处理必须留 CRLF：cmd.exe 读 LF 结尾的 .bat/.cmd 会把标签和续行读坏。
+*.bat text eol=crlf
+*.cmd text eol=crlf

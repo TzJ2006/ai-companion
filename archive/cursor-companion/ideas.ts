@@ -594,11 +594,17 @@ export function main(args: string[]): number {
       return d.allow ? 0 : 1;
     }
     case "enforce": {
-      const on = args[1] !== "off";
-      doc.set("enforce", on);
+      // D25: enforcement only ever turns ON from here. The graph carries no
+      // switch an agent may flip off — the one way out is the parent-process
+      // env var AIDEV_GUARD=off, which a subcommand cannot set for its caller.
+      if (args[1] === "off") {
+        console.error("拒绝：闸门不能由子命令关闭。真被卡住时，请人在启动编辑器前设 AIDEV_GUARD=off —— 那是逃生口，只有人设得了，不是常态。");
+        return 2;
+      }
+      doc.set("enforce", true);
       save(file, doc);
-      appendProjectLog(logFile, { date: today, by: flag(args, "by") ?? "human", note: `enforce → ${on}` });
-      console.log(`enforce ${on}`);
+      appendProjectLog(logFile, { date: today, by: flag(args, "by") ?? "human", note: "enforce → true" });
+      console.log("enforce true");
       return 0;
     }
     case "render": {
@@ -608,7 +614,7 @@ export function main(args: string[]): number {
       return 0;
     }
     default:
-      console.error("usage: ideas.ts check | next | show <id> | new <name> | set <id> <status> | allow <path> | enforce on|off | log | render | init | paths");
+      console.error("usage: ideas.ts check | next | show <id> | new <name> | set <id> <status> | allow <path> | enforce on | log | render | init | paths");
       console.error("       [--file ideas/graph.yaml] [--project .] [--by who] [--note text] [--files a,b] [--ideas I-001] [--force]");
       return 2;
   }

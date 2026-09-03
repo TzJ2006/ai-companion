@@ -1,8 +1,12 @@
-﻿// Shared write-gate. Used by ideas.ts (CLI) and hooks/gate.mjs (Cursor preToolUse).
+// Shared write-gate. Used by ideas.ts (CLI) and hooks/gate.mjs (Cursor preToolUse).
 // Keep this file plain Node ESM -- the hook cannot wait for tsx.
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
+
+// Windows filesystems are case-insensitive; POSIX ones are not. Comparing paths
+// case-insensitively everywhere would merge src/A.ts and src/a.ts on Linux.
+const CASE_INSENSITIVE = process.platform === "win32";
 
 export const WRITE_TOOLS = /^(Write|StrReplace|Delete|EditNotebook|ApplyPatch|search_replace)$/i;
 
@@ -121,13 +125,46 @@ export function matchesExempt(rel, patterns) {
   return false;
 }
 
-/** Repo-relative suffix match with path-segment boundaries. */
-export function matchesFile(rel, key) {
-  const n = norm(rel);
-  const k = norm(key);
-  if (!k || !n) return false;
-  if (n === k) return true;
-  return n.endsWith("/" + k);
+/** True for `/x`, `C:/x`, `//server/share` -- anything that is not project-relative. */
+function isRooted(p) {
+  return p.startsWith("/") || /^[A-Za-z]:/.test(p);
+}
+
+/**
+ * Resolve a path against the project root and return it as a project-relative
+ * POSIX path, or null when it leaves the root (D31: every path is a
+ * project-relative POSIX path with no `..`, so a plan cannot unlock files
+ * outside the project).
+ *
+ * The escape that makes this necessary is Windows-only: `path.relative` reports
+ * a path on another drive as an absolute path, not as a `..` prefix, so
+ * checking for a `..` prefix alone lets `Z:/other/src/a.ts` through.
+ */
+export function projectRelative(p, projectDir) {
+  const raw = String(p ?? "").trim().replace(/\\/g, "/");
+  if (!raw) return null;
+  if (!projectDir) {
+    // No root to resolve against: accept only an already project-relative path.
+    if (isRooted(raw)) return null;
+    const n = norm(raw);
+    return n && !n.split("/").includes("..") ? n : null;
+  }
+  const root = resolve(projectDir);
+  const rel = relative(root, resolve(root, raw)).replace(/\\/g, "/");
+  if (!rel || rel === ".." || rel.startsWith("../") || isRooted(rel)) return null;
+  return rel;
+}
+
+/**
+ * Exact match against one path claimed by an idea (D31: `code.file` is one
+ * exact file). A suffix match would let a claim on `x/y.ts` unlock every file
+ * in the project whose path happens to end that way.
+ */
+export function matchesFile(rel, key, projectDir) {
+  const n = projectRelative(rel, projectDir);
+  const k = projectRelative(key, projectDir);
+  if (!n || !k) return false;
+  return CASE_INSENSITIVE ? n.toLowerCase() === k.toLowerCase() : n === k;
 }
 
 export function isBuildReady(idea) {
@@ -168,6 +205,31 @@ export function fileClash(idea, graph) {
   return clashes;
 }
 
+/**
+ * Claims that name nothing on disk and carry the same file name as the write
+ * being judged -- the signature of a graph written against the old lenient
+ * suffix rule, where `code.file: a.ts` still unlocked `src/a.ts`. Exact
+ * matching (D31) unlocks nothing for such a claim, so the deny has to say the
+ * claim is stale rather than report that no idea claims this file.
+ */
+function staleClaims(unlocked, rel, projectDir) {
+  if (!projectDir) return [];
+  const base = (p) => {
+    const b = norm(p).split("/").pop() ?? "";
+    return CASE_INSENSITIVE ? b.toLowerCase() : b;
+  };
+  const want = base(rel);
+  const out = [];
+  for (const u of unlocked) {
+    for (const f of u.files) {
+      if (base(f) !== want) continue;
+      const claimed = projectRelative(f, projectDir);
+      if (!claimed || !existsSync(join(projectDir, claimed))) out.push(`${u.id}:${f}`);
+    }
+  }
+  return out;
+}
+
 export function unlockedFiles(graph) {
   const out = [];
   for (const idea of graph?.ideas ?? []) {
@@ -182,8 +244,12 @@ export function unlockedFiles(graph) {
  * @returns {{ allow: boolean, reason: string }}
  */
 export function decideWrite(graph, rel, projectDir) {
-  const n = norm(rel);
-  if (!n) return { allow: false, reason: "no file path" };
+  if (!norm(rel)) return { allow: false, reason: "no file path" };
+  // D31: resolve once, here, so every rule below compares the same
+  // project-relative path -- and so a path that escapes the root (`..`, another
+  // Windows drive) is refused before it can be read as a ledger or a claim.
+  const n = projectRelative(rel, projectDir);
+  if (!n) return { allow: false, reason: `路径不在项目根目录内：${norm(rel)}` };
 
   if (isLedger(n, projectDir)) {
     const names = projectDir
@@ -192,20 +258,27 @@ export function decideWrite(graph, rel, projectDir) {
     return { allow: true, reason: `ledger (ideas/${names.graph}|${names.log}|${names.html})` };
   }
 
+  // D25: the one escape hatch is the parent-process env var. A subcommand
+  // cannot set the environment of the process that spawned it, so the hook only
+  // ever sees this when a human started the editor with the hatch open.
+  if (process.env.AIDEV_GUARD === "off") {
+    return { allow: true, reason: "AIDEV_GUARD=off — 闸门整体停用。这是逃生口，不是常态。" };
+  }
+
   const enforce = graph?.enforce !== false;
   if (!enforce) return { allow: true, reason: "enforce: false" };
 
   if (matchesExempt(n, graph?.exempt)) return { allow: true, reason: `exempt ${n}` };
 
   if (isHarness(n)) {
-    return { allow: false, reason: "harness files are locked ? a human turns enforce off, or edits cursor-companion/ then reinstalls" };
+    return { allow: false, reason: "harness files are locked — a human turns enforce off, or edits cursor-companion/ then reinstalls" };
   }
 
   const unlocked = unlockedFiles(graph);
   if (unlocked.length === 0) {
     const doing = (graph?.ideas ?? []).filter((i) => (i.status ?? "todo") === "doing");
     if (doing.length === 0) {
-      return { allow: false, reason: "no idea is doing ? /idea-discuss first, then ideas.ts set <id> doing" };
+      return { allow: false, reason: "no idea is doing — /idea-discuss first, then ideas.ts set <id> doing" };
     }
     return {
       allow: false,
@@ -214,9 +287,17 @@ export function decideWrite(graph, rel, projectDir) {
   }
 
   for (const u of unlocked) {
-    if (u.files.some((f) => matchesFile(n, f))) {
+    if (u.files.some((f) => matchesFile(n, f, projectDir))) {
       return { allow: true, reason: `${u.id} doing` };
     }
+  }
+
+  const stale = staleClaims(unlocked, n, projectDir);
+  if (stale.length > 0) {
+    return {
+      allow: false,
+      reason: `${stale.join(", ")} 声明的路径在项目里不存在，解锁不了 ${n} — 旧图里的裸文件名不再模糊匹配，按 D31 把它补成项目根起算的完整路径`,
+    };
   }
 
   const listed = unlocked.flatMap((u) => u.files.map((f) => `${u.id}:${f}`)).join(", ");

@@ -115,12 +115,25 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(fileClash(byId(g, "I-005"), g)).toBeNull();        // 自己不和自己撞
   });
 
-  // ── set 的闸门：todo→doing 三道检查 + 小转移表 ───────────────────────────
+  // ── set 的闸门：todo→doing 三道检查 + 两次批准 + 小转移表 ─────────────────
 
+  // 纯单元用法：没有项目目录，就没有回执可读，只剩三道检查。
   const trySet = (id: string, status: string) => {
     const { doc, graph } = load(graphPath(dir));
     setStatus(doc, graph, id, status as Idea["status"] & string, { date: "2026-08-31" });
     return String(doc);
+  };
+
+  // 真实用法（命令行 set 就是这条）：带项目目录，D17 的两道批准闸门生效。
+  const trySetHere = (id: string, status: string) => {
+    const { doc, graph } = load(graphPath(dir));
+    setStatus(doc, graph, id, status as Idea["status"] & string, { date: "2026-08-31" }, dir);
+    return String(doc);
+  };
+
+  const approve = (gate: "decomposition" | "plan", nodes?: string[]) => {
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, gate, nodes);
+    applyApproval(dir, `批准 ${challenge}`, { date: "2026-08-31" });
   };
 
   it("refuses doing when a plan field is missing, and says which", () => {
@@ -135,8 +148,35 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(() => trySet("I-006", "doing")).toThrow(/I-005/);
   });
 
-  it("allows doing when ready, prerequisites done, no overlap", () => {
+  it("allows doing when ready, prerequisites done, no overlap — no project dir, no receipts to read", () => {
     expect(trySet("I-002", "doing")).toContain("status: doing");
+  });
+
+  // D17：开工要的是两次当前有效的批准 —— 拆分（人看过整张图）和计划（人看过这个
+  // 节点的八问）。缺哪次就点名该跑的那条命令，不让人猜。
+  it("refuses doing with no approval at all, and names the decomposition command", () => {
+    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate decomposition/);
+  });
+
+  it("refuses doing when only the plan is approved — the split still needs a human", () => {
+    approve("plan", ["I-002"]);
+    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate decomposition/);
+  });
+
+  it("refuses doing when only the decomposition is approved, and names the plan command", () => {
+    approve("decomposition");
+    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate plan --node I-002/);
+  });
+
+  it("allows doing once both approvals are current", () => {
+    approve("decomposition");
+    approve("plan", ["I-002"]);
+    expect(trySetHere("I-002", "doing")).toContain("status: doing");
+  });
+
+  // 走 blocked 绕一圈也没用：闸门看的是「进入 doing」，不是上一个状态。
+  it("refuses blocked → doing without the two approvals as well", () => {
+    expect(() => trySetHere("I-007", "doing")).toThrow(/request-approval --gate decomposition/);
   });
 
   it("enforces the small transition table", () => {
@@ -226,6 +266,9 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(lines.find((l) => l.includes("I-002"))).toMatch(/READY/i);   // 现在就能做
 
     // I-099 起 allow 给出守卫的完整判决：能写 = 认领 + 计划批准 + 失败记录俱在。
+    // H5 起还要那份测试文件真的在：没有测试可失败，红就不算红。
+    mkdirSync(join(dir, "tests"), { recursive: true });
+    writeFileSync(join(dir, "tests", "I-005.test.ts"), "// 会失败的测试\n");
     const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-005"]);
     applyApproval(dir, `批准 ${challenge}`, { date: "2026-08-31" });
     runCheck(dir, load(graphPath(dir)).graph, "I-005", "red");

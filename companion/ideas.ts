@@ -5,18 +5,32 @@
 // (graph.claude.yaml, graph.cursor.yaml) are read-only migration inputs and
 // this engine never touches them.
 //
-//   npx tsx ideas.ts check | next | show <id> | set <id> <status> | render | paths | init
+// What it answers is `SUBCOMMANDS` further down, and the usage text is
+// generated off that list — no hand-copied second list up here, because the one
+// that used to sit here had already drifted half a dozen subcommands behind.
+// How it is invoked in a repository that installed it: `node <ENGINE_RELATIVE>
+// <子命令>`, spelled once in manifests.ts and imported below (D14/D28).
 //
 // ponytail: no package, no build step. tsx runs it from source; the bundled
 // dist/companion.mjs (I-096) is the same file with `yaml` baked in.
 
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, readdirSync, unlinkSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { argv, exit, cwd, pid, platform, env } from "node:process";
 import { parseDocument, stringify, type Document } from "yaml";
+import { ENGINE_RELATIVE } from "./manifests.js";
+
+/**
+ * How a person actually invokes this engine in a repository that installed it
+ * (D14): the single-file bundle, at the one path manifests.ts spells. Every
+ * "去跑这个" the engine prints is built from here — `ideas.ts` is a source-tree
+ * filename that does not exist in an installed repository, so naming it in a
+ * message is pointing at nothing.
+ */
+const ENGINE_CMD = `node ${ENGINE_RELATIVE}`;
 
 export type Status = "todo" | "doing" | "done" | "blocked";
 const STATUSES: Status[] = ["todo", "doing", "done", "blocked"];
@@ -80,7 +94,7 @@ export interface Graph {
 
 export function load(file: string): { doc: Document; graph: Graph } {
   if (!existsSync(file)) {
-    throw new Error(`no idea graph at ${file} — run \`ideas.ts init\` first`);
+    throw new Error(`no idea graph at ${file} — run \`${ENGINE_CMD} init\` first`);
   }
   const doc = parseDocument(readFileSync(file, "utf8"));
   if (doc.errors.length > 0) throw new Error(`invalid YAML in ${file}: ${doc.errors[0].message}`);
@@ -94,27 +108,40 @@ function pauseSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** Write back through the parsed Document so comments and formatting survive. */
-function save(file: string, doc: Document): void {
-  // A fixed `${file}.tmp` is itself a race: two processes saving at once write
-  // the same scratch file and one of them renames the other's half-written
-  // bytes over the graph. Scope it to this process, the way the Python
-  // companion does.
+/**
+ * D30: every generated file lands this way — the graph, the checklist, the
+ * approval receipts, the red/green evidence, the rendered page. Write a scratch
+ * file, then rename it over the target, so a crash or a second process leaves
+ * the previous version whole instead of a truncated one.
+ *
+ * A fixed `${file}.tmp` would itself be the race: two processes writing at once
+ * share the scratch name and one renames the other's half-written bytes into
+ * place. Scope it to this process, the way the Python companion does.
+ */
+function atomicWrite(file: string, text: string): void {
   const tmp = `${file}.${pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-  writeFileSync(tmp, String(doc));
+  writeFileSync(tmp, text);
   // rename is atomic, but on Windows it also fails outright when anything else
   // holds a handle on the target — an editor, a virus scanner, another hook.
   // Those three codes mean "busy", not "broken", so wait and try again.
   for (let attempt = 0; ; attempt++) {
     try {
-      renameSync(tmp, file);   // atomic: a crash mid-write leaves the old graph intact
+      renameSync(tmp, file);   // atomic: a crash mid-write leaves the old file intact
       return;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code ?? "";
-      if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(code)) throw error;
+      if (attempt >= 5 || !["EPERM", "EBUSY", "EACCES"].includes(code)) {
+        rmFileQuietly(tmp);    // no scratch file left lying beside the target
+        throw error;
+      }
       pauseSync(20 * (attempt + 1));
     }
   }
+}
+
+/** Write back through the parsed Document so comments and formatting survive. */
+function save(file: string, doc: Document): void {
+  atomicWrite(file, String(doc));
 }
 
 // ─── graph queries ──────────────────────────────────────────────────────────
@@ -241,14 +268,20 @@ export const worklistFile = (projectDir: string) => paths(projectDir).worklist;
 /** The human-readable change record. */
 export const logFile = (projectDir: string) => paths(projectDir).log;
 
-// Files whose content nobody needs to read to understand the project.
+// Files whose content nobody needs to read to understand the project, each
+// paired with the reason the scan report has to be able to print (D29): a
+// skipped file must be visible, because "not read" dressed up as "not there"
+// is exactly the self-report the checklist exists to replace.
 // `node_modules` is listed explicitly because a repo may *track* one (this is
 // not hypothetical — ai-companion commits packages/ast/node_modules), and then
 // `git ls-files` hands you a vendored dependency's C source to "read".
-const SKIP = /\.(png|jpe?g|gif|svg|ico|webp|pdf|zip|gz|tar|woff2?|ttf|eot|mp[34]|mov|wasm|lock|min\.js|map)$|(^|\/)(node_modules|vendor|third_party|ideas)\/|(^|\/)package-lock\.json$/i;
+const SKIP_RULES: [RegExp, string][] = [
+  [/\.(png|jpe?g|gif|svg|ico|webp|pdf|zip|gz|tar|woff2?|ttf|eot|mp[34]|mov|wasm)$/i, "二进制或资源文件，读它读不出内容"],
+  [/\.(lock|min\.js|map)$|(^|\/)package-lock\.json$/i, "生成物（锁文件 / 压缩产物 / source map），源头在别处"],
+  [/(^|\/)(node_modules|vendor|third_party)\//i, "第三方依赖，不是这个项目自己的代码"],
+  [/(^|\/)ideas\//i, "账本目录，由引擎自己生成和维护"],
+];
 
-/** Every file worth reading. `git ls-files` is the answer when it's available — */
-/** it already knows about .gitignore, submodules and case. */
 /**
  * Path prefixes to leave out of the scan, one per line in `ideas/.scanignore`.
  * Vendored skill packs and other agents' parallel work live inside the repo but
@@ -264,23 +297,53 @@ export function scanIgnores(projectDir: string): string[] {
     .filter((l) => l && !l.startsWith("#"));
 }
 
-export function listProjectFiles(projectDir: string): string[] {
-  let files: string[];
+/** Everything this project contains, before any of the scan rules apply. */
+function allProjectFiles(projectDir: string): string[] {
   try {
     // --others --exclude-standard: tracked files alone would hide every file
     // that is present but not committed yet — i.e. exactly the work in progress
     // you most need to read. --exclude-standard still honours .gitignore.
     // -z: NUL-separated and unquoted. Without it git octal-escapes any path
     // with non-ASCII in it, and every such file silently fails to match a Read.
-    files = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    return execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
       { cwd: projectDir, encoding: "utf8" })
       .split("\0").filter(Boolean);
   } catch {
-    files = walk(projectDir, projectDir);   // not a git repo — walk it
+    return walk(projectDir, projectDir);   // not a git repo — walk it
   }
+}
+
+/** Why one file is not on the checklist (D29). */
+export interface SkippedFile { file: string; reason: string }
+
+/** The reason this path is skipped, or null when it is not skipped at all. */
+function skipReason(file: string, ignores: string[]): string | null {
+  const prefix = ignores.find((p) => file.startsWith(p));
+  if (prefix) return `ideas/.scanignore 里排除的前缀 ${prefix}`;
+  return SKIP_RULES.find(([rule]) => rule.test(file))?.[1] ?? null;
+}
+
+/**
+ * Everything the scan leaves out, each with the reason (D29). The checklist
+ * alone answers "how much is left"; this answers "and what did you not even
+ * put on it" — the half a scan report cannot honestly leave to a promise.
+ */
+export function skippedFiles(projectDir: string): SkippedFile[] {
   const ignores = scanIgnores(projectDir);
-  return files
-    .filter((f) => !SKIP.test(f) && !ignores.some((prefix) => f.startsWith(prefix)))
+  return allProjectFiles(projectDir)
+    .flatMap((file) => {
+      const reason = skipReason(file, ignores);
+      return reason ? [{ file, reason }] : [];
+    })
+    .sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+/** Every file worth reading — everything the project has, minus what one of the
+ *  skip rules or `.scanignore` accounts for. `skippedFiles` names the rest. */
+export function listProjectFiles(projectDir: string): string[] {
+  const ignores = scanIgnores(projectDir);
+  return allProjectFiles(projectDir)
+    .filter((f) => skipReason(f, ignores) === null)
     .sort();
 }
 
@@ -353,12 +416,49 @@ export function readWorklist(projectDir: string): string[] {
   return readChecklist(projectDir).filter((f) => !effectivelyStruck(projectDir, struck, f));
 }
 
+/**
+ * How many checklist entries are struck off and still unchanged (D12).
+ *
+ * Counted, never subtracted. "Everything minus what is still on the list" is
+ * a different number the moment the list and the file tree disagree, and it
+ * lies in the one direction that matters: it reports unread files as read.
+ */
+export function worklistDone(projectDir: string): number {
+  const struck = readStruck(projectDir);
+  if (struck.size === 0) return 0;
+  return readChecklist(projectDir).filter((f) => effectivelyStruck(projectDir, struck, f)).length;
+}
+
+/**
+ * Bring the checklist back in line with the files that exist right now (D29):
+ * add what appeared since it was built, drop what vanished. Returns both sets
+ * so the caller can say out loud that the scan is no longer complete.
+ *
+ * The struck-off record is deliberately left untouched — unlike
+ * `writeWorklist`, which clears it. A reconcile must never un-strike a file
+ * somebody genuinely read, and a file that vanished and came back is caught
+ * by its content hash, not by wiping the ledger.
+ */
+export function reconcileWorklist(
+  projectDir: string, all: string[],
+): { added: string[]; removed: string[] } {
+  const checklist = readChecklist(projectDir);
+  const known = new Set(checklist.map((f) => f.toLowerCase()));
+  const live = new Set(all.map((f) => f.toLowerCase()));
+  const added = all.filter((f) => !known.has(f.toLowerCase()));
+  const removed = checklist.filter((f) => !live.has(f.toLowerCase()));
+  if (added.length === 0 && removed.length === 0) return { added, removed };
+  mkdirSync(dirname(worklistFile(projectDir)), { recursive: true });
+  atomicWrite(worklistFile(projectDir), all.join("\n") + (all.length > 0 ? "\n" : ""));
+  return { added, removed };
+}
+
 export function writeWorklist(projectDir: string, files: string[]): void {
   mkdirSync(dirname(worklistFile(projectDir)), { recursive: true });
-  writeFileSync(worklistFile(projectDir), files.join("\n") + (files.length > 0 ? "\n" : ""));
+  atomicWrite(worklistFile(projectDir), files.join("\n") + (files.length > 0 ? "\n" : ""));
   // A fresh checklist beside a stale struck-off list would report every file as
   // already read — R7 switched off, silently. The two always move together.
-  writeFileSync(doneFile(projectDir), "");
+  atomicWrite(doneFile(projectDir), "");
 }
 
 /**
@@ -408,7 +508,95 @@ export interface CheckResult { errors: string[]; warnings: string[] }
 
 const PLANNING_FIELDS = ["what", "why", "expected", "how", "why_this_way", "future"] as const;
 
-export function check(g: Graph, projectDir: string): CheckResult {
+/**
+ * D31: every planned path is a project-relative POSIX path. An absolute path or
+ * a `..` segment names a file the project does not own — the write gate refuses
+ * it anyway (it compares project-relative paths), so all such a path can do is
+ * sit in the graph as a lie nobody catches, and /ccfix reads the graph as fact.
+ * Returns the complaint, or null when the path is fine.
+ */
+function badPlanPath(path: string): string | null {
+  const posix = String(path).replaceAll("\\", "/");
+  // `/x`, `//server/share/x` and `C:/x` are all "somewhere else on this machine".
+  if (/^\//.test(posix) || /^[A-Za-z]:/.test(posix)) return "必须写成项目相对路径，不能是绝对路径";
+  if (posix.split("/").includes("..")) return "不能含 `..`（父目录）段 —— 那指向项目之外";
+  return null;
+}
+
+/** How many lines this file has right now. A trailing newline ends the last
+ *  line, it does not start an empty one. */
+function lineCount(text: string): number {
+  if (text.length === 0) return 0;
+  return text.replace(/\r?\n$/, "").split("\n").length;
+}
+
+/**
+ * D32: a done idea's `lines` must be a readable `start-end`, 1-based, end not
+ * before start, and it should still fit the file as it stands right now. Those
+ * are two different faults and they do not deserve the same severity:
+ *
+ *   `impossible` — no edit to any file can turn a once-true `12-40` into `3-2`,
+ *     `0-1` or `大概第三行`. A range shaped like that never described anything;
+ *     it was already false at the moment somebody called the idea done, so it
+ *     is a lie about the work being claimed, and stays an error.
+ *   `stale` — the range parses and once fit; the file has since been shortened
+ *     by other, permitted work. That is documentation drift on finished work,
+ *     not an invalid graph, and R5 turns every check error into "you may not
+ *     end the session" — grading drift as an error would let any ordinary
+ *     shortening edit hold the session hostage to an unrelated done idea.
+ *
+ * Returns the complaint and its severity, or null. Only asked once the file is
+ * known to exist — a missing file is already its own error.
+ */
+/** `lines` is a comma-separated list of SEGMENTS, each `start-end` or a bare
+ *  single line. One idea's code legitimately lives in several disjoint hunks —
+ *  the live ledger carries `731-742,1058-1207` for a change split across two
+ *  functions, and `591,740` for a two-line touch. Reading it as one range was
+ *  too narrow: it refused six real records and blocked the migration outright.
+ *  Every segment is checked, and `impossible` outranks `stale` — a range no
+ *  edit could ever have produced is a typo to fix now, while one the file has
+ *  merely outgrown is drift on finished work (D32). */
+function badLineRange(fullPath: string, lines: string): { kind: "impossible" | "stale"; why: string } | null {
+  const impossible = (why: string) => ({ kind: "impossible" as const, why });
+  const shape = `行号要写成 start-end（如 12-40），单行写行号，多段用逗号隔开（如 12-40,88），现在是「${lines}」`;
+  // Empty segments are NOT filtered away: a trailing comma is what a truncated
+  // record looks like («1-2,105» cut short), and silently reading it as «1-2»
+  // would bless the truncation. An empty `lines` lands here too.
+  const segments = String(lines).trim().split(",").map((s) => s.trim());
+  if (segments.length === 0) return impossible(shape);
+
+  let count: number | null;
+  try { count = lineCount(readFileSync(fullPath, "utf8")); }
+  catch { count = null; }   // 读不出来就不猜行数；文件存在与否另有一条错误管
+  let stale: { kind: "stale"; why: string } | null = null;
+
+  for (const segment of segments) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(segment);
+    if (!m) return impossible(shape);
+    const start = Number(m[1]);
+    const end = m[2] === undefined ? start : Number(m[2]);
+    if (start < 1) return impossible(`行号从 1 起算，start 不能是 ${start}`);
+    if (end < start) return impossible(`end ${end} 小于 start ${start}`);
+    if (count !== null && end > count && !stale) {
+      stale = { kind: "stale", why: `end ${end} 超过文件现在只有的 ${count} 行` };
+    }
+  }
+  return stale;
+}
+
+// `file` is the graph this came from, when the caller knows it. Omitted means
+// the project's own graph — that is what the guard, `apply` and migrate check.
+export function check(g: Graph, projectDir: string, file?: string): CheckResult {
+  // H15: the canonical name can be occupied by a retired implementation's graph
+  // (D10). Validating that against this engine's rules buries the real problem
+  // under a pile of unrelated errors, so say the one thing that is wrong and
+  // the one step that fixes it. A legacy graph a caller names explicitly is a
+  // migration input and is still checked as itself — see the `--file` rule.
+  const stamp = legacyStamp(g);
+  if (stamp && (file === undefined || sameFile(file, graphPath(projectDir)))) {
+    return { errors: [legacyAtCanonical(stamp)], warnings: [] };
+  }
+
   const errors: string[] = [];
   const warnings: string[] = [];
   const seen = new Set<string>();
@@ -445,14 +633,47 @@ export function check(g: Graph, projectDir: string): CheckResult {
       }
     }
 
+    // D8: an idea being built on a whole-project command with no `test_files`
+    // has nothing that can go red on its own, so its implementation gate only
+    // opens on a human red-waiver. A warning, not an error — the shape is legal
+    // — said now, while adding a test file is still cheap, rather than at the
+    // first blocked write.
+    if (status === "doing" && idea.verify?.command && !(idea.verify.test_files ?? []).length) {
+      warnings.push(`${at}: 在做，但 \`verify\` 只有一条命令、没有 \`test_files\` —— 没有能单独失败的测试就撑不起 RED，实现前要么补上测试文件，要么请人批一次 red-waiver（D8）`);
+    }
+
     for (const ref of idea.code ?? []) {
       if (!ref.file) { errors.push(`${at}: a \`code\` entry has no file`); continue; }
+      // D31: checked at every status. A path that leaves the project is wrong
+      // the moment it is planned, not the moment somebody tries to write it.
+      const strayed = badPlanPath(ref.file);
+      if (strayed) { errors.push(`${at}: \`code\` 路径 ${ref.file} ${strayed}（D31）`); continue; }
       // Before it is built, `code.file` is a plan — the file is not supposed to
       // exist yet. Once done it must: question 6 is only worth anything if the
       // path resolves, and /ccfix trusts it.
-      if (status === "done" && !existsSync(resolve(projectDir, ref.file))) {
+      const full = resolve(projectDir, ref.file);
+      if (status === "done" && !existsSync(full)) {
         errors.push(`${at}: code file not found — ${ref.file}`);
+        continue;
       }
+      // D32: same reasoning one level down — a done idea's line range is read
+      // as fact. A range no file edit could ever produce is an error; a range
+      // the file has simply outgrown is drift, and drift must not reach R5.
+      if (status === "done" && ref.lines !== undefined) {
+        const bad = badLineRange(full, ref.lines);
+        if (bad?.kind === "impossible") {
+          errors.push(`${at}: \`code\` ${ref.file} 的行号对不上：${bad.why}（D32）`);
+        } else if (bad) {
+          warnings.push(`${at}: \`code\` ${ref.file} 的行号过期了：${bad.why} —— 别处的改动把它改短了，记录该刷新：在 ideas/graph.yaml 里把这条 \`lines\` 改成现在的范围，再跑 \`${ENGINE_CMD} check\` 复核（D32）`);
+        }
+      }
+    }
+
+    // D31 again, for the other half of the plan: test paths are declared, never
+    // guessed out of the command string, so they get the same boundary check.
+    for (const rel of idea.verify?.test_files ?? []) {
+      const strayed = badPlanPath(rel);
+      if (strayed) errors.push(`${at}: \`verify.test_files\` 路径 ${rel} ${strayed}（D31）`);
     }
   }
 
@@ -471,7 +692,7 @@ export function check(g: Graph, projectDir: string): CheckResult {
   // no graph at all. Say the number out loud.
   const unread = readWorklist(projectDir);
   if (unread.length > 0) {
-    warnings.push(`扫描未完成：还有 ${unread.length} 个文件没被读过（\`ideas.ts scan\`）`);
+    warnings.push(`扫描未完成：还有 ${unread.length} 个文件没被读过（\`${ENGINE_CMD} scan\`）`);
   }
 
   return { errors, warnings };
@@ -652,7 +873,7 @@ export function requestApproval(
   const challenge = `CC-${randomBytes(4).toString("hex").toUpperCase()}`;
   const file = join(pendingDir(projectDir), `${challenge}.json`);
   mkdirSync(pendingDir(projectDir), { recursive: true });
-  writeFileSync(file, JSON.stringify({
+  atomicWrite(file, JSON.stringify({
     v: 1, challenge, gate, node_ids: nodeIds ?? null, snapshot,
     requested_at: meta.date ?? "", by: meta.by ?? "",
   }, null, 2));
@@ -692,7 +913,7 @@ export function applyApproval(
   }
 
   mkdirSync(approvalsDir(projectDir), { recursive: true });
-  writeFileSync(join(approvalsDir(projectDir), `${challenge}.json`), JSON.stringify({
+  atomicWrite(join(approvalsDir(projectDir), `${challenge}.json`), JSON.stringify({
     ...pending, decision, responded_at: meta.date,
     session_id: meta.session_id ?? "", turn_id: meta.turn_id ?? "",
     prompt_sha256: sha256(prompt),
@@ -745,7 +966,12 @@ export function validApproval(projectDir: string, graph: Graph, gate: Gate, node
 // not a timestamp — clocks skew and rewind, a counter bumped by the write hook
 // does neither.
 
-interface CheckRun { exit_code: number; output_tail: string; test_hashes: Record<string, string>; at_seq: number; outcome?: "red" | "unexpected_pass" }
+interface CheckRun {
+  exit_code: number; output_tail: string; test_hashes: Record<string, string>; at_seq: number;
+  outcome?: "red" | "unexpected_pass" | "infra_error";
+  // Only on an infra_error run; older evidence files simply lack it (H5).
+  infra_error?: string;
+}
 interface Evidence { change_seq?: number; red?: CheckRun; green?: CheckRun }
 
 const evidenceFile = (projectDir: string, id: string) => join(paths(projectDir).runtime, `${id}.json`);
@@ -758,7 +984,7 @@ function readEvidence(projectDir: string, id: string): Evidence {
 
 function writeEvidence(projectDir: string, id: string, evidence: Evidence): void {
   mkdirSync(paths(projectDir).runtime, { recursive: true });
-  writeFileSync(evidenceFile(projectDir, id), JSON.stringify(evidence, null, 2));
+  atomicWrite(evidenceFile(projectDir, id), JSON.stringify(evidence, null, 2));
 }
 
 /** Fingerprints of the idea's declared test files, as they are right now. */
@@ -771,8 +997,67 @@ function hashTests(projectDir: string, idea: Idea): Record<string, string> {
   return out;
 }
 
+/** The declared test files that really exist right now (H5). */
+function presentTests(projectDir: string, idea: Idea): string[] {
+  return (idea.verify?.test_files ?? []).filter((rel) => existsSync(join(resolve(projectDir), rel)));
+}
+
 const sameHashes = (a: Record<string, string>, b: Record<string, string>) =>
   JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+
+// D8: a command that never really ran is not a failing test. A missing
+// executable, a timeout, a signal and a spawn error all leave a non-zero (or
+// no) exit code, so without this classification one typo in verify.command
+// counts as RED and opens the implementation gate. The shell says "not found"
+// with 127 (POSIX sh) or 9009 (cmd.exe); Windows may run either as ComSpec.
+const NOT_FOUND_EXITS = platform === "win32" ? [9009, 127] : [127];
+
+// cmd.exe answers "is not recognized" with a plain exit 1, so on Windows the
+// exit code alone cannot tell a typo from a failing test. Resolve the program
+// the shell would run before running it, the way the retired Python
+// implementation did; compound command lines are left to the codes above.
+const SHELL_OPERATORS = /[|&;<>`$(){}\n]/;
+
+/** The declared command's program, if it plainly is not runnable (H5). */
+function missingExecutable(projectDir: string, command: string): string | undefined {
+  if (SHELL_OPERATORS.test(command)) return undefined;   // 复合命令，读不出到底跑的是谁
+  const token = (command.trim().match(/^"([^"]+)"|^'([^']+)'|^(\S+)/) ?? []).slice(1).find(Boolean);
+  if (!token) return undefined;
+  if (/[\\/]/.test(token)) {
+    return existsSync(resolve(projectDir, token)) ? undefined : `找不到可执行文件 ${token}`;
+  }
+  const exts = platform === "win32" ? ["", ...(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")] : [""];
+  for (const dir of (env.PATH ?? "").split(platform === "win32" ? ";" : ":")) {
+    if (!dir) continue;
+    for (const ext of exts) if (ext !== undefined && existsSync(join(dir, token + ext))) return undefined;
+  }
+  return `命令没找到：${token} 不在 PATH 上`;
+}
+
+/** Why this run proves nothing — undefined when the command really ran (H5). */
+function infraReason(run: SpawnSyncReturns<string>): string | undefined {
+  const error = run.error as NodeJS.ErrnoException | undefined;
+  if (error) {
+    return error.code === "ETIMEDOUT"
+      ? "命令超时，被强行杀掉"
+      : `命令没能启动：${error.message}`;
+  }
+  if (run.signal) return `命令被信号 ${run.signal} 杀掉`;
+  if (run.status === null) return "命令没有留下退出码（超时或被杀）";
+  if (NOT_FOUND_EXITS.includes(run.status)) return `命令没找到（退出码 ${run.status}）`;
+  return undefined;
+}
+
+/**
+ * The same verdict re-derived from a stored record, so evidence written before
+ * H5 (no `infra_error` field) is judged by its exit code too.
+ */
+function infraOf(run: CheckRun): string | undefined {
+  if (run.outcome === "infra_error") return run.infra_error ?? "命令没能真正跑起来";
+  if (run.exit_code === -1) return "命令没有留下退出码（超时或被杀）";
+  if (NOT_FOUND_EXITS.includes(run.exit_code)) return `命令没找到（退出码 ${run.exit_code}）`;
+  return undefined;
+}
 
 /**
  * The write hook calls this after every implementation write: every idea whose
@@ -803,8 +1088,31 @@ export function redGateReady(projectDir: string, graph: Graph, id: string): Gate
   if (!evidence.red) {
     return { ready: false, reason: `还没有 RED 记录 —— 先 run-check ${id} --phase red，看着测试真的失败` };
   }
+  // D8: 命令坏了和测试红了是两回事，说清楚是哪一种（H5）。这一条站在豁免之上：
+  // 人能批「这次失败算数」，批不了「一条根本没跑起来的命令算数」。
+  const broken = infraOf(evidence.red);
+  if (broken) {
+    return { ready: false, reason: `上次 red 里验证命令根本没跑起来：${broken} —— 这是命令坏了，不是测试红了；修好 verify.command 再重跑 run-check ${id} --phase red` };
+  }
   if (!sameHashes(evidence.red.test_hashes, hashTests(projectDir, idea))) {
     return { ready: false, reason: `RED 证据已过期（stale）—— 测试文件在失败记录之后被改过，重跑 red` };
+  }
+  // D8: 一个存在的测试文件都没有时，那条命令的非零退出可能来自任何地方，单靠
+  // 它撑不起一次 RED（H5）。但「一条整项目命令、没有 test_files」本身是合法形
+  // 状，硬拒会把这些想法永远锁死 —— 所以和 unexpected_pass 一样交给人裁决：
+  // 这一条必须留在 red-waiver 分支之上够得着的位置。
+  const declared = idea.verify.test_files ?? [];
+  if (presentTests(projectDir, idea).length === 0) {
+    if (validApproval(projectDir, graph, "red-waiver", [id])) {
+      return { ready: true, reason: "没有可失败的测试文件 + 人批的豁免" };
+    }
+    const gap = declared.length === 0
+      ? `${id} 没有 verify.test_files`
+      : `${id} 声明的测试文件一个都不存在（${declared.join("、")}）`;
+    return {
+      ready: false,
+      reason: `${gap} —— 没有测试文件时，验证命令的非零退出可能来自任何地方，撑不起一次 RED（D8）。两条出路：把会失败的测试写出来、写进 verify.test_files 再 run-check ${id} --phase red，或者请人批一次豁免（request-approval --gate red-waiver --node ${id}）`,
+    };
   }
   if (evidence.red.outcome === "unexpected_pass") {
     return validApproval(projectDir, graph, "red-waiver", [id])
@@ -829,7 +1137,9 @@ export function greenCurrent(projectDir: string, graph: Graph, id: string): bool
  * both the `allow` command and the guard, so they can never disagree:
  * evidence files are CLI-only (D24), legacy suffixed graphs are read-only
  * migration inputs (D10), the ledger stays writable, and a product file needs
- * a ready doing idea + current plan approval + fresh RED (D16/D7/D8).
+ * a ready doing idea + current plan approval + fresh RED (D16/D7/D8). A
+ * declared test file needs the first two but not the RED — D8 puts the failing
+ * test before the evidence.
  */
 export function decideProductWrite(projectDir: string, graph: Graph, filePath: string): { allow: boolean; reason: string } {
   const root = resolve(projectDir).replaceAll("\\", "/");
@@ -859,14 +1169,29 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
   }
 
   const doing = graph.ideas.filter((i) => i.status === "doing" && !isBuildReady(i));
+  const needsPlan = (idea: Idea) => ({
+    allow: false,
+    reason: `${idea.id}「${idea.name}」的计划还没有当前有效的人工批准 —— request-approval --gate plan --node ${idea.id}，请人看过后整条消息回复口令（D7）。`,
+  });
+
+  // D8: the failing test IS the legal first move, so this branch asks for no
+  // RED — that is the whole point. But it still asks for the plan approval
+  // (D7/D17), because `verify.test_files` is graph PROSE and the graph rule
+  // protects only status and signed_off: without this, appending any path —
+  // the guard's own source, the engine, the host config — to some doing idea
+  // would hand the agent that file. The plan snapshot covers `verify`, so a
+  // current approval means a human saw exactly this list, and appending a path
+  // self-destructs it. It costs the sanctioned loop nothing: D17 already
+  // requires a plan approval before an idea can reach `doing` at all.
   const testOwner = doing.find((i) => (i.verify?.test_files ?? []).some((f) => sameFile(f, rel)));
-  if (testOwner) return { allow: true, reason: `${testOwner.id} 的测试文件 —— 先写会失败的测试正是第一步` };
+  if (testOwner) {
+    if (!validApproval(projectDir, graph, "plan", [testOwner.id])) return needsPlan(testOwner);
+    return { allow: true, reason: `${testOwner.id} 的测试文件 —— 先写会失败的测试正是第一步` };
+  }
 
   const codeOwner = doing.find((i) => (i.code ?? []).some((c) => c.file && sameFile(c.file, rel)));
   if (codeOwner) {
-    if (!validApproval(projectDir, graph, "plan", [codeOwner.id])) {
-      return { allow: false, reason: `${codeOwner.id}「${codeOwner.name}」的计划还没有当前有效的人工批准 —— request-approval --gate plan --node ${codeOwner.id}，请人看过后整条消息回复口令（D7）。` };
-    }
+    if (!validApproval(projectDir, graph, "plan", [codeOwner.id])) return needsPlan(codeOwner);
     const gate = redGateReady(projectDir, graph, codeOwner.id);
     if (!gate.ready) return { allow: false, reason: `测试先行（D8）：${gate.reason}` };
     return { allow: true, reason: `${codeOwner.id} 认领了它，批准与失败记录俱在` };
@@ -881,6 +1206,61 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
 }
 
 /**
+ * A declared verify command is handed to a shell VERBATIM, so it has to BE one
+ * command: separators, pipes, redirects, line breaks and both spellings of
+ * command substitution each carry a second command the human never reviewed
+ * (D21/D28). This is the SAME question the guard's shell rule asks before it
+ * honours a declared verify command; it lives here, on the engine side, because
+ * guard.ts imports ideas.ts and not the other way round — one predicate, both
+ * doors, which is the drift D11 exists to prevent.
+ */
+export const isChainedCommand = (command: string) => /[;&|<>\r\n]|\$\(|`/.test(command);
+
+/**
+ * The chained-command screen WHOLE: the predicate above and the words the human
+ * is shown, in one place, because both doors need both halves. The guard asks
+ * it before it honours a declared `verify.command`; `run-check` asks it below
+ * before it spawns one. Keeping a second regex plus a second wording on the
+ * guard side is not "the same rule twice", it is two rules that happen to agree
+ * today — which is how the three engines forked and exactly what D11 forbids.
+ * Returns the refusal to show the human, or null when it really is one command.
+ *
+ * guard.ts still declares its own `CHAINED_COMMAND` and restates these words in
+ * its declared-verify branch: that constant and that message should both become
+ * a call to this function.
+ */
+export function chainedCommandRefusal(idea: Pick<Idea, "id" | "name">, command: string): string | null {
+  if (!isChainedCommand(command)) return null;
+  return `${idea.id}「${idea.name}」的 verify.command 里串了第二条命令（分号/与号/管道/重定向/换行/命令替换）——「${command.slice(0, 80)}」。`
+    + `验证命令是被原样交给 shell 跑的，所以它只能是一条命令（D21/D28）：把图里这条改成单条命令，多步验证拆成多个想法或写进脚本再由人过目。`;
+}
+
+/**
+ * The two conditions the guard applies to a declared verify command, asked
+ * again at the engine's own point of execution. `run-check` spawns
+ * `idea.verify.command` through a shell and sits on the guard's engine
+ * allowlist, while verify.command is graph PROSE the project deliberately
+ * leaves editable — so without this, the exact payload the guard refuses to an
+ * agent's face runs when routed through the engine instead (D7/D21/D28).
+ * Returns the refusal to show the human, or null to proceed.
+ */
+function verifyCommandRefusal(projectDir: string, graph: Graph, idea: Idea, command: string): string | null {
+  // D21/D28: a chain is a defect in the graph, not a permission question — no
+  // approval buys it, because what the human approved was one command.
+  const chained = chainedCommandRefusal(idea, command);
+  if (chained) return chained;
+  // D7: the plan snapshot covers `verify`, so editing the command destroys the
+  // approval — that self-destruct is the whole reason a graph-written command
+  // can be trusted enough to execute at all.
+  if (!validApproval(projectDir, graph, "plan", [idea.id])) {
+    return `${idea.id}「${idea.name}」的计划没有当前有效的人工批准，不跑它的 verify.command（D7）——`
+      + `命令是图里的散文，没人过目就等于让 agent 自己写一条命令再自己执行。`
+      + `先 \`request-approval --gate plan --node ${idea.id}\`，请人回一句「批准 CC-…」；改过 how/code/verify 之后批准会作废，要重新请。`;
+  }
+  return null;
+}
+
+/**
  * Run the idea's verify command for real and record what happened. RED before
  * GREEN: the green phase refuses to run while the red gate is not ready.
  */
@@ -892,28 +1272,36 @@ export function runCheck(
   if (!idea) throw new Error(`no idea with id ${id}`);
   const command = idea.verify?.command;
   if (!command) throw new Error(`${id} 没有 verify.command —— 人工验收的想法用 manual-check 关卡`);
+  // Asked before anything is spawned OR recorded: a refused run leaves the
+  // existing evidence exactly as it was (D7/D21/D28).
+  const refusal = verifyCommandRefusal(projectDir, graph, idea, command);
+  if (refusal) throw new Error(refusal);
   if (phase === "green") {
     const gate = redGateReady(projectDir, graph, id);
     if (!gate.ready) throw new Error(`先过 RED 门再跑 green：${gate.reason}`);
   }
 
-  const run = spawnSync(command, {
+  const missing = missingExecutable(projectDir, command);
+  const run = missing ? null : spawnSync(command, {
     shell: true, cwd: resolve(projectDir), encoding: "utf8",
     timeout: opts.timeoutMs ?? 120_000,
   });
   const evidence = readEvidence(projectDir, id);
+  const broken = missing ?? infraReason(run!);
   const record: CheckRun = {
-    exit_code: run.status ?? -1,
-    output_tail: `${run.stdout ?? ""}${run.stderr ?? ""}`.slice(-2000),
+    exit_code: run?.status ?? -1,
+    output_tail: `${run?.stdout ?? ""}${run?.stderr ?? ""}${broken ? `\n[companion] ${broken}` : ""}`.slice(-2000),
     test_hashes: hashTests(projectDir, idea),
     at_seq: evidence.change_seq ?? 0,
   };
-  if (phase === "red") {
+  // Recorded honestly, but a run that never happened satisfies no gate (D8/H5).
+  if (broken) {
+    record.outcome = "infra_error";
+    record.infra_error = broken;
+  } else if (phase === "red") {
     record.outcome = record.exit_code === 0 ? "unexpected_pass" : "red";
-    evidence.red = record;
-  } else {
-    evidence.green = record;
   }
+  if (phase === "red") evidence.red = record; else evidence.green = record;
   writeEvidence(projectDir, id, evidence);
   return record;
 }
@@ -928,10 +1316,58 @@ export function runCheck(
 export interface MigrateResult { ok: boolean; written?: string; report?: string[]; reason?: string }
 
 type LegacyKind = "claude" | "cursor" | "codex";
-interface LegacySource { kind: LegacyKind; path: string }
+export interface LegacySource {
+  kind: LegacyKind;
+  path: string;
+  /** Set only when this legacy graph sits at the canonical name (H15): the one
+   *  sentence saying what it is and what the human has to do about it. */
+  instruction?: string;
+}
 
-function findLegacySources(projectDir: string): LegacySource[] {
+interface LegacyStamp { key: string; agent: string; kind: LegacyKind }
+
+/**
+ * The keys that give a retired implementation's graph away: `agent:` stamps it
+ * as one agent's file (D10 — the graph belongs to the project), and `enforce:` /
+ * `exempt:` are the in-graph switches D24/D25 removed. Returns the key that
+ * gives it away plus who wrote it, or null for an ordinary project graph.
+ */
+function legacyStamp(graph: unknown): LegacyStamp | null {
+  const g = graph as Record<string, unknown> | null;
+  if (!g || typeof g !== "object") return null;
+  const agent = typeof g.agent === "string" ? g.agent.trim().toLowerCase() : "";
+  // enforce/exempt were the Cursor gate's own switches, so a graph carrying
+  // them without an `agent:` key came from cursor-companion.
+  const kind = (["claude", "cursor", "codex"] as const).find((k) => k === agent) ?? "cursor";
+  if (agent) return { key: `agent: ${agent}`, agent, kind };
+  const key = ["enforce", "exempt"].find((k) => g[k] !== undefined);
+  return key ? { key: `${key}:`, agent: "cursor", kind } : null;
+}
+
+/** Same question, asked of a file. Unreadable or unparsable → not our problem here. */
+function legacyStampOf(file: string): LegacyStamp | null {
+  try { return legacyStamp(parseDocument(readFileSync(file, "utf8")).toJSON()); } catch { return null; }
+}
+
+/**
+ * H15/D10: one sentence for the one situation — a legacy graph parked on the
+ * canonical name. The rename is a human decision about a live file, so the
+ * engine names the step and stops; it never moves the file itself.
+ */
+function legacyAtCanonical(stamp: LegacyStamp): string {
+  return `ideas/graph.yaml 带着 ${stamp.key} —— 这是旧实现（${stamp.agent}）留下的图，不是本引擎的项目图（D10）：`
+    + `请人先手工把它改名成 ideas/graph.${stamp.agent}.yaml，再跑 \`migrate\` 把内容并进来（引擎不替人改名，也不动这个文件）。`;
+}
+
+export function findLegacySources(projectDir: string): LegacySource[] {
   const out: LegacySource[] = [];
+  // H15: the canonical name itself can be occupied by a legacy graph — the one
+  // place the old search never looked, because it only knew suffixed names.
+  const plain = graphPath(projectDir);
+  if (existsSync(plain)) {
+    const stamp = legacyStampOf(plain);
+    if (stamp) out.push({ kind: stamp.kind, path: plain, instruction: legacyAtCanonical(stamp) });
+  }
   for (const kind of ["claude", "cursor"] as const) {
     const p = join(IDEAS_DIR(projectDir), `graph.${kind}.yaml`);
     if (existsSync(p)) out.push({ kind, path: p });
@@ -1041,10 +1477,15 @@ export function migrate(
   opts: { pick?: LegacyKind; dryRun?: boolean; date: string },
 ): MigrateResult {
   const plain = graphPath(projectDir);
+  const sources = findLegacySources(projectDir);
+  // H15: look at the file before refusing. "Already exists" is true of a legacy
+  // graph parked on the canonical name too, and it is the wrong sentence — the
+  // human step there is a rename, not "nothing to do".
+  const occupied = sources.find((s) => s.instruction);
+  if (occupied) return { ok: false, reason: occupied.instruction };
   if (existsSync(plain)) {
     return { ok: false, reason: `ideas/graph.yaml 已存在 —— 项目图已就位，没有可迁的位置（旧图保持只读）` };
   }
-  const sources = findLegacySources(projectDir);
   if (sources.length === 0) {
     return { ok: false, reason: "没有发现旧格式的图（ideas/graph.claude.yaml / ideas/graph.cursor.yaml / .codex-companion/nodes）" };
   }
@@ -1080,8 +1521,8 @@ export function migrate(
   if (opts.dryRun) return { ok: true, report: converted.report };
 
   mkdirSync(IDEAS_DIR(projectDir), { recursive: true });
-  writeFileSync(plain, converted.text);
-  writeFileSync(join(IDEAS_DIR(projectDir), "migrate-report.md"),
+  atomicWrite(plain, converted.text);
+  atomicWrite(join(IDEAS_DIR(projectDir), "migrate-report.md"),
     `# 迁移报告（${opts.date}，来源：${chosen.kind}）\n\n没能无损转换的内容，逐条列在这里：\n\n${converted.report.join("\n")}\n`);
   return { ok: true, written: plain, report: converted.report };
 }
@@ -1099,8 +1540,11 @@ const TRANSITIONS: Record<Status, Status[]> = {
 export function setStatus(
   doc: Document, graph: Graph, id: string, status: Status,
   entry: { by?: string; note?: string; date: string },
-  // With a projectDir the done-gate also demands current GREEN evidence (D20).
-  // Callers without one (pure in-memory edits) skip it — the guard re-checks.
+  // With a projectDir the doing-gate also demands the two current approvals
+  // (D17) and the done-gate current GREEN evidence (D20).
+  // Without one nothing downstream re-checks it: `apply` writes the graph from
+  // Bash, where the guard never looks. So a caller that cannot supply one must
+  // refuse `doing` and `done` itself — see the status op in applyChanges.
   projectDir?: string,
 ): void {
   const index = graph.ideas.findIndex((i) => i.id === id);
@@ -1119,6 +1563,20 @@ export function setStatus(
     if (unmet) throw new Error(`${id}: cannot be doing — ${unmet}`);
     const clash = fileClash(idea, graph);
     if (clash) throw new Error(`${id}: cannot be doing — ${clash}`);
+    // D17: both of D7's regular stop points must be valid AT the transition —
+    // decomposition (a human saw the split) and plan (a human saw this node's
+    // eight answers). Receipts live under the project dir, so a caller without
+    // one keeps the three checks above and nothing more (pure unit use).
+    // The gate is on ENTERING doing, not on `from`: todo → blocked → doing is
+    // in the transition table, and an approval a detour walks around is none.
+    if (projectDir) {
+      if (!validApproval(projectDir, graph, "decomposition")) {
+        throw new Error(`${id}: cannot be doing — 拆分还没有当前有效的人工批准 —— request-approval --gate decomposition，请人看过整张图的名称、边和前三问，再整条消息回复口令（D7/D17）`);
+      }
+      if (!validApproval(projectDir, graph, "plan", [id])) {
+        throw new Error(`${id}: cannot be doing — 计划还没有当前有效的人工批准 —— request-approval --gate plan --node ${id}，请人看过这个想法的八问，再整条消息回复口令（D7/D17）`);
+      }
+    }
   }
   if (status === "done") {
     if (!idea.code?.length) throw new Error(`${id}: cannot be done without \`code\` — say where it lives`);
@@ -1155,7 +1613,13 @@ export interface ApplyResult {
   text?: string;
   /** One line per applied operation, for the human to read before trusting it. */
   changed?: string[];
+  /** Manual signatures the envelope ASKED for. Nothing is written for these —
+   *  the caller turns each into a one-time manual-check challenge (D27). */
+  signRequests?: SignRequest[];
 }
+
+/** One `sign` op, carried out of the write-back as a request instead of a write. */
+export interface SignRequest { id: string; who: string; words: string }
 
 const CHANGE_VERSION = 1;
 
@@ -1165,6 +1629,13 @@ const BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
 /** What a new idea may bring with it. Everything else is stripped — a change
  *  file must not be able to conjure a `done` idea with a forged signature. */
 const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
+
+/** What a `set` may reach: the name plus the six prose answers the browser puts
+ *  in a text box. D24 — `status`, `verify` (and with it `signed_off`), `code`
+ *  and `log` are lifecycle, and lifecycle only moves through the CLI. Without
+ *  this list a `set` on `status` is a `done` with no gate at all: it writes a
+ *  folded scalar that reads back as a perfectly valid status. */
+const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
 
 const idNumber = (id: string) => {
   const m = /^I-(\d+)$/.exec(String(id));
@@ -1187,7 +1658,14 @@ function needsNode(doc: Document, ids: string[]) {
   return node;
 }
 
-export function applyChanges(source: string, envelope: unknown, today: string): ApplyResult {
+export function applyChanges(
+  source: string, envelope: unknown, today: string,
+  // Where the approval receipts and the evidence live. Both real callers (the
+  // `apply` command and `serve`) know it, so a status op out of an envelope
+  // meets exactly the gates the `set` subcommand meets (D17/D20). Optional only
+  // for pure unit use of the write-back — and that use may not reach `doing`.
+  projectDir?: string,
+): ApplyResult {
   const env = envelope as { v?: number; ops?: Record<string, string>[]; baseDigest?: string };
 
   // Version first, before anything else is trusted — a half-understood change
@@ -1263,9 +1741,31 @@ export function applyChanges(source: string, envelope: unknown, today: string): 
     const idea = (doc.toJSON() as Graph).ideas[index];
 
     if (op.op === "status") {
+      // D20: `done` needs a GREEN that is still current, and that evidence sits
+      // on disk — a pure write-back cannot read it, and nothing downstream
+      // re-checks. So this path never hands out `done`, whatever the envelope
+      // says; the person finishes an idea where the evidence is.
+      if (op.to === "done") {
+        return {
+          ok: false,
+          reason: `${op.id}: 网页改不出 done —— 完成要有当前有效的 GREEN 证据（D20）：`
+            + `先 run-check ${op.id} --phase green，再 set ${op.id} done，整体拒绝`,
+        };
+      }
+      // D17: `doing` is the status that unlocks writing product code, and its
+      // two approval gates live inside setStatus behind the project dir. A call
+      // without one walks straight past them, so a write-back that does not know
+      // where the receipts are refuses instead of quietly waving `doing` through.
+      if (op.to === "doing" && !projectDir) {
+        return {
+          ok: false,
+          reason: `${op.id}: 这次写回不知道项目目录在哪儿，读不到批准回执，doing 一律不给（D17）：`
+            + `改成 apply --project <项目目录>，或者走命令行 set ${op.id} doing，整体拒绝`,
+        };
+      }
       try {
         setStatus(doc, doc.toJSON() as Graph, op.id!, op.to as Status,
-          { by: "apply", note: `网页上改的状态：${op.from} → ${op.to}`, date: today });
+          { by: "apply", note: `网页上改的状态：${op.from} → ${op.to}`, date: today }, projectDir);
       } catch (error) {
         return { ok: false, reason: String(error instanceof Error ? error.message : error) };
       }
@@ -1273,27 +1773,40 @@ export function applyChanges(source: string, envelope: unknown, today: string): 
       continue;
     }
 
+    // D24: a field edit is a field edit. Anything outside this list is lifecycle
+    // dressed up as prose, and lifecycle has its own gates.
+    if (!SET_FIELDS.includes(op.field!)) {
+      return {
+        ok: false,
+        reason: `改动想改 ${op.id} 的 ${op.field} —— 写回只认这几个字段：${SET_FIELDS.join("、")}；`
+          + `状态、验证方式、签字这些只能走命令行（D24），整体拒绝`,
+      };
+    }
     doc.setIn(["ideas", index, op.field!], proseNode(doc, op.new));
     changed.push(`${op.id} · ${op.field}`);
 
     // A finished idea whose behaviour changed is not finished any more. Without
     // this, the guard waves through its code files (it short-circuits on done)
-    // and the new idea gets built with no test and no approval.
+    // and the new idea gets built with no test and no approval. It goes to
+    // blocked, not doing: done → doing is not in the transition table (D19),
+    // and an idea whose plan just changed under it is not one you may build.
     if (idea.status === "done" && BEHAVIOUR_FIELDS.includes(op.field!)) {
-      doc.setIn(["ideas", index, "status"], "doing");
-      const log = (idea.log ?? []).concat({
-        date: today, by: "apply",
-        note: `已完成的想法被改了 ${op.field}，自动降回 doing —— 测试先行、想清楚、人批准三条规则对它重新生效`,
-      });
-      doc.setIn(["ideas", index, "log"], log);
-      changed.push(`${op.id} 因行为字段被改，降回 doing`);
+      setStatus(doc, doc.toJSON() as Graph, op.id!, "blocked", {
+        by: "apply", date: today,
+        note: `已完成的想法被改了 ${op.field}，自动退回 blocked —— 想清楚再走一遍 doing，测试先行、人批准三条规则对它重新生效`,
+      }, projectDir);
+      changed.push(`${op.id} 因行为字段被改，退回 blocked`);
     }
   }
 
-  // ── phase 2b: signatures ─────────────────────────────────────────────────
-  // A manual check is the one thing a machine may not conclude. What lands here
-  // is the person's own sentence, in the same shape a hand-recorded signature
-  // has always taken, so old and new entries read as the same kind of thing.
+  // ── phase 2b: signature requests ─────────────────────────────────────────
+  // D27: a manual check is the one thing a machine may not conclude, and a
+  // change file is not a person — an agent can write one and run the write-back
+  // from Bash. So the envelope only ASKS. The graph gets `signed_off` from
+  // applyApproval, when the human's whole message answers a one-time challenge,
+  // and from nowhere else. This closes the conflict FORMAT.md recorded as open
+  // under D27 on 2026-08-31.
+  const signRequests: SignRequest[] = [];
   for (const op of ops) {
     if (op.op !== "sign") continue;
     const index = indexOf(op.id!);
@@ -1316,9 +1829,8 @@ export function applyChanges(source: string, envelope: unknown, today: string): 
     if (!who) return { ok: false, reason: `${op.id} 的签字没有名字 —— 查不到是谁签的记录没有意义` };
     if (!words) return { ok: false, reason: `${op.id} 的签字没有原话 —— 空白的签名等于没签` };
 
-    doc.setIn(["ideas", index, "verify", "signed_off"],
-      `${who} ${today} —— 人的原话：「${words}」；在网页上签的`);
-    changed.push(`${op.id} 人工验证签字（${who}）`);
+    signRequests.push({ id: op.id!, who, words });
+    changed.push(`${op.id} 请求人工验证签字（${who}）—— 还没写进图，等人回一次性口令`);
   }
 
   // ── phase 3: edges ───────────────────────────────────────────────────────
@@ -1372,7 +1884,27 @@ export function applyChanges(source: string, envelope: unknown, today: string): 
     return { ok: false, reason: `应用之后图校验不过，整体放弃：\n  - ${real_errors.join("\n  - ")}` };
   }
 
-  return { ok: true, text: String(doc), changed };
+  return { ok: true, text: String(doc), changed, signRequests };
+}
+
+/**
+ * Turn the signatures an envelope asked for into one-time manual-check
+ * challenges (D27). Called after the graph is written, by whoever did the
+ * writing — this is the disk-touching half the pure write-back refuses to do.
+ * Returns one line per request, for the person to read.
+ */
+export function requestSignatures(
+  projectDir: string, graph: Graph, requests: SignRequest[], date: string,
+): string[] {
+  return requests.map((r) => {
+    try {
+      const { challenge } = requestApproval(projectDir, graph, "manual-check", [r.id], { by: r.who, date });
+      return `${r.id} 的人工验证要人亲口签：整条消息回一句「批准 ${challenge}」，签字才会写进图`
+        + `（网页上写的原话：「${r.words}」）`;
+    } catch (error) {
+      return `${r.id} 的签字请求没发出去：${error instanceof Error ? error.message : String(error)}`;
+    }
+  });
 }
 
 /** Small helper so the leftover-tmp message can name the offending value. */
@@ -1398,11 +1930,32 @@ export const fingerprint = (text: string) =>
 
 const NONE = "<span class='none'>—</span>";
 
-/** The six prose answers a person can retype in the browser. */
-const PROSE = [
-  ["what", "是什么"], ["why", "为什么有这个想法"], ["expected", "预期结果"],
-  ["how", "如何实现"], ["why_this_way", "为什么这样实现"], ["future", "未来怎么用"],
+/**
+ * The eight questions, in order, in the ONE wording D11 settled on. Every place
+ * that asks a question reads its words from here: the card, the CLI's `show`,
+ * and anything added later. Three copies of these labels used to live in this
+ * one file, drifting apart — which is the exact drift D11 exists to prevent.
+ *
+ * `prose` marks the six answers that are plain text a person retypes in the
+ * browser; questions 6 and 7 are rendered from `code` and `verify` structures.
+ */
+export const QUESTIONS = [
+  { n: 1, key: "what",         prose: true,  label: "是什么" },
+  { n: 2, key: "why",          prose: true,  label: "为什么有这个想法" },
+  { n: 3, key: "expected",     prose: true,  label: "预期结果" },
+  { n: 4, key: "how",          prose: true,  label: "如何实现" },
+  { n: 5, key: "why_this_way", prose: true,  label: "为什么这样实现" },
+  { n: 6, key: "code",         prose: false, label: "代码在哪" },
+  { n: 7, key: "verify",       prose: false, label: "如何验证" },
+  { n: 8, key: "future",       prose: true,  label: "未来怎么用" },
 ] as const;
+
+/** One question's wording, by its number. */
+const askedAs = (n: number) => QUESTIONS[n - 1].label;
+
+/** The six prose answers a person can retype in the browser — straight off the
+ *  one list above, never a second hand-kept copy of the same words. */
+const PROSE = QUESTIONS.filter((q) => q.prose) as readonly { key: string; label: string }[];
 
 /**
  * `source` is the graph file's exact text and `projectDir` the repo it lives
@@ -1716,9 +2269,9 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
 
   const card = (i: Idea) => `<section class="idea ${cls(i)}" id="${esc(i.id)}">
   <h3><span class="ro">${esc(i.name)}</span><input class="rw" data-idea="${attr(i.id)}" data-field="name" value="${attr(i.name)}"> <span class="badge ro">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${statusPicker(i)}${ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<button class="edit-toggle" data-edit="${attr(i.id)}">编辑</button><button class="edit-toggle danger" data-remove="${attr(i.id)}" title="标记待删，再点一次撤销">删除</button><span class="iid">${esc(i.id)}</span></h3>
-  <dl>${PROSE.slice(0, 5).map(([name, label]) => field(i, name, label)).join("")}
-    <dt>代码在哪</dt><dd>${codeOf(i)}</dd>
-    <dt>如何验证</dt><dd>${verifyOf(i)}</dd>${field(i, "future", "未来怎么用")}
+  <dl>${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
+    <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
+    <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}
   </dl>
   <p class="edges needs" data-needs-of="${attr(i.id)}"><b>前置想法</b> <span class="chips">${
     (i.needs ?? []).filter((n) => map.has(n)).map((n) => needChip(n, i.id)).join("") || NONE
@@ -2043,12 +2596,26 @@ ${g.ideas.map(card).join("\n")}
     const list = document.getElementById("restore-list");
     document.getElementById("restore-count").textContent = String(draft.ops.length);
     if (draft.stale) {
+      // Into the panel, NOT into the list. The done() helper below hides the
+      // panel once the list is empty, so anything parked in the list that is
+      // not a row keeps the count above zero forever — the panel never closes
+      // and the draft is never cleared, so it returns on every reload.
+      // (No backticks in here: this whole block lives inside a template
+      // literal, and one would close it.)
       const warn = document.createElement("div");
+      warn.className = "restore-warn";
       warn.textContent = "注意：这份草稿是对着另一个版本的图写的，恢复之前请逐条确认它是否还说得通。";
-      list.append(warn);
+      panel.insertBefore(warn, list);
     }
     panel.hidden = false;
-    const done = () => { if (!list.children.length) { panel.hidden = true; clearDraft(); } };
+    const done = () => {
+      if (list.children.length) return;
+      panel.hidden = true;
+      // Persist whatever ended up in the book, rather than wiping it: restoring
+      // a row writes it to the draft, and clearing unconditionally right after
+      // would lose exactly what was just restored on the next reload.
+      if (ledger.isEmpty()) clearDraft(); else writeDraft();
+    };
     for (const o of draft.ops) {
       const row = document.createElement("div");
       const label = document.createElement("span");
@@ -2214,7 +2781,9 @@ ${g.ideas.map(card).join("\n")}
     signPanel.hidden = false;
     signPanel.replaceChildren();
     const head = document.createElement("div");
-    head.textContent = "给 " + id + " 的人工验证签字。你要签的是这件事：";
+    // D27: the page asks; the signature itself lands when the person answers the
+    // one-time challenge in the agent's chat. Say so, or the button lies.
+    head.textContent = "给 " + id + " 的人工验证提签字请求（提交后回一句一次性口令才真的签上）。你要签的是这件事：";
     const what = document.createElement("div");
     what.className = "what";
     what.textContent = t.getAttribute("data-manual") || "";
@@ -2288,8 +2857,12 @@ ${g.ideas.map(card).join("\n")}
     const text = JSON.stringify(envelope, null, 2);
     const box = say("这台机器上没有开着本地服务，所以改动存成了一个文件。");
     const how = document.createElement("div");
+    // D14 + D34: the engine a project actually has is the single-file bundle at
+    // the host-neutral plugin root, so that is the one command this page names —
+    // interpolated from ENGINE_CMD, not retyped, because a hand-copied path that
+    // merely happens to match today is exactly what D14 forbids.
     how.textContent = "把它放进 " + (PROJECT || "<项目目录>") + "/ideas/ ，然后跑："
-      + " npx tsx claude-companion/ideas.ts apply";
+      + " ${ENGINE_CMD} apply";
     // The last tier is a textarea on purpose: a download can be blocked and the
     // clipboard is often unavailable under file://, but selecting text in a box
     // cannot fail. The only requirement of a fallback is that it never fails.
@@ -2610,17 +3183,23 @@ export async function serve(
         }
         const source = readFileSync(file, "utf8");
         const today = new Date().toISOString().slice(0, 10);
-        const result = applyChanges(source, body.envelope, today);
+        // The project dir goes with it: a status op from the page is gated the
+        // same way `set` is (D17/D20), not more loosely for coming over HTTP.
+        const result = applyChanges(source, body.envelope, today, projectDir);
         if (!result.ok) { send(res, 200, { ok: false, reason: result.reason }); return; }
 
         // Two steps on one route: first tell the person exactly what would
         // happen, and only write once they have said yes.
         if (body.confirm !== true) { send(res, 200, { ok: true, preview: true, changed: result.changed }); return; }
 
-        writeFileSync(file, result.text!);
+        atomicWrite(file, result.text!);
         appendServeLog(projectDir, result.changed ?? []);
         const graph = parseDocument(result.text!).toJSON() as Graph;
-        send(res, 200, { ok: true, changed: result.changed, graph });
+        // D27: the page cannot sign. It asks, and the person answers the
+        // one-time challenge in the agent's chat — printed here, where they are.
+        const signs = requestSignatures(projectDir, graph, result.signRequests ?? [], today);
+        for (const line of signs) console.log(line);
+        send(res, 200, { ok: true, changed: result.changed, graph, signs });
         return;
       }
 
@@ -2689,6 +3268,46 @@ ideas: []
 /** `serve` keeps the process alive; every other command exits when it returns. */
 const KEEP_RUNNING = -1;
 
+/**
+ * Every subcommand this CLI answers, with the arguments each takes (D28). The
+ * usage text is generated from this list and from nowhere else — the string it
+ * replaces was hand-kept and had already drifted, silently omitting `migrate`,
+ * `run-check` and `request-approval` from a message whose entire job is to say
+ * what exists.
+ */
+export const SUBCOMMANDS: [name: string, args: string][] = [
+  ["paths", ""],
+  ["init", ""],
+  ["migrate", "[--pick claude|cursor|codex] [--dry-run]"],
+  ["scan", "[--reset] [--n 40] [--skipped]"],
+  ["new", "<名称> [--needs I-001,I-002]"],
+  ["check", ""],
+  ["status", ""],
+  ["next", ""],
+  ["show", "<id>"],
+  ["log", "[id] [--n 10]"],
+  ["set", "<id> <status>"],
+  ["allow", "<path>"],
+  ["render", ""],
+  ["apply", "[file]"],
+  ["serve", "[--port 4173] [--no-open]"],
+  ["request-approval", "--gate decomposition|plan|red-waiver|manual-check [--node I-002[,I-003]] [--by 人名]"],
+  ["run-check", "<id> --phase red|green [--timeout 秒]"],
+];
+
+/** One command's own usage line, off the same list — never retyped (D28). */
+const usageOf = (name: string) => {
+  const found = SUBCOMMANDS.find(([n]) => n === name);
+  return `usage: ${ENGINE_CMD} ${name}${found?.[1] ? ` ${found[1]}` : ""}`;
+};
+
+/** The usage text, generated from the list above. */
+export const usageLines = (): string[] => [
+  `usage: ${ENGINE_CMD} <子命令>`,
+  ...SUBCOMMANDS.map(([name, args]) => `  ${name}${args ? ` ${args}` : ""}`),
+  "  共用参数：[--file ideas/graph.yaml] [--project .] [--by who] [--note text] [--date YYYY-MM-DD]",
+];
+
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : undefined;
@@ -2699,7 +3318,7 @@ function redraw(file: string, projectDir: string): string {
   const out = file.replace(/\.ya?ml$/, ".html");
   const text = readFileSync(file, "utf8");
   const graph = parseDocument(text).toJSON() as Graph;
-  writeFileSync(out, render(graph, text, projectDir));
+  atomicWrite(out, render(graph, text, projectDir));
   return `wrote ${out} (${graph.ideas.length} ideas)`;
 }
 
@@ -2711,6 +3330,22 @@ export function main(args: string[]): number {
   const file = resolve(flag(args, "file") ?? graphPath(projectDir));
   // Callers pass the date in so the tool has no clock of its own to disagree with.
   const today = flag(args, "date") ?? new Date().toISOString().slice(0, 10);
+
+  // Commands that may be pointed at any graph: they only read the file --file
+  // names. Everything else writes state that is keyed to the project's own
+  // graph — approval receipts, red/green evidence, the guard's verdict all
+  // resolve through paths(projectDir), never through --file (D10: the project
+  // owns exactly one graph). Letting a writing command follow --file elsewhere
+  // is what mints a challenge against one file that is answered against
+  // another, so refuse it here instead of half-honouring the flag.
+  const READS_ANY_GRAPH = ["check", "next", "show", "log", "status", "render", "allow", "paths", "scan"];
+  if (!READS_ANY_GRAPH.includes(command) && !sameFile(file, graphPath(projectDir))) {
+    const rel = (p: string) => relative(projectDir, p).replaceAll("\\", "/") || p;
+    console.error(`\`${command}\` 会改状态，只能作用在项目自己的图上：${rel(graphPath(projectDir))} —— 项目的图只有一份（D10）。`);
+    console.error(`--file ${rel(file)} 是另一份图；批准口令和红绿证据都记在项目图名下，写到别处会造出永远答不上的口令。`);
+    console.error(`去掉 --file 重跑。只想看那份旧图：${READS_ANY_GRAPH.join(" / ")} 加 --file 照常可用；要把它的内容并进来：migrate。`);
+    return 2;
+  }
 
   // `scan` runs before a graph exists, so it must not require one.
   if (command === "scan") {
@@ -2729,9 +3364,31 @@ export function main(args: string[]): number {
       if (already.length > 0) appendFileSync(doneFile(projectDir), already.map((f) => `${f}\n`).join(""));
       console.log(`迁移到只追加的记录：${all.length} 个文件，其中 ${already.length} 个此前已读`);
     }
+    // Every run, not just the first: files appear and disappear while a scan is
+    // being worked through, and a checklist built once describes a project that
+    // no longer exists (D29). Left alone, the whole `companion/` directory can
+    // arrive after the list was written and be counted as read by nobody.
+    const { added, removed } = reconcileWorklist(projectDir, all);
+    if (added.length > 0 || removed.length > 0) {
+      console.log(`清单已对账：新出现 ${added.length} 个（未读），消失 ${removed.length} 个`);
+      for (const f of added.slice(0, 20)) console.log(`  + ${f}`);
+      if (added.length > 20) console.log(`  … 另有 ${added.length - 20} 个新文件`);
+    }
+    // D29: what never made it onto the list, and why. Counted every run and
+    // listed on demand — a skipped file the report cannot name is "not read"
+    // wearing "not there" as a costume.
+    const skipped = skippedFiles(projectDir);
+    if (skipped.length > 0) {
+      console.log(`跳过 ${skipped.length} 个文件${args.includes("--skipped") ? "：" : "（--skipped 逐条列出，各带原因）"}`);
+      if (args.includes("--skipped")) for (const s of skipped) console.log(`  - ${s.file}\t${s.reason}`);
+    }
     const left = readWorklist(projectDir);
-    const done = all.length - left.length;
-    console.log(`已读 ${done}/${all.length}${left.length === 0 ? "  —  全部读完" : `，还剩 ${left.length}：`}`);
+    // Counted off the struck records, not `all.length - left.length` (D12):
+    // subtraction turns "never was on the list" into "already read", which is
+    // exactly the self-report R7 exists to make impossible.
+    const total = readChecklist(projectDir).length;
+    const done = worklistDone(projectDir);
+    console.log(`已读 ${done}/${total}${left.length === 0 ? "  —  全部读完" : `，还剩 ${left.length}：`}`);
     // Print the next batch so the caller has something to act on, not just a
     // number. `--n 0` means all of them (that is what /ccscan asks for).
     const batch = Number(flag(args, "n") ?? 40);
@@ -2744,7 +3401,7 @@ export function main(args: string[]): number {
   if (command === "init") {
     if (existsSync(file)) { console.log(`already there: ${file}`); return 0; }
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, SEED.replace("PROJECT_NAME", projectDir.split(/[\\/]/).pop() ?? "project"));
+    atomicWrite(file, SEED.replace("PROJECT_NAME", projectDir.split(/[\\/]/).pop() ?? "project"));
     console.log(`created ${file}`);
     return 0;
   }
@@ -2774,7 +3431,7 @@ export function main(args: string[]): number {
 
   switch (command) {
     case "check": {
-      const { errors, warnings } = check(graph, projectDir);
+      const { errors, warnings } = check(graph, projectDir, file);
       for (const w of warnings) console.log(`warn  ${w}`);
       for (const e of errors) console.log(`ERROR ${e}`);
       console.log(`\n${graph.ideas.length} ideas · ${errors.length} errors · ${warnings.length} warnings`);
@@ -2796,18 +3453,40 @@ export function main(args: string[]): number {
       if (!idea) { console.error(`no idea with id ${args[1]}`); return 1; }
       const map = byId(graph);
       console.log(`${idea.id}  ${idea.name}  [${idea.status ?? "todo"}]`);
-      for (const [label, value] of [
-        ["1 是什么", idea.what], ["2 为什么有这个想法", idea.why], ["3 预期结果", idea.expected],
-        ["4 如何实现", idea.how], ["5 为什么这样实现", idea.why_this_way],
-        ["6 代码在哪", (idea.code ?? []).map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`).join(", ")],
-        ["7 如何验证", idea.verify?.command ?? idea.verify?.manual],
-        ["8 未来怎么用", idea.future],
-      ] as [string, string | undefined][]) {
-        console.log(`\n${label}\n  ${(value || "—").trim().replace(/\n/g, "\n  ")}`);
+      // D11: the wording comes from QUESTIONS, the same list the card renders
+      // from — this used to be a third hand-typed copy of the eight questions.
+      for (const q of QUESTIONS) {
+        const value = q.key === "code"
+          ? (idea.code ?? []).map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`).join(", ")
+          : q.key === "verify"
+            ? idea.verify?.command ?? idea.verify?.manual
+            : idea[q.key];
+        console.log(`\n${q.n} ${q.label}\n  ${(value || "—").trim().replace(/\n/g, "\n  ")}`);
       }
       console.log(`\n前置想法  ${(idea.needs ?? []).map((n) => `${n} (${map.get(n)?.status ?? "?"})`).join(", ") || "—"}`);
       console.log(`它是谁的前置  ${dependents(graph, idea.id).join(", ") || "—"}`);
       for (const l of idea.log ?? []) console.log(`  log ${l.date} ${l.by ?? ""} ${l.note}`);
+      return 0;
+    }
+    case "log": {
+      // D28: the per-idea append-only record, read out loud. Without this the
+      // only way to see why an idea moved is to open the yaml and scroll to it.
+      const wanted = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
+      if (wanted && !byId(graph).has(wanted)) { console.error(`no idea with id ${wanted}`); return 1; }
+      const wall = wanted ? [byId(graph).get(wanted)!] : graph.ideas;
+      // `--n` keeps the tail: the last few entries are the ones being asked about.
+      const tail = Number(flag(args, "n")) || 0;
+      let printed = 0;
+      for (const idea of wall) {
+        const entries = idea.log ?? [];
+        if (entries.length === 0) continue;
+        console.log(`${idea.id}\t${idea.name}\t[${idea.status ?? "todo"}]`);
+        for (const l of tail > 0 ? entries.slice(-tail) : entries) {
+          console.log(`  ${l.date}\t${l.by ?? "—"}\t${l.note}`);
+          printed += 1;
+        }
+      }
+      if (printed === 0) console.log(wanted ? `${wanted} 还没有任何修改记录` : "这张图里还没有任何修改记录");
       return 0;
     }
     case "set": {
@@ -2822,7 +3501,7 @@ export function main(args: string[]): number {
     }
     case "new": {
       const name = args[1];
-      if (!name || name.startsWith("--")) { console.error("usage: ideas.ts new <名称> [--needs I-001,I-002]"); return 2; }
+      if (!name || name.startsWith("--")) { console.error(usageOf("new")); return 2; }
       const needs = (flag(args, "needs") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
       const id = addIdea(doc, graph, name, needs, today);
       save(file, doc);
@@ -2831,7 +3510,7 @@ export function main(args: string[]): number {
       return 0;
     }
     case "allow": {
-      if (!args[1]) { console.error("usage: ideas.ts allow <path>"); return 2; }
+      if (!args[1]) { console.error(usageOf("allow")); return 2; }
       // The guard's verdict, verbatim — same function, same answer (I-099).
       const verdict = decideProductWrite(projectDir, graph, args[1]);
       console.log(`${verdict.allow ? "allow" : "deny"}\t${args[1]}\t${verdict.reason}`);
@@ -2841,12 +3520,22 @@ export function main(args: string[]): number {
       const id = args[1];
       const phase = flag(args, "phase") as "red" | "green" | undefined;
       if (!id || !phase || !["red", "green"].includes(phase)) {
-        console.error("usage: ideas.ts run-check <id> --phase red|green [--timeout 秒]");
+        console.error(usageOf("run-check"));
         return 2;
       }
       const record = runCheck(projectDir, graph, id, phase,
         { timeoutMs: (Number(flag(args, "timeout")) || 120) * 1000 });
       console.log(`${phase} → 退出码 ${record.exit_code}${record.outcome ? ` (${record.outcome})` : ""}`);
+      // D8/H5: 命令没跑起来时别让人以为记下了一次红。
+      if (record.outcome === "infra_error") {
+        console.log(`验证命令没能真正跑起来：${record.infra_error} —— 这不是测试红了，实现的门不开。`);
+        console.log(record.output_tail);
+        return 1;
+      }
+      if (phase === "red" && record.outcome !== "unexpected_pass") {
+        const gate = redGateReady(projectDir, graph, id);
+        if (!gate.ready) console.log(`注意：${gate.reason}`);
+      }
       if (record.outcome === "unexpected_pass") {
         console.log(`测试还没实现就通过了 —— 这挡住实现写入。要么测试写错了，要么真有现成实现：`);
         console.log(`  request-approval --gate red-waiver --node ${id}   # 请人裁决`);
@@ -2860,7 +3549,7 @@ export function main(args: string[]): number {
     case "request-approval": {
       const gate = flag(args, "gate") as Gate | undefined;
       if (!gate || !["decomposition", "plan", "red-waiver", "manual-check"].includes(gate)) {
-        console.error("usage: ideas.ts request-approval --gate decomposition|plan|red-waiver|manual-check [--node I-002[,I-003]] [--by 人名]");
+        console.error(usageOf("request-approval"));
         return 2;
       }
       const nodes = (flag(args, "node") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -2918,16 +3607,23 @@ export function main(args: string[]): number {
       try { envelope = JSON.parse(readFileSync(changeFile, "utf8")); }
       catch (error) { console.error(`改动文件不是合法的 JSON：${error}`); return 1; }
 
-      const result = applyChanges(readFileSync(file, "utf8"), envelope, today);
+      // D17/D20: same gates as `set` — the approvals and the evidence are read
+      // from the project dir, so the write-back has to be told where it is.
+      const result = applyChanges(readFileSync(file, "utf8"), envelope, today, projectDir);
       if (!result.ok) {
         // Refused means refused: the change file stays exactly where it is, so
         // the person's edits are not the thing that gets destroyed.
         console.error(`拒绝写回：${result.reason}\n\n改动文件原样留在 ${changeFile}，没有动过。`);
         return 1;
       }
-      writeFileSync(file, result.text!);
+      atomicWrite(file, result.text!);
       for (const line of result.changed ?? []) console.log(`  ${line}`);
       console.log(`\n写回 ${result.changed?.length ?? 0} 处改动 → ${relative(projectDir, file)}`);
+      // The signatures the envelope asked for become challenges, never writes (D27).
+      const written = parseDocument(result.text!).toJSON() as Graph;
+      for (const line of requestSignatures(projectDir, written, result.signRequests ?? [], today)) {
+        console.log(`\n${line}`);
+      }
       const archived = changeFile.replace(/\.json$/, "") + `.applied-${today}.json`;
       try { renameSync(changeFile, archived); console.log(`改动文件已归档 → ${relative(projectDir, archived)}`); }
       catch { console.log(`（改动文件归档失败，它还在 ${changeFile}）`); }
@@ -2936,8 +3632,7 @@ export function main(args: string[]): number {
       return 0;
     }
     default:
-      console.error("usage: ideas.ts check | next | show <id> | set <id> <status> | new <名称> | allow <path> | status | render | serve | apply [file] | paths | init | scan");
-      console.error("       [--file ideas/graph.yaml] [--project .] [--by who] [--note text]");
+      for (const line of usageLines()) console.error(line);
       return 2;
   }
 }
