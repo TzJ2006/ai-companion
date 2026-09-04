@@ -7397,6 +7397,11 @@ function paths(projectDir) {
   };
 }
 var graphPath = (projectDir) => paths(projectDir).graph;
+function tally(ideas) {
+  const by = { todo: 0, doing: 0, done: 0, blocked: 0 };
+  for (const i of ideas) by[i.status ?? "todo"] = (by[i.status ?? "todo"] ?? 0) + 1;
+  return { total: ideas.length, done: by.done, by };
+}
 function load(file) {
   if (!existsSync(file)) {
     throw new Error(`no idea graph at ${file} \u2014 run \`${ENGINE_CMD} init\` first`);
@@ -7474,6 +7479,38 @@ function orphans(g) {
     stack.push(...map.get(id).needs ?? []);
   }
   return g.ideas.filter((i) => !reaching.has(i.id)).map((i) => i.id).sort();
+}
+function topoOrder(g) {
+  const present = new Set(g.ideas.map((i) => i.id));
+  const waiting = g.ideas.map((i) => (i.needs ?? []).filter((n) => present.has(n)).length);
+  const unlocks = /* @__PURE__ */ new Map();
+  for (const [index, idea] of g.ideas.entries()) {
+    for (const need of idea.needs ?? []) {
+      if (!present.has(need)) continue;
+      const list = unlocks.get(need);
+      if (list) list.push(index);
+      else unlocks.set(need, [index]);
+    }
+  }
+  const earlierId = (a, b) => g.ideas[a].id < g.ideas[b].id ? -1 : g.ideas[a].id > g.ideas[b].id ? 1 : 0;
+  const out = [];
+  const emitted = /* @__PURE__ */ new Set();
+  let layer = g.ideas.map((_, index) => index).filter((index) => waiting[index] === 0);
+  while (layer.length > 0) {
+    layer.sort(earlierId);
+    const next = [];
+    for (const index of layer) {
+      out.push(g.ideas[index]);
+      emitted.add(index);
+      for (const blocked of unlocks.get(g.ideas[index].id) ?? []) {
+        if (--waiting[blocked] === 0) next.push(blocked);
+      }
+    }
+    layer = next;
+  }
+  const stuck = g.ideas.map((_, index) => index).filter((index) => !emitted.has(index));
+  stuck.sort(earlierId);
+  return out.concat(stuck.map((index) => g.ideas[index]));
 }
 var worklistFile = (projectDir) => paths(projectDir).worklist;
 var logFile = (projectDir) => paths(projectDir).log;
@@ -7698,6 +7735,29 @@ function check(g, projectDir, file) {
     for (const rel of idea.verify?.test_files ?? []) {
       const strayed = badPlanPath(rel);
       if (strayed) errors.push(`${at}: \`verify.test_files\` \u8DEF\u5F84 ${rel} ${strayed}\uFF08D31\uFF09`);
+    }
+  }
+  const steps = g.steps ?? [];
+  const stepName = (s) => String(s ?? "").trim();
+  const declared = new Set(steps.map((s) => stepName(s?.name)));
+  for (const [n, s] of steps.entries()) {
+    if (!stepName(s?.name)) errors.push(`\`steps\` \u7B2C ${n + 1} \u6B65\u6CA1\u6709\u540D\u5B57\uFF08\`name\`\uFF09`);
+  }
+  for (const idea of g.ideas) {
+    const step = stepName(idea.step);
+    if (step && !declared.has(step)) {
+      errors.push(`${idea.id || "(missing id)"}: step\u300C${step}\u300D\u4E0D\u5728 \`steps\` \u91CC \u2014\u2014 \u5F52\u5230\u4E86\u4E00\u4E2A\u4E0D\u5B58\u5728\u7684\u6B65\u9AA4\uFF0C\u9875\u9762\u4E0A\u7684\u5206\u6B65\u8BA1\u6570\u4F1A\u51ED\u7A7A\u5C11\u5B83\u4E00\u4E2A`);
+    }
+  }
+  if (steps.length > 0) {
+    if (steps.length < 3 || steps.length > 7) {
+      warnings.push(`\`steps\` \u6709 ${steps.length} \u6B65 \u2014\u2014 \u6982\u89C8\u8BE5\u662F\u4E09\u5230\u4E03\u6B65\uFF1A\u5C11\u4E8E\u4E09\u6B65\u4E0D\u9700\u8981\u6982\u89C8\uFF0C\u591A\u4E8E\u4E03\u6B65\u662F\u76EE\u5F55\u3001\u4EBA\u4E00\u773C\u626B\u4E0D\u5B8C`);
+    }
+    for (const idea of g.ideas) {
+      if (!stepName(idea.step)) warnings.push(`${idea.id || "(missing id)"}: \u6CA1\u6709\u5F52\u5230\u4EFB\u4F55\u4E00\u6B65\uFF08\`step\`\uFF09\u2014\u2014 \u9875\u9762\u4E0A\u7684\u5206\u6B65\u8BA1\u6570\u4F1A\u5C11\u7B97\u5B83`);
+    }
+    for (const name of declared) {
+      if (name && !g.ideas.some((i) => stepName(i.step) === name)) warnings.push(`\u6B65\u9AA4\u300C${name}\u300D\u4E00\u4E2A\u60F3\u6CD5\u90FD\u6CA1\u6709`);
     }
   }
   const cycle = findCycle(g);
@@ -8223,30 +8283,52 @@ function convertLegacyYaml(text, kind, date) {
   report.push(`- \u8FC1\u81EA graph.${kind}.yaml\uFF08${date}\uFF09\uFF0C\u6CE8\u91CA\u539F\u6837\u4FDD\u7559`);
   return { text: String(doc), graph: doc.toJSON(), report };
 }
+function legacyLines(sources) {
+  return sources.map((s) => {
+    try {
+      const count = s.kind === "codex" ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length : ((0, import_yaml.parseDocument)(readFileSync(s.path, "utf8")).toJSON()?.ideas ?? []).length;
+      return `  ${s.kind}: ${count} \u4E2A\u60F3\u6CD5\uFF08${s.path}\uFF09`;
+    } catch {
+      return `  ${s.kind}: \u8BFB\u4E0D\u51FA\u6765\uFF08${s.path}\uFF09`;
+    }
+  });
+}
 function migrate(projectDir, opts) {
   const plain = graphPath(projectDir);
   const sources = findLegacySources(projectDir);
   const occupied = sources.find((s) => s.instruction);
   if (occupied) return { ok: false, reason: occupied.instruction };
-  if (existsSync(plain)) {
-    return { ok: false, reason: `ideas/graph.yaml \u5DF2\u5B58\u5728 \u2014\u2014 \u9879\u76EE\u56FE\u5DF2\u5C31\u4F4D\uFF0C\u6CA1\u6709\u53EF\u8FC1\u7684\u4F4D\u7F6E\uFF08\u65E7\u56FE\u4FDD\u6301\u53EA\u8BFB\uFF09` };
-  }
   if (sources.length === 0) {
     return { ok: false, reason: "\u6CA1\u6709\u53D1\u73B0\u65E7\u683C\u5F0F\u7684\u56FE\uFF08ideas/graph.claude.yaml / ideas/graph.cursor.yaml / .codex-companion/nodes\uFF09" };
   }
+  let seedNote = null;
+  if (existsSync(plain)) {
+    let count;
+    try {
+      const doc = (0, import_yaml.parseDocument)(readFileSync(plain, "utf8"));
+      if (doc.errors.length > 0) throw doc.errors[0];
+      count = (doc.toJSON()?.ideas ?? []).length;
+    } catch {
+      count = null;
+    }
+    if (count === null) {
+      return { ok: false, reason: `ideas/graph.yaml \u8BFB\u4E0D\u51FA\u6765\uFF08YAML \u89E3\u6790\u5931\u8D25\uFF09\u2014\u2014 \u4E0D\u80FD\u5F53\u6210\u7A7A\u79CD\u5B50\u8986\u76D6\u3002\u8BF7\u4EBA\u5148\u770B\u8FD9\u4E2A\u6587\u4EF6\uFF0C\u4FEE\u597D\u6216\u632A\u5F00\uFF0C\u518D\u8DD1 migrate\u3002` };
+    }
+    if (count > 0) {
+      return {
+        ok: false,
+        reason: `ideas/graph.yaml \u5DF2\u6709 ${count} \u4E2A\u60F3\u6CD5\uFF0C\u65C1\u8FB9\u8FD8\u7559\u7740\u6CA1\u8FC1\u7684\u65E7\u56FE\uFF1A
+${legacyLines(sources).join("\n")}
+\u5F15\u64CE\u4E0D\u5408\u5E76\u4E24\u5F20\u56FE\uFF08D10\uFF09\u2014\u2014 \u8981\u8FC1\u65E7\u56FE\uFF0C\u8BF7\u4EBA\u5148\u628A ideas/graph.yaml \u632A\u5F00\u518D\u8DD1 migrate\uFF1B\u8981\u4FDD\u7559\u73B0\u56FE\uFF0C\u628A\u65E7\u56FE\u632A\u8D70\u3002`
+      };
+    }
+    seedNote = "- \u8986\u76D6\u4E86\u53EA\u6709\u79CD\u5B50\u3001\u6CA1\u6709\u60F3\u6CD5\u7684 ideas/graph.yaml\uFF08\u5B89\u88C5\u5668\u79CD\u4E0B\u7684\u7A7A\u79CD\u5B50\uFF09";
+  }
   if (sources.length > 1 && !opts.pick) {
-    const lines = sources.map((s) => {
-      try {
-        const count = s.kind === "codex" ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length : ((0, import_yaml.parseDocument)(readFileSync(s.path, "utf8")).toJSON()?.ideas ?? []).length;
-        return `  ${s.kind}: ${count} \u4E2A\u60F3\u6CD5\uFF08${s.path}\uFF09`;
-      } catch {
-        return `  ${s.kind}: \u8BFB\u4E0D\u51FA\u6765\uFF08${s.path}\uFF09`;
-      }
-    });
     return {
       ok: false,
       reason: `\u53D1\u73B0\u591A\u4EFD\u65E7\u56FE\uFF0C\u4E0D\u81EA\u52A8\u6311\u8D62\u5BB6\uFF08D10\uFF09\u2014\u2014 \u4EBA\u7528 --pick claude|cursor|codex \u660E\u793A\u9009\u62E9\u6216\u5148\u624B\u5DE5\u5408\u5E76\uFF1A
-${lines.join("\n")}`
+${legacyLines(sources).join("\n")}`
     };
   }
   const chosen = sources.length === 1 ? sources[0] : sources.find((s) => s.kind === opts.pick);
@@ -8259,6 +8341,7 @@ ${lines.join("\n")}`
     return { ok: false, reason: `\u8FC1\u51FA\u6765\u7684\u56FE\u6CA1\u901A\u8FC7\u6821\u9A8C\uFF0C\u4E00\u4E2A\u5B57\u90FD\u6CA1\u5199\uFF1A
 ${real.map((e) => `  - ${e}`).join("\n")}`, report: converted.report };
   }
+  if (seedNote) converted.report.push(seedNote);
   if (opts.dryRun) return { ok: true, report: converted.report };
   mkdirSync(IDEAS_DIR(projectDir), { recursive: true });
   atomicWrite(plain, converted.text);
@@ -8325,8 +8408,9 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
 }
 var CHANGE_VERSION = 1;
 var BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
-var NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
-var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
+var NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
+var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
+var fieldNode = (doc, field, value) => field === "step" ? String(value ?? "").trim() : proseNode(doc, value);
 var idNumber = (id) => {
   const m = /^I-(\d+)$/.exec(String(id));
   return m ? Number(m[1]) : NaN;
@@ -8388,7 +8472,7 @@ function applyChanges(source, envelope, today, projectDir) {
     node.set("needs", needsNode(doc, []));
     for (const f of NEW_IDEA_FIELDS) {
       if (f === "name" || fields[f] === void 0) continue;
-      node.set(f, proseNode(doc, fields[f]));
+      node.set(f, fieldNode(doc, f, fields[f]));
     }
     doc.addIn(["ideas"], node);
     changed.push(`\u65B0\u5EFA ${op.tmp}\u300C${String(fields.name ?? "")}\u300D`);
@@ -8432,7 +8516,7 @@ function applyChanges(source, envelope, today, projectDir) {
         reason: `\u6539\u52A8\u60F3\u6539 ${op.id} \u7684 ${op.field} \u2014\u2014 \u5199\u56DE\u53EA\u8BA4\u8FD9\u51E0\u4E2A\u5B57\u6BB5\uFF1A${SET_FIELDS.join("\u3001")}\uFF1B\u72B6\u6001\u3001\u9A8C\u8BC1\u65B9\u5F0F\u3001\u7B7E\u5B57\u8FD9\u4E9B\u53EA\u80FD\u8D70\u547D\u4EE4\u884C\uFF08D24\uFF09\uFF0C\u6574\u4F53\u62D2\u7EDD`
       };
     }
-    doc.setIn(["ideas", index, op.field], proseNode(doc, op.new));
+    doc.setIn(["ideas", index, op.field], fieldNode(doc, op.field, op.new));
     changed.push(`${op.id} \xB7 ${op.field}`);
     if (idea.status === "done" && BEHAVIOUR_FIELDS.includes(op.field)) {
       setStatus(doc, doc.toJSON(), op.id, "blocked", {
@@ -8712,7 +8796,7 @@ function render(g, source = "", projectDir = "", token = "") {
   ${rows.map((r) => `<div class="wl-row"><a class="xlink" href="#${esc(r.id)}" data-goto="${esc(r.id)}">${esc(r.name)}</a><span class="wl-note">${esc(r.note)}</span></div>`).join("\n  ")}
 </details>`;
   const STATUS_ZH = { todo: "\u5F85\u529E", doing: "\u8FDB\u884C\u4E2D", done: "\u5DF2\u5B8C\u6210", blocked: "\u53D7\u963B" };
-  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${g.ideas.filter((i) => (i.status ?? "todo") === s).length}`).join(" \xB7 ");
+  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(g.ideas).by[s]}`).join(" \xB7 ");
   const field = (i, name, label) => `
     <dt>${label}</dt><dd data-f="${name}"><span class="ro">${esc(i[name]) || NONE}</span
       ><textarea class="rw" data-idea="${attr(i.id)}" data-field="${name}" rows="3">${esc(i[name] ?? "")}</textarea></dd>`;
@@ -8908,9 +8992,16 @@ ${worklist("\u8FDB\u884C\u4E2D", g.ideas.filter((i) => i.status === "doing").map
     return { id: i.id, name: i.name, note: waiting.length ? `\u5728\u7B49 ${waiting.join("\u3001")}` : "\u6CA1\u6709\u524D\u7F6E\u6321\u7740\u5B83" };
   }))}
 <h2>\u60F3\u6CD5\u8BE6\u60C5 <button id="new-idea">\uFF0B \u65B0\u5EFA\u60F3\u6CD5</button></h2>
+<p class="legend">\u5361\u7247\u6309\u4F9D\u8D56\u987A\u5E8F\u6392\u5217 \u2014\u2014 \u6BCF\u5F20\u90FD\u5728\u5B83\u5168\u90E8\u524D\u7F6E\u4E4B\u540E\uFF0C\u4E0D\u662F\u6587\u4EF6\u91CC\u7684\u4E66\u5199\u987A\u5E8F\u3002</p>
 <div id="offline-note" hidden>\u56FE\u6682\u65F6\u4E0D\u53EF\u7528\uFF08\u79BB\u7EBF\uFF0C\u753B\u56FE\u8981\u8054\u7F51\u53D6\u4E00\u4E2A\u7B2C\u4E09\u65B9\u5E93\uFF09\u2014\u2014 \u7F16\u8F91\u4E0E\u63D0\u4EA4\u7167\u5E38\u3002</div>
 <div id="cards">
-${g.ideas.map(card).join("\n")}
+${// I-061: the cards are the one place a reader goes through in order, so they
+  // come out in dependency order (topoOrder, I-060). Only the cards: the
+  // diagram's node order and the JSON model below keep the written order —
+  // the diagram's layout depends on declaration order, and the page re-derives
+  // the diagram from the model, so sorting either would make the picture jump
+  // on the first structural edit. Anchors are by id, so sorting costs nothing.
+  topoOrder(g).map(card).join("\n")}
 </div>
 <!-- The same text the engine ran to draw the diagram above. A classic script,
      so it defines one global both module scripts below can reach. -->
