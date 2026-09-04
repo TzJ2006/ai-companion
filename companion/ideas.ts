@@ -69,11 +69,16 @@ export interface CodeRef { file: string; symbol?: string; lines?: string }
 export interface Verify { command?: string; test_files?: string[]; pass?: string; manual?: string; signed_off?: string | null }
 export interface LogEntry { date: string; by?: string; note: string }
 
+// I-085: one entry of the step overview (FORMAT.md, "The step overview") —
+// `name` is the short word ideas claim with `step`, `blurb` the one sentence.
+export interface Step { name: string; blurb?: string }
+
 export interface Idea {
   id: string;
   name: string;
   status?: Status;
   needs?: string[];
+  step?: string;                  // which step of the overview this idea belongs to
   what?: string; why?: string; expected?: string; how?: string; why_this_way?: string;
   code?: CodeRef[];
   verify?: Verify;
@@ -87,7 +92,17 @@ export interface Graph {
   overview?: string;
   endpoints?: string[];
   next_id?: number;
+  steps?: Step[];                 // the step overview; optional, ordered
   ideas: Idea[];
+}
+
+/** How many ideas a group holds, how many are finished, and how many sit in
+ *  each status — ONE count for the legend and the step overview, so the two
+ *  numbers on the page can never disagree (I-085). */
+export function tally(ideas: Idea[]): { total: number; done: number; by: Record<Status, number> } {
+  const by: Record<Status, number> = { todo: 0, doing: 0, done: 0, blocked: 0 };
+  for (const i of ideas) by[(i.status ?? "todo") as Status] = (by[(i.status ?? "todo") as Status] ?? 0) + 1;
+  return { total: ideas.length, done: by.done, by };
 }
 
 // ─── loading ────────────────────────────────────────────────────────────────
@@ -674,6 +689,36 @@ export function check(g: Graph, projectDir: string, file?: string): CheckResult 
     for (const rel of idea.verify?.test_files ?? []) {
       const strayed = badPlanPath(rel);
       if (strayed) errors.push(`${at}: \`verify.test_files\` 路径 ${rel} ${strayed}（D31）`);
+    }
+  }
+
+  // I-085: the step overview, in two tiers on purpose. A step nobody declared
+  // is a certain typo that makes the page under-count — an error. Everything
+  // else is a warning: "not assigned yet" is the normal state of every graph
+  // that predates the field, and turning those red would bill other people's
+  // repositories for our new field. A graph with no `steps` at all is not
+  // nagged — the rule is for those who want it, not a fine for those who don't.
+  const steps = g.steps ?? [];
+  const stepName = (s: string | undefined) => String(s ?? "").trim();
+  const declared = new Set(steps.map((s) => stepName(s?.name)));
+  for (const [n, s] of steps.entries()) {
+    if (!stepName(s?.name)) errors.push(`\`steps\` 第 ${n + 1} 步没有名字（\`name\`）`);
+  }
+  for (const idea of g.ideas) {
+    const step = stepName(idea.step);
+    if (step && !declared.has(step)) {
+      errors.push(`${idea.id || "(missing id)"}: step「${step}」不在 \`steps\` 里 —— 归到了一个不存在的步骤，页面上的分步计数会凭空少它一个`);
+    }
+  }
+  if (steps.length > 0) {
+    if (steps.length < 3 || steps.length > 7) {
+      warnings.push(`\`steps\` 有 ${steps.length} 步 —— 概览该是三到七步：少于三步不需要概览，多于七步是目录、人一眼扫不完`);
+    }
+    for (const idea of g.ideas) {
+      if (!stepName(idea.step)) warnings.push(`${idea.id || "(missing id)"}: 没有归到任何一步（\`step\`）—— 页面上的分步计数会少算它`);
+    }
+    for (const name of declared) {
+      if (name && !g.ideas.some((i) => stepName(i.step) === name)) warnings.push(`步骤「${name}」一个想法都没有`);
     }
   }
 
@@ -1472,6 +1517,19 @@ function convertLegacyYaml(text: string, kind: LegacyKind, date: string): { text
   return { text: String(doc), graph: doc.toJSON() as Graph, report };
 }
 
+/** One line per legacy graph: which kind, how many ideas, where. Shared by every
+ *  refusal that has to say what is waiting (I-101). */
+function legacyLines(sources: LegacySource[]): string[] {
+  return sources.map((s) => {
+    try {
+      const count = s.kind === "codex"
+        ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length
+        : ((parseDocument(readFileSync(s.path, "utf8")).toJSON() as Graph)?.ideas ?? []).length;
+      return `  ${s.kind}: ${count} 个想法（${s.path}）`;
+    } catch { return `  ${s.kind}: 读不出来（${s.path}）`; }
+  });
+}
+
 export function migrate(
   projectDir: string,
   opts: { pick?: LegacyKind; dryRun?: boolean; date: string },
@@ -1483,24 +1541,48 @@ export function migrate(
   // human step there is a rename, not "nothing to do".
   const occupied = sources.find((s) => s.instruction);
   if (occupied) return { ok: false, reason: occupied.instruction };
-  if (existsSync(plain)) {
-    return { ok: false, reason: `ideas/graph.yaml 已存在 —— 项目图已就位，没有可迁的位置（旧图保持只读）` };
-  }
+  // No legacy graph anywhere is the whole answer, whether or not a project graph
+  // exists — asking about graph.yaml first produced a sentence about the wrong
+  // file (I-101).
   if (sources.length === 0) {
     return { ok: false, reason: "没有发现旧格式的图（ideas/graph.claude.yaml / ideas/graph.cursor.yaml / .codex-companion/nodes）" };
   }
+  // I-101: an existing graph.yaml used to mean "nothing to migrate onto" — said
+  // of a 68-byte installer seed sitting beside a 148 KB legacy graph, in three
+  // repositories at once. The file's EXISTENCE proves nothing; its contents do.
+  // A seed with no ideas holds no information, and the one step that would
+  // free it (moving the file aside) is a step no agent can take (D21), so it
+  // is migrated over and the report says so. A graph WITH ideas is refused —
+  // the engine never merges two graphs (D10) — but the refusal names what is
+  // waiting, how much of it, and which file the human moves. An unreadable
+  // graph is refused too: "could not parse" must never be read as "empty".
+  let seedNote: string | null = null;
+  if (existsSync(plain)) {
+    let count: number | null;
+    try {
+      // parseDocument is lenient: a broken file comes back as a PARTIAL document
+      // with its errors listed, not as a throw — and a partial document counted
+      // one idea in a file that has none readable. Ask for the errors.
+      const doc = parseDocument(readFileSync(plain, "utf8"));
+      if (doc.errors.length > 0) throw doc.errors[0];
+      count = ((doc.toJSON() as Graph)?.ideas ?? []).length;
+    } catch { count = null; }
+    if (count === null) {
+      return { ok: false, reason: `ideas/graph.yaml 读不出来（YAML 解析失败）—— 不能当成空种子覆盖。请人先看这个文件，修好或挪开，再跑 migrate。` };
+    }
+    if (count > 0) {
+      return {
+        ok: false,
+        reason: `ideas/graph.yaml 已有 ${count} 个想法，旁边还留着没迁的旧图：\n${legacyLines(sources).join("\n")}\n`
+          + `引擎不合并两张图（D10）—— 要迁旧图，请人先把 ideas/graph.yaml 挪开再跑 migrate；要保留现图，把旧图挪走。`,
+      };
+    }
+    seedNote = "- 覆盖了只有种子、没有想法的 ideas/graph.yaml（安装器种下的空种子）";
+  }
   if (sources.length > 1 && !opts.pick) {
-    const lines = sources.map((s) => {
-      try {
-        const count = s.kind === "codex"
-          ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length
-          : ((parseDocument(readFileSync(s.path, "utf8")).toJSON() as Graph)?.ideas ?? []).length;
-        return `  ${s.kind}: ${count} 个想法（${s.path}）`;
-      } catch { return `  ${s.kind}: 读不出来（${s.path}）`; }
-    });
     return {
       ok: false,
-      reason: `发现多份旧图，不自动挑赢家（D10）—— 人用 --pick claude|cursor|codex 明示选择或先手工合并：\n${lines.join("\n")}`,
+      reason: `发现多份旧图，不自动挑赢家（D10）—— 人用 --pick claude|cursor|codex 明示选择或先手工合并：\n${legacyLines(sources).join("\n")}`,
     };
   }
   const chosen = sources.length === 1 ? sources[0] : sources.find((s) => s.kind === opts.pick);
@@ -1518,6 +1600,7 @@ export function migrate(
   if (real.length > 0) {
     return { ok: false, reason: `迁出来的图没通过校验，一个字都没写：\n${real.map((e) => `  - ${e}`).join("\n")}`, report: converted.report };
   }
+  if (seedNote) converted.report.push(seedNote);
   if (opts.dryRun) return { ok: true, report: converted.report };
 
   mkdirSync(IDEAS_DIR(projectDir), { recursive: true });
@@ -1628,14 +1711,20 @@ const BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
 
 /** What a new idea may bring with it. Everything else is stripped — a change
  *  file must not be able to conjure a `done` idea with a forged signature. */
-const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
+const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
 
 /** What a `set` may reach: the name plus the six prose answers the browser puts
  *  in a text box. D24 — `status`, `verify` (and with it `signed_off`), `code`
  *  and `log` are lifecycle, and lifecycle only moves through the CLI. Without
  *  this list a `set` on `status` is a `done` with no gate at all: it writes a
  *  folded scalar that reads back as a perfectly valid status. */
-const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future"];
+const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
+
+/** `step` is a name, not prose: it is compared by exact value against
+ *  `steps[].name`, so it is stored as one plain line — a folded block would
+ *  read back with a trailing newline and match nothing (I-085). */
+const fieldNode = (doc: Document, field: string, value: unknown) =>
+  field === "step" ? String(value ?? "").trim() : proseNode(doc, value);
 
 const idNumber = (id: string) => {
   const m = /^I-(\d+)$/.exec(String(id));
@@ -1727,7 +1816,7 @@ export function applyChanges(
     node.set("needs", needsNode(doc, []));
     for (const f of NEW_IDEA_FIELDS) {
       if (f === "name" || fields[f] === undefined) continue;
-      node.set(f, proseNode(doc, fields[f]));
+      node.set(f, fieldNode(doc, f, fields[f]));
     }
     doc.addIn(["ideas"], node);
     changed.push(`新建 ${op.tmp}「${String(fields.name ?? "")}」`);
@@ -1782,7 +1871,7 @@ export function applyChanges(
           + `状态、验证方式、签字这些只能走命令行（D24），整体拒绝`,
       };
     }
-    doc.setIn(["ideas", index, op.field!], proseNode(doc, op.new));
+    doc.setIn(["ideas", index, op.field!], fieldNode(doc, op.field!, op.new));
     changed.push(`${op.id} · ${op.field}`);
 
     // A finished idea whose behaviour changed is not finished any more. Without
@@ -2255,7 +2344,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
 </details>`;
 
   const STATUS_ZH: Record<string, string> = { todo: "待办", doing: "进行中", done: "已完成", blocked: "受阻" };
-  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${g.ideas.filter((i) => (i.status ?? "todo") === s).length}`).join(" · ");
+  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(g.ideas).by[s]}`).join(" · ");
 
   // Every editable field ships twice: the prose a reader sees, and the input a
   // writer types into. CSS shows one or the other; no text is ever built from
@@ -2464,9 +2553,17 @@ ${worklist("进行中", g.ideas.filter((i) => i.status === "doing").map((i) => {
   return { id: i.id, name: i.name, note: waiting.length ? `在等 ${waiting.join("、")}` : "没有前置挡着它" };
 }))}
 <h2>想法详情 <button id="new-idea">＋ 新建想法</button></h2>
+<p class="legend">卡片按依赖顺序排列 —— 每张都在它全部前置之后，不是文件里的书写顺序。</p>
 <div id="offline-note" hidden>图暂时不可用（离线，画图要联网取一个第三方库）—— 编辑与提交照常。</div>
 <div id="cards">
-${g.ideas.map(card).join("\n")}
+${
+  // I-061: the cards are the one place a reader goes through in order, so they
+  // come out in dependency order (topoOrder, I-060). Only the cards: the
+  // diagram's node order and the JSON model below keep the written order —
+  // the diagram's layout depends on declaration order, and the page re-derives
+  // the diagram from the model, so sorting either would make the picture jump
+  // on the first structural edit. Anchors are by id, so sorting costs nothing.
+  topoOrder(g).map(card).join("\n")}
 </div>
 <!-- The same text the engine ran to draw the diagram above. A classic script,
      so it defines one global both module scripts below can reach. -->

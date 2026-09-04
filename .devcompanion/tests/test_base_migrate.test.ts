@@ -152,19 +152,80 @@ ideas:
     expect(readFileSync(graphPath(dir), "utf8")).toContain("光标版的地基");
   });
 
-  it("an existing plain graph.yaml means there is nothing to migrate onto", () => {
-    writeFileSync(graphPath(dir), "version: 1\nproject: p\nideas: []\n");
+  // ── I-101：ideas/graph.yaml 已存在时，说真话 ─────────────────────────────
+  // 安装器种下的 graph.yaml 一个想法都没有；旁边躺着几十个想法的旧图。原来的 migrate
+  // 见到文件存在就回「项目图已就位，没有可迁的位置」—— 它算出了旧图来源却一个字不提，
+  // 而 ccscan 第 0 步把这句拒绝当成「确认无旧图」，接着在真实数据旁边建新图。
+  // 三个仓库、136 个想法就这样被一句假话挡在门外。
+  const SEED = "version: 1\nproject: p\noverview: >\nendpoints: []\nideas: []\n";
+  const WITH_IDEAS = `version: 1
+project: p
+endpoints: [I-001]
+ideas:
+  - id: I-001
+    name: "现图里已经有的想法"
+    status: todo
+    needs: []
+    what: W
+    why: Y
+    expected: E
+`;
+
+  it("a bare seed beside a legacy graph is migrated over, and the report says so", () => {
+    writeFileSync(graphPath(dir), SEED);
+    writeFileSync(join(dir, "ideas", "graph.claude.yaml"), claudeLegacy);
+    const r = migrate(dir, { date: "2026-09-01" });
+    expect(r.ok, r.reason).toBe(true);
+    expect(readFileSync(graphPath(dir), "utf8")).toContain("旧图的地基");
+    expect(readFileSync(join(dir, "ideas", "migrate-report.md"), "utf8")).toMatch(/空种子|没有想法/);
+  });
+
+  it("a bare seed with two legacy graphs beside it still needs --pick", () => {
+    writeFileSync(graphPath(dir), SEED);
+    writeFileSync(join(dir, "ideas", "graph.claude.yaml"), claudeLegacy);
+    writeFileSync(join(dir, "ideas", "graph.cursor.yaml"), cursorLegacy);
+    const r = migrate(dir, { date: "2026-09-01" });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/--pick/);
+    expect(readFileSync(graphPath(dir), "utf8")).toBe(SEED);
+  });
+
+  it("a graph that already has ideas is refused — and the refusal tells the truth", () => {
+    writeFileSync(graphPath(dir), WITH_IDEAS);
     writeFileSync(join(dir, "ideas", "graph.claude.yaml"), claudeLegacy);
     const r = migrate(dir, { date: "2026-09-01" });
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/graph\.yaml/);
-    expect(readFileSync(graphPath(dir), "utf8")).toBe("version: 1\nproject: p\nideas: []\n");
+    expect(r.reason).toMatch(/1 个想法/);                 // 现图有几个
+    expect(r.reason).toMatch(/graph\.claude\.yaml/);      // 旁边是哪份
+    expect(r.reason).toMatch(/2 个想法/);                 // 它有几个
+    expect(r.reason).toMatch(/挪开|挪走/);                // 人该做什么
+    expect(r.reason).toMatch(/D10/);                      // 为什么引擎不合并
+    expect(r.reason).not.toMatch(/没有可迁的位置/);       // 那句假话不许再出现
+    expect(readFileSync(graphPath(dir), "utf8")).toBe(WITH_IDEAS);
+  });
+
+  it("an unreadable graph.yaml is refused, never mistaken for an empty seed", () => {
+    writeFileSync(graphPath(dir), "ideas: [\n  - id: I-001\n    name: 'broken\n");
+    writeFileSync(join(dir, "ideas", "graph.claude.yaml"), claudeLegacy);
+    const r = migrate(dir, { date: "2026-09-01" });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/读不出来|解析/);
+    expect(readFileSync(graphPath(dir), "utf8")).toContain("broken");
   });
 
   it("no legacy sources at all: says so instead of inventing a graph", () => {
     const r = migrate(dir, { date: "2026-09-01" });
     expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/没有发现旧格式的图/);
     expect(existsSync(graphPath(dir))).toBe(false);
+  });
+
+  it("no legacy sources: the same sentence even when graph.yaml exists", () => {
+    writeFileSync(graphPath(dir), WITH_IDEAS);
+    const r = migrate(dir, { date: "2026-09-01" });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/没有发现旧格式的图/);
+    expect(readFileSync(graphPath(dir), "utf8")).toBe(WITH_IDEAS);
   });
 
   it("dry-run reports without writing", () => {
