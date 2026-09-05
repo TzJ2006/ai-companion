@@ -89,7 +89,7 @@ describe("companion shared skills (I-095)", () => {
   });
 
   it("the workflow mechanics of the shared base are actually referenced", () => {
-    expect(bodyOf("ccthink")).toMatch(/request-approval/);         // 两道关卡
+    expect(bodyOf("ccthink")).toMatch(/request-approval/);         // 一道关卡
     expect(bodyOf("ccbuild")).toMatch(/run-check/);                // RED→GREEN
     expect(bodyOf("ccbuild")).toMatch(/--phase red/);
     expect(bodyOf("ccscan")).toMatch(/migrate/);                   // 旧图迁移入口
@@ -239,18 +239,6 @@ describe("the spec is true about the engine as it stands (H27)", () => {
 
   it("D15 records how the session-start wiring behaves on all three platforms", () => {
     expect(row(15) + row(22)).toMatch(/SessionStart|sessionStart/);
-  });
-
-  it("the step overview is marked as not implemented", () => {
-    const src = read("companion", "ideas.ts");
-    const graph = /export interface Graph \{([\s\S]*?)\n\}/.exec(src);
-    const idea = /export interface Idea \{([\s\S]*?)\n\}/.exec(src);
-    expect(graph, "ideas.ts 里找不到 Graph 类型").not.toBeNull();
-    expect(idea, "ideas.ts 里找不到 Idea 类型").not.toBeNull();
-    // 建成之后来改这条：那天 steps/step 会先出现在这两个类型里。
-    expect(/^\s*steps\??:/m.test(graph![1]), "引擎认 steps 了 —— 去把那一节的落地情况改掉").toBe(false);
-    expect(/^\s*step\??:/m.test(idea![1]), "引擎认 step 了 —— 去把那一节的落地情况改掉").toBe(false);
-    expect(section("The step overview"), "分步概览一节写得像已经能跑").toMatch(/未落地|尚未落地/);
   });
 
   it("the engine section shows the neutral path and does not oversell `check`", () => {

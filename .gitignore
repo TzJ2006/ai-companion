@@ -17,9 +17,6 @@ dist/
 # local-only Claude Code settings
 .claude/settings.local.json
 
-# Cursor Companion engine install (yaml lives here)
-.cursor/companion/node_modules/
-.cursor/companion/package-lock.json
 
 # one-off backup snapshots and scratch files (history preserved in git)
 archive/
@@ -36,5 +33,4 @@ ideas/graph.html
 # <<< AI Dev Companion
 
 # per-machine install registry (absolute paths)
-claude-companion/.installs.json
 companion/.installs.json

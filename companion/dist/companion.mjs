@@ -7737,28 +7737,37 @@ function check(g, projectDir, file) {
       if (strayed) errors.push(`${at}: \`verify.test_files\` \u8DEF\u5F84 ${rel} ${strayed}\uFF08D31\uFF09`);
     }
   }
-  const steps = g.steps ?? [];
-  const stepName = (s) => String(s ?? "").trim();
-  const declared = new Set(steps.map((s) => stepName(s?.name)));
-  for (const [n, s] of steps.entries()) {
-    if (!stepName(s?.name)) errors.push(`\`steps\` \u7B2C ${n + 1} \u6B65\u6CA1\u6709\u540D\u5B57\uFF08\`name\`\uFF09`);
-  }
+  const parentOf = new Map(g.ideas.map((i) => [i.id, String(i.parent ?? "").trim()]));
+  const childCount = /* @__PURE__ */ new Map();
+  const inReportedCycle = /* @__PURE__ */ new Set();
+  let roots = 0;
   for (const idea of g.ideas) {
-    const step = stepName(idea.step);
-    if (step && !declared.has(step)) {
-      errors.push(`${idea.id || "(missing id)"}: step\u300C${step}\u300D\u4E0D\u5728 \`steps\` \u91CC \u2014\u2014 \u5F52\u5230\u4E86\u4E00\u4E2A\u4E0D\u5B58\u5728\u7684\u6B65\u9AA4\uFF0C\u9875\u9762\u4E0A\u7684\u5206\u6B65\u8BA1\u6570\u4F1A\u51ED\u7A7A\u5C11\u5B83\u4E00\u4E2A`);
+    const at = idea.id || "(missing id)";
+    const parent = parentOf.get(idea.id) ?? "";
+    if (!parent) {
+      roots += 1;
+      continue;
+    }
+    if (!parentOf.has(parent)) {
+      errors.push(`${at}: parent\u300C${parent}\u300D\u4E0D\u662F\u56FE\u91CC\u7684\u60F3\u6CD5`);
+      continue;
+    }
+    childCount.set(parent, (childCount.get(parent) ?? 0) + 1);
+    if (inReportedCycle.has(idea.id)) continue;
+    const path = [idea.id];
+    for (let up = parent; up && parentOf.has(up); up = parentOf.get(up) ?? "") {
+      path.push(up);
+      if (up === idea.id) {
+        errors.push(`parent \u6210\u73AF\uFF1A${path.join(" \u2192 ")} \u2014\u2014 \u4E00\u4E2A\u60F3\u6CD5\u4E0D\u80FD\u662F\u81EA\u5DF1\u7684\u7956\u5148`);
+        for (const id of path) inReportedCycle.add(id);
+        break;
+      }
+      if (path.length > g.ideas.length) break;
     }
   }
-  if (steps.length > 0) {
-    if (steps.length < 3 || steps.length > 7) {
-      warnings.push(`\`steps\` \u6709 ${steps.length} \u6B65 \u2014\u2014 \u6982\u89C8\u8BE5\u662F\u4E09\u5230\u4E03\u6B65\uFF1A\u5C11\u4E8E\u4E09\u6B65\u4E0D\u9700\u8981\u6982\u89C8\uFF0C\u591A\u4E8E\u4E03\u6B65\u662F\u76EE\u5F55\u3001\u4EBA\u4E00\u773C\u626B\u4E0D\u5B8C`);
-    }
-    for (const idea of g.ideas) {
-      if (!stepName(idea.step)) warnings.push(`${idea.id || "(missing id)"}: \u6CA1\u6709\u5F52\u5230\u4EFB\u4F55\u4E00\u6B65\uFF08\`step\`\uFF09\u2014\u2014 \u9875\u9762\u4E0A\u7684\u5206\u6B65\u8BA1\u6570\u4F1A\u5C11\u7B97\u5B83`);
-    }
-    for (const name of declared) {
-      if (name && !g.ideas.some((i) => stepName(i.step) === name)) warnings.push(`\u6B65\u9AA4\u300C${name}\u300D\u4E00\u4E2A\u60F3\u6CD5\u90FD\u6CA1\u6709`);
-    }
+  if (roots > 7) warnings.push(`\u9876\u5C42\u6709 ${roots} \u4E2A\u60F3\u6CD5 \u2014\u2014 \u6700\u591A\u4E03\u4E2A\uFF0C\u4EBA\u4E00\u773C\u626B\u4E0D\u5B8C\uFF1B\u540C\u7C7B\u7684\u5F52\u5230\u4E00\u4E2A\u7236\u60F3\u6CD5\u4E0B`);
+  for (const [pid2, n] of childCount) {
+    if (n > 7) warnings.push(`${pid2}: \u76F4\u63A5\u5B50\u60F3\u6CD5 ${n} \u4E2A \u2014\u2014 \u6700\u591A\u4E03\u4E2A\uFF0C\u518D\u5206\u4E00\u5C42`);
   }
   const cycle = findCycle(g);
   if (cycle.length > 0) {
@@ -7834,7 +7843,7 @@ function addIdea(doc, graph, name, needs, date) {
   return id;
 }
 var sha256 = (text) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
-function approvalSnapshot(graph, gate, nodeIds) {
+function approvalProjection(graph, gate, nodeIds) {
   const map = byId(graph);
   const three = (i) => ({
     id: i.id,
@@ -7844,7 +7853,7 @@ function approvalSnapshot(graph, gate, nodeIds) {
     why: i.why ?? "",
     expected: i.expected ?? ""
   });
-  const projection = gate === "decomposition" ? graph.ideas.map(three) : (nodeIds ?? []).map((id) => {
+  return gate === "decomposition" ? graph.ideas.map(three) : (nodeIds ?? []).map((id) => {
     const i = map.get(id);
     if (!i) throw new Error(`no idea with id ${id}`);
     return {
@@ -7856,7 +7865,21 @@ function approvalSnapshot(graph, gate, nodeIds) {
       verify: i.verify ?? {}
     };
   });
-  return sha256(JSON.stringify(projection)).slice(0, 12);
+}
+function approvalSnapshot(graph, gate, nodeIds) {
+  return sha256(JSON.stringify(approvalProjection(graph, gate, nodeIds))).slice(0, 12);
+}
+function approvalLines(entries) {
+  const out = [];
+  for (const e of entries) {
+    const upTo = "how" in e ? 8 : 3;
+    out.push(`${e.id}  ${e.name}`);
+    out.push(`\u524D\u7F6E\u60F3\u6CD5  ${e.needs.length ? e.needs.join(", ") : "\u2014"}`);
+    for (const block of questionLines(e, upTo)) out.push(`
+${block}`);
+    out.push("");
+  }
+  return out;
 }
 var pendingDir = (projectDir) => join(paths(projectDir).runtime, "pending");
 var approvalsDir = (projectDir) => join(paths(projectDir).runtime, "approvals");
@@ -8408,9 +8431,9 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
 }
 var CHANGE_VERSION = 1;
 var BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
-var NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
-var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
-var fieldNode = (doc, field, value) => field === "step" ? String(value ?? "").trim() : proseNode(doc, value);
+var NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
+var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
+var fieldNode = (doc, field, value) => field === "parent" ? String(value ?? "").trim() : proseNode(doc, value);
 var idNumber = (id) => {
   const m = /^I-(\d+)$/.exec(String(id));
   return m ? Number(m[1]) : NaN;
@@ -8617,6 +8640,26 @@ var QUESTIONS = [
 ];
 var askedAs = (n) => QUESTIONS[n - 1].label;
 var PROSE = QUESTIONS.filter((q) => q.prose);
+function codeText(code) {
+  return (code ?? []).map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`).join(", ");
+}
+function verifyText(v) {
+  if (!v) return "";
+  const bits = [];
+  if (v.command) bits.push(v.command);
+  if (v.pass) bits.push(`\u901A\u8FC7\u6761\u4EF6\uFF1A${v.pass}`);
+  if (v.test_files?.length) bits.push(`\u6D4B\u8BD5\u6587\u4EF6\uFF1A${v.test_files.join("\u3001")}`);
+  if (v.manual) bits.push(`\u4EBA\u5DE5\u68C0\u67E5\uFF1A${v.manual}`);
+  if (v.signed_off) bits.push(`\u7B7E\u5B57\uFF1A${v.signed_off}`);
+  return bits.join("\n");
+}
+function questionLines(x, upTo = 8) {
+  return QUESTIONS.slice(0, upTo).map((q) => {
+    const value = q.key === "code" ? codeText(x.code) : q.key === "verify" ? verifyText(x.verify) : x[q.key];
+    return `${q.n} ${q.label}
+  ${(value || "\u2014").trim().replace(/\n/g, "\n  ")}`;
+  });
+}
 var MERMAID_SOURCE_FN = `function buildMermaidSource(g) {
   var ideas = (g && g.ideas) || [];
   var present = new Set(ideas.map(function (i) { return i.id; }));
@@ -9904,12 +9947,8 @@ ${graph.ideas.length} ideas \xB7 ${errors.length} errors \xB7 ${warnings.length}
       }
       const map = byId(graph);
       console.log(`${idea.id}  ${idea.name}  [${idea.status ?? "todo"}]`);
-      for (const q of QUESTIONS) {
-        const value = q.key === "code" ? (idea.code ?? []).map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`).join(", ") : q.key === "verify" ? idea.verify?.command ?? idea.verify?.manual : idea[q.key];
-        console.log(`
-${q.n} ${q.label}
-  ${(value || "\u2014").trim().replace(/\n/g, "\n  ")}`);
-      }
+      for (const block of questionLines(idea)) console.log(`
+${block}`);
       console.log(`
 \u524D\u7F6E\u60F3\u6CD5  ${(idea.needs ?? []).map((n) => `${n} (${map.get(n)?.status ?? "?"})`).join(", ") || "\u2014"}`);
       console.log(`\u5B83\u662F\u8C01\u7684\u524D\u7F6E  ${dependents(graph, idea.id).join(", ") || "\u2014"}`);
@@ -10021,9 +10060,11 @@ ${q.n} ${q.label}
         nodes.length ? nodes : void 0,
         { by: flag(args2, "by"), date: today }
       );
+      console.log(approvalLines(approvalProjection(graph, gate, nodes.length ? nodes : void 0)).join("\n"));
       console.log(`\u4E00\u6B21\u6027\u53E3\u4EE4\uFF1A${r.challenge}\uFF08${gate}${nodes.length ? ` \xB7 ${nodes.join(", ")}` : ""}\uFF09`);
-      console.log(`\u8BF7\u4EBA\u770B\u8FC7\u5185\u5BB9\u540E\uFF0C\u6574\u6761\u6D88\u606F\u56DE\u590D\uFF1A\u6279\u51C6 ${r.challenge}`);
+      console.log(`\u8BF7\u4EBA\u770B\u8FC7\u4E0A\u9762\u7684\u5185\u5BB9\u540E\uFF0C\u6574\u6761\u6D88\u606F\u56DE\u590D\uFF1A\u6279\u51C6 ${r.challenge}`);
       console.log(`\uFF08\u62D2\u7EDD\u5C31\u56DE\uFF1A\u62D2\u7EDD ${r.challenge}\u3002\u5185\u5BB9\u6539\u52A8\u6216\u53E3\u4EE4\u7528\u8FC7\u4E00\u6B21\u5373\u4F5C\u5E9F\u3002\uFF09`);
+      console.log(`\u8FD9\u4E00\u53E5\u53EA\u80FD\u7531\u4EBA\u5728\u5BF9\u8BDD\u91CC\u4EB2\u624B\u56DE\uFF0C\u522B\u5904\u70B9\u4EC0\u4E48\u90FD\u4E0D\u7B97\u6570\u3002`);
       return 0;
     }
     case "status": {
@@ -10175,6 +10216,9 @@ function decideInner(event, projectDir) {
       return ruleStop(event, projectDir);
     case "shell":
       return ruleShell(event, projectDir);
+    case "fetch":
+      return ruleFetch(event);
+    // R8 — see ruleFetch (I-104)
     case "pre-write":
       return rulePreWrite(event, projectDir);
     default:
@@ -10860,13 +10904,55 @@ function mcpTargets(input) {
   }
   return found;
 }
+var MCP_URL_KEY = /^(url|uri|href|link|address|endpoint|target_url|page_url)$/i;
+function urlsIn(input) {
+  const found = [];
+  for (const [key, value] of Object.entries(input)) {
+    if (!MCP_URL_KEY.test(key)) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (typeof item === "string" && item) found.push(item);
+    }
+  }
+  return found;
+}
+function isLoopback(url) {
+  let host;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  host = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host === "::1") return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+}
+var SCRIPT_IN_PAGE = /(?:^|_)(javascript|execute_script|evaluate_script|run_script|inject_script|eval)(?:_|$)/i;
+function fetchEvent(tool, input, raw) {
+  const urls = urlsIn(input);
+  if (urls.length === 0 && !SCRIPT_IN_PAGE.test(tool)) return null;
+  return { event: "fetch", tool, urls, cwd: raw.cwd };
+}
+function ruleFetch(event) {
+  if (SCRIPT_IN_PAGE.test(event.tool ?? "")) {
+    return {
+      allow: false,
+      reason: `\u5728\u9875\u9762\u91CC\u6267\u884C\u811A\u672C\u7684\u8C03\u7528\u4E0D\u653E\u884C\uFF08R8/I-104\uFF09\uFF1A\u811A\u672C\u8DD1\u5728\u300C\u5F53\u524D\u90A3\u4E00\u9875\u300D\u4E0A\uFF0C\u800C\u90A3\u662F\u6D4F\u89C8\u5668\u7684\u72B6\u6001\uFF0C\u5B88\u536B\u770B\u4E0D\u89C1\u662F\u54EA\u4E00\u9875 \u2014\u2014 \u5224\u4E0D\u51FA\u76EE\u6807\uFF0C\u6240\u4EE5\u8FD9\u4E00\u6761\u53EA\u80FD\u6309\u5DE5\u5177\u7684\u540D\u5B57\u8BA4\uFF0C\u8FD9\u662F\u5B83\u6BD4\u7F51\u5740\u90A3\u6761\u5F31\u7684\u5730\u65B9\uFF0C\u5982\u5B9E\u5199\u5728\u8FD9\u91CC\u3002\u8981\u8BFB\u9875\u9762\u5C31\u7528\u53EA\u8BFB\u7684\u8BFB\u53D6\u5DE5\u5177\uFF1B\u8981\u8DD1\u672C\u5730\u670D\u52A1\u7684\u68C0\u67E5\uFF0C\u8D70 run-check\u3002\u8FD9\u662F\u884C\u4E3A\u62A4\u680F\u4E0D\u662F\u6C99\u7BB1\uFF1A\u5B83\u628A\u300C\u987A\u624B\u5C31\u80FD\u505A\u5230\u300D\u53D8\u6210\u300C\u5FC5\u987B\u660E\u786E\u7ED5\u8FC7\u300D\uFF08D26\uFF09\u3002`
+    };
+  }
+  const local = (event.urls ?? []).find(isLoopback);
+  if (!local) return OK;
+  return {
+    allow: false,
+    reason: `\u8FD9\u6B21\u8C03\u7528\u51B2\u7740\u672C\u673A\u670D\u52A1\u53BB\uFF08${local.slice(0, 80)}\uFF09\u2014\u2014 \u56DE\u73AF\u5730\u5740\u4E0A\u7684\u4E1C\u897F\u4E00\u5F8B\u4E0D\u653E\u884C\uFF08R8/I-104\uFF09\u3002\u7406\u7531\uFF1Aserve \u8D77\u7684\u90A3\u4E00\u9875\u4E0A\u4EBA\u505A\u7684\u52A8\u4F5C\uFF0C\u662F\u8FD9\u5957\u5DE5\u5177\u91CC\u552F\u4E00\u8FD8\u7B97\u6570\u7684\u4EBA\u5DE5\u6388\u6743\uFF1Bagent \u591F\u5F97\u7740\u90A3\u4E00\u9875\uFF0C\u90A3\u4E2A\u6388\u6743\u5C31\u7B49\u4E8E\u96F6\u3002\u6574\u4E2A\u56DE\u73AF\u65CF\u90FD\u62E6\uFF0C\u4E0D\u6311\u7AEF\u53E3 \u2014\u2014 serve \u6709 --port\uFF0C\u800C\u5B88\u536B\u548C\u670D\u52A1\u662F\u4E24\u4E2A\u8FDB\u7A0B\uFF0C\u5B88\u536B\u65E0\u4ECE\u77E5\u9053\u5B83\u6B64\u523B\u5728\u54EA\u4E2A\u7AEF\u53E3\u4E0A\u3002\u4EBA\u81EA\u5DF1\u5728\u6D4F\u89C8\u5668\u91CC\u6253\u5F00\u540C\u4E00\u4E2A\u5730\u5740\u4E0D\u53D7\u5F71\u54CD\u3002\u5916\u7F51\u7167\u5E38\u653E\u884C\u3002\u8FD9\u662F\u884C\u4E3A\u62A4\u680F\u4E0D\u662F\u6C99\u7BB1\uFF1A2026-09-05 \u5B9E\u6D4B\uFF0C\u81EA\u52A8\u5316\u9A71\u52A8\u7684\u70B9\u51FB\u5728\u9875\u9762\u4E0A\u548C\u4EBA\u624B\u70B9\u7684\u8BFB\u6570\u4E00\u6A21\u4E00\u6837\uFF0C\u6240\u4EE5\u5B83\u63D0\u9AD8\u7684\u662F\u6469\u64E6\u548C\u7559\u75D5\uFF0C\u4E0D\u662F\u4E0D\u53EF\u7ED5\u8FC7\u6027\uFF08D26\uFF09\u3002`
+  };
+}
 function mcpEvent(kind, tool, input, raw) {
   const targets = mcpTargets(input);
   if (targets.length > 0) return { event: kind, tool, paths: targets, cwd: raw.cwd };
   if (MCP_WRITEISH.test(tool) || Object.keys(input).some((key) => MCP_CONTENT_KEY.test(key))) {
     return { event: kind, tool, paths: [], unknownTarget: kind === "pre-write", cwd: raw.cwd };
   }
-  return { event: "other", tool, cwd: raw.cwd };
+  return fetchEvent(tool, input, raw) ?? { event: "other", tool, cwd: raw.cwd };
 }
 var PATCH_HEADER = /^([ \t]*)\*{3} (.+?)\s*$/gm;
 var PATCH_OP = /^(Add|Update|Delete) File: (.+)$/;
@@ -10906,7 +10992,7 @@ function normalizeClaude(raw) {
         return { event: "pre-write", tool, paths: path ? [path] : [], unknownTarget: !path, edit: editOf(input), cwd: raw.cwd };
       }
       if (tool.startsWith("mcp__")) return mcpEvent("pre-write", tool, input, raw);
-      return { event: "other", tool, cwd: raw.cwd };
+      return fetchEvent(tool, input, raw) ?? { event: "other", tool, cwd: raw.cwd };
     case "PostToolUse": {
       const path = extractPath(input);
       if (!path) return { event: "other", tool, paths: [], cwd: raw.cwd };
@@ -10927,7 +11013,7 @@ function encodeClaude(event, verdict) {
   if (verdict.allow) {
     return { exitCode: 0, stdout: verdict.message ? verdict.message + "\n" : void 0, stderr: verdict.warn };
   }
-  if (event.event === "pre-write" || event.event === "shell") {
+  if (event.event === "pre-write" || event.event === "shell" || event.event === "fetch") {
     return {
       exitCode: 2,
       stdout: JSON.stringify({ hookSpecificOutput: {

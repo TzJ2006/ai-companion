@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "vitest run --dir .devcompanion/tests",
-    "graph": "tsx claude-companion/ideas.ts serve"
+    "test": "vitest run --dir .devcompanion/tests"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

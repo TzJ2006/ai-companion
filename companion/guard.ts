@@ -37,7 +37,7 @@ import { ENGINE_RELATIVE } from "./manifests.js";
 // ─── the normalized event — the only shape the rules ever see (D22) ─────────
 
 export interface NormalizedEvent {
-  event: "pre-write" | "post-write" | "read" | "shell" | "prompt" | "session" | "stop" | "other";
+  event: "pre-write" | "post-write" | "read" | "shell" | "prompt" | "session" | "stop" | "fetch" | "other";
   tool?: string;
   /** Files the action would touch; absolute or project-relative. */
   paths?: string[];
@@ -45,6 +45,10 @@ export interface NormalizedEvent {
   operations?: { kind: "add" | "update" | "delete"; path: string }[];
   /** For shell events: the raw command string. */
   command?: string;
+  /** For fetch events: every URL the call names. Data, not a verdict — the
+   *  judging happens in `decideInner`, inside `decide`'s try/catch, so a screen
+   *  that throws fails CLOSED. `normalize()` runs outside it (D9/I-104). */
+  urls?: string[];
   /** For prompt events: the human's literal message. */
   prompt?: string;
   cwd?: string;
@@ -162,6 +166,7 @@ function decideInner(event: NormalizedEvent, projectDir: string): Verdict {
     case "session": return OK;                          // the briefing is a message, not a verdict
     case "stop": return ruleStop(event, projectDir);
     case "shell": return ruleShell(event, projectDir);
+    case "fetch": return ruleFetch(event);              // R8 — see ruleFetch (I-104)
     case "pre-write": return rulePreWrite(event, projectDir);
     default: return OK;
   }
@@ -1261,7 +1266,7 @@ function ruleShell(event: NormalizedEvent, projectDir: string): Verdict {
     // command; this door asks it before it HONOURS one.
     const chained = declared && chainedCommandRefusal(declared, command);
     if (chained) return { allow: false, reason: chained };
-    if (declared && validApproval(projectDir, graph, "plan", [declared.id])) return OK;
+    if (declared && validApproval(projectDir, graph, "plan", declared.id)) return OK;
   } catch { /* no graph — fall through to the pattern screen */ }
 
   const verdict = screenShell(command, projectDir);
@@ -1272,7 +1277,7 @@ function ruleShell(event: NormalizedEvent, projectDir: string): Verdict {
   // holds, instead of asking for the approval it is waiting on (D7/D28).
   return {
     allow: false,
-    reason: `这是 ${declared.id}「${declared.name}」在图里声明的 verify.command（「${command.slice(0, 80)}」），拦下它的不是命令本身，是这个想法的方案还没有当前有效的人工批准（D7）：去要一次 —— request-approval --gate plan --node ${declared.id}，人回「批准」之后这条命令就照原样放行。（批准绑在图的内容上：之后再改 how / verify，批准作废，要重新要。若确实想改命令本身，先改图再要批准。原本挡住它的规则：${verdict.reason}）`,
+    reason: `这是 ${declared.id}「${declared.name}」在图里声明的 verify.command（「${command.slice(0, 80)}」），拦下它的不是命令本身，是这个想法的方案还没有当前有效的人工批准（D7）：去要一次 —— request-approval --node ${declared.id}，人回「批准」之后这条命令就照原样放行。（批准绑在图的内容上：之后再改 how / verify，批准作废，要重新要。若确实想改命令本身，先改图再要批准。原本挡住它的规则：${verdict.reason}）`,
   };
 }
 
@@ -1495,6 +1500,97 @@ function mcpTargets(input: Record<string, unknown>): string[] {
   return found;
 }
 
+// ─── fetch: calls that name a URL, and calls that run script in a page (I-104)
+//
+// The shell gate (D21) refuses the whole downloader family — curl, wget,
+// Invoke-RestMethod — as write verbs, so an agent cannot speak HTTP from a
+// command line. It could speak it from a browser: navigate, click, run script.
+// Those name no file and carry no content, so they fell through mcpEvent's third
+// outlet to `other` and were allowed without a question being asked.
+
+/** A key whose NAME says the value is somewhere to go. */
+const MCP_URL_KEY = /^(url|uri|href|link|address|endpoint|target_url|page_url)$/i;
+
+/** Every URL this call names. Same shape as `mcpTargets`, one dimension over:
+ *  that one asks "which file", this one asks "which host". */
+function urlsIn(input: Record<string, unknown>): string[] {
+  const found: string[] = [];
+  for (const [key, value] of Object.entries(input)) {
+    if (!MCP_URL_KEY.test(key)) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (typeof item === "string" && item) found.push(item);
+    }
+  }
+  return found;
+}
+
+/** Is this address the machine the guard is running on? Parsed, never matched as
+ *  a substring: `https://127.0.0.1.evil.example/` and `https://mylocalhost.com/`
+ *  are ordinary web hosts that a `includes("127.0.0.1")` screen would refuse,
+ *  and refusing the open web is worse than not refusing at all. */
+function isLoopback(url: string): boolean {
+  let host: string;
+  try { host = new URL(url).hostname; } catch { return false; }
+  host = host.replace(/^\[|\]$/g, "").toLowerCase();     // [::1] → ::1
+  if (host === "localhost" || host === "::1") return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);  // the whole 127/8 block
+}
+
+/** Tools that run script INSIDE whatever page is currently loaded.
+ *
+ *  This one clause is judged by NAME, and that is a real weakness stated out
+ *  loud rather than papered over: such a call names no target at all — the page
+ *  it acts on is browser state the guard cannot see — so there is nothing to
+ *  judge it by. Kept deliberately narrow so it catches the script runners and
+ *  not every tool with a verb in its name (`evaluate_grade` is not one). */
+const SCRIPT_IN_PAGE = /(?:^|_)(javascript|execute_script|evaluate_script|run_script|inject_script|eval)(?:_|$)/i;
+
+/** The fetch-shaped event, or null when this call is neither. Shared by every
+ *  platform's normalizer so one rule covers all three (D11). */
+function fetchEvent(tool: string, input: Record<string, unknown>, raw: RawHook): NormalizedEvent | null {
+  const urls = urlsIn(input);
+  if (urls.length === 0 && !SCRIPT_IN_PAGE.test(tool)) return null;
+  return { event: "fetch", tool, urls, cwd: raw.cwd };
+}
+
+/**
+ * R8 — a call aimed at this machine's own service, or one that runs script in a
+ * page (I-104). Judged by TARGET, never by tool name: enumerating browser tools
+ * both misses whatever the next one is called and refuses ordinary web work that
+ * has nothing to do with us.
+ *
+ * Honest about its own size: this is a guardrail, not a sandbox. Measured on
+ * 2026-09-05, a click driven through a browser's automation protocol arrives at
+ * the page with `isTrusted`, `navigator.userActivation.isActive` true and
+ * `navigator.webdriver` false — indistinguishable from a hand on a mouse. So
+ * this rule raises the cost of reaching the local service from "incidental" to
+ * "deliberate"; it does not make it impossible, and nothing downstream should be
+ * designed as though it did (D26).
+ */
+function ruleFetch(event: NormalizedEvent): Verdict {
+  if (SCRIPT_IN_PAGE.test(event.tool ?? "")) {
+    return {
+      allow: false,
+      reason: `在页面里执行脚本的调用不放行（R8/I-104）：脚本跑在「当前那一页」上，而那是浏览器的状态，`
+        + `守卫看不见是哪一页 —— 判不出目标，所以这一条只能按工具的名字认，这是它比网址那条弱的地方，`
+        + `如实写在这里。要读页面就用只读的读取工具；要跑本地服务的检查，走 run-check。`
+        + `这是行为护栏不是沙箱：它把「顺手就能做到」变成「必须明确绕过」（D26）。`,
+    };
+  }
+  const local = (event.urls ?? []).find(isLoopback);
+  if (!local) return OK;                                 // the open web is not ours to block
+  return {
+    allow: false,
+    reason: `这次调用冲着本机服务去（${local.slice(0, 80)}）—— 回环地址上的东西一律不放行（R8/I-104）。`
+      + `理由：serve 起的那一页上人做的动作，是这套工具里唯一还算数的人工授权；`
+      + `agent 够得着那一页，那个授权就等于零。整个回环族都拦，不挑端口 —— serve 有 --port，`
+      + `而守卫和服务是两个进程，守卫无从知道它此刻在哪个端口上。`
+      + `人自己在浏览器里打开同一个地址不受影响。外网照常放行。`
+      + `这是行为护栏不是沙箱：2026-09-05 实测，自动化驱动的点击在页面上和人手点的读数一模一样，`
+      + `所以它提高的是摩擦和留痕，不是不可绕过性（D26）。`,
+  };
+}
+
 /** One event for any MCP tool call, on any platform. Three outcomes, and the
  *  middle one is where D23 lands: a call that names a file is judged on it; a
  *  call that is write-capable — the name says so, or it is carrying file content
@@ -1507,7 +1603,9 @@ function mcpEvent(kind: "pre-write" | "post-write", tool: string, input: Record<
   if (MCP_WRITEISH.test(tool) || Object.keys(input).some((key) => MCP_CONTENT_KEY.test(key))) {
     return { event: kind, tool, paths: [], unknownTarget: kind === "pre-write", cwd: raw.cwd };
   }
-  return { event: "other", tool, cwd: raw.cwd };        // a read-shaped MCP call is not ours to block
+  // A read-shaped MCP call is not ours to block — unless what it reaches for is
+  // this machine's own service, or it runs script in a page (R8/I-104).
+  return fetchEvent(tool, input, raw) ?? { event: "other", tool, cwd: raw.cwd };
 }
 
 /** apply_patch: every `*** …` line is a header, and every header must be one we
@@ -1567,7 +1665,11 @@ export function normalizeClaude(raw: RawHook): NormalizedEvent {
         return { event: "pre-write", tool, paths: path ? [path] : [], unknownTarget: !path, edit: editOf(input), cwd: raw.cwd };
       }
       if (tool.startsWith("mcp__")) return mcpEvent("pre-write", tool, input, raw);
-      return { event: "other", tool, cwd: raw.cwd };
+      // Not every URL-speaking tool wears an `mcp__` prefix — the host's own
+      // fetch tool does not. Asked here too, so R8 is about the target rather
+      // than about which family a tool happens to belong to (I-104). Whether
+      // such a tool reaches the guard at all is a manifest question (I-106).
+      return fetchEvent(tool, input, raw) ?? { event: "other", tool, cwd: raw.cwd };
     case "PostToolUse": {
       const path = extractPath(input);
       if (!path) return { event: "other", tool, paths: [], cwd: raw.cwd };
@@ -1591,7 +1693,10 @@ export function encodeClaude(event: NormalizedEvent, verdict: Verdict): WireRepl
   if (verdict.allow) {
     return { exitCode: 0, stdout: verdict.message ? verdict.message + "\n" : undefined, stderr: verdict.warn };
   }
-  if (event.event === "pre-write" || event.event === "shell") {
+  // `fetch` belongs with these two: it is a PreToolUse refusal, and without the
+  // structured reply it would fall to a bare exit 2 — Claude honours the code
+  // but the human sees a failure with no explanation attached (I-104).
+  if (event.event === "pre-write" || event.event === "shell" || event.event === "fetch") {
     return {
       exitCode: 2,
       stdout: JSON.stringify({ hookSpecificOutput: {
