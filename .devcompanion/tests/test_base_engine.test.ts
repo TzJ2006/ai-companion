@@ -215,9 +215,9 @@ ideas:
   // The CLI `set` writes back to the PLAIN file, regenerates the PLAIN html,
   // and leaves the decoy byte-for-byte alone. One real subprocess proves it.
   it("cli set touches only the plain graph and plain html", () => {
-    // D17：命令行的 set 带着项目目录，开工要两次当前有效的批准，先把它们办掉。
-    for (const [gate, nodes] of [["decomposition", undefined], ["plan", ["I-002"]]] as const) {
-      const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, gate, nodes);
+    // D17：命令行的 set 带着项目目录，开工要这个想法当前有效的批准，先把它办掉。
+    {
+      const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-002"]);
       applyApproval(dir, `批准 ${challenge}`, { date: "2026-08-31" });
     }
     const r = spawnSync("npx", ["tsx", ENGINE, "set", "I-002", "doing",

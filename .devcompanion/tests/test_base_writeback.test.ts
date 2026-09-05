@@ -327,29 +327,15 @@ ideas:
   it("没有人工批准，信封推不动 doing，而且话里点名去哪儿要批准", () => {
     const r = toDoing(project());
     expect(r.ok, "一个批准都没有，改动文件却把想法推进了 doing").toBe(false);
-    expect(r.reason).toMatch(/request-approval/);
-    expect(r.reason).toMatch(/decomposition/);
+    expect(r.reason).toMatch(/request-approval --node I-002/);
     expect(r.text).toBeUndefined();
   });
 
-  it("计划那道单独缺一份，也照样推不动", () => {
+  it("这个想法的批准齐了，同一份信封照常写得进去", () => {
     const dir = project();
     const { graph } = load(graphPath(dir));
-    const { challenge } = requestApproval(dir, graph, "decomposition", undefined, { by: "人", date: TODAY });
+    const { challenge } = requestApproval(dir, graph, "plan", ["I-002"], { by: "人", date: TODAY });
     expect(applyApproval(dir, `批准 ${challenge}`, { date: TODAY })?.ok).toBe(true);
-
-    const r = toDoing(dir);
-    expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/request-approval --gate plan --node I-002/);
-  });
-
-  it("两道批准都齐了，同一份信封照常写得进去", () => {
-    const dir = project();
-    const { graph } = load(graphPath(dir));
-    for (const [gate, ids] of [["decomposition", undefined], ["plan", ["I-002"]]] as const) {
-      const { challenge } = requestApproval(dir, graph, gate, ids, { by: "人", date: TODAY });
-      expect(applyApproval(dir, `批准 ${challenge}`, { date: TODAY })?.ok).toBe(true);
-    }
     const r = toDoing(dir);
     expect(r.ok, "批准齐了却写不进去：" + r.reason).toBe(true);
     expect(blockOf(r.text!, "I-002")).toMatch(/status: doing/);

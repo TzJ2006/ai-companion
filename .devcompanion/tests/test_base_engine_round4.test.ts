@@ -97,7 +97,7 @@ ideas:
   it("no plan approval at all: even the idea's own declared test file is refused, with the way out", () => {
     const v = decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt"));
     expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/request-approval --gate plan --node I-001/);
+    expect(v.reason).toMatch(/request-approval --node I-001/);
   });
 
   it("re-approving the amended plan is the only way in — and then a human really saw the path", () => {

@@ -85,7 +85,7 @@ ideas:
   });
 
   it("end to end: cursor's prompt reply is ONE json document, not text then json", { timeout: 120_000 }, () => {
-    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "decomposition");
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-001"]);
     const r = run("cursor", { hook_event_name: "beforeSubmitPrompt", prompt: `批准 ${challenge}`, cwd: dir });
     const out = (r.stdout ?? "").trim();
     expect(out.length).toBeGreaterThan(0);

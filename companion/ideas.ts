@@ -2357,8 +2357,18 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   const ends = new Set(g.endpoints ?? []);
   const cls = (i: Idea) => (ends.has(i.id) ? "endpoint" : i.status ?? "todo");
 
-  // The graph itself shows names only — detail lives one click away.
-  const mermaid = buildMermaidSource(g);
+  // The tree (FORMAT.md, "The tree"). One page per idea, addressed by hash:
+  // `#I-107` shows I-107's own card on top and its children below, drawn like
+  // the home page draws the top level. A `parent` nobody has is treated as
+  // top level here — the page must not lose an idea; `check` reports it.
+  const parentKey = (i: Idea) => (i.parent && map.has(i.parent) ? i.parent : "");
+  const ordered = topoOrder(g);                 // I-061: siblings stay in dependency order
+  const kidsOf = (owner: string) => ordered.filter((i) => parentKey(i) === owner);
+  const descendants = (owner: string): Idea[] => kidsOf(owner).flatMap((k) => [k, ...descendants(k.id)]);
+
+  // The diagram shows the current page's children, names only — detail lives
+  // one click away. This is the home page's; the script redraws per page.
+  const mermaid = buildMermaidSource({ ...g, ideas: kidsOf("") });
 
   const links = (ids: string[]) => ids.length === 0 ? NONE : ids.map((id) =>
     `<a class="xlink" href="#${esc(id)}" data-goto="${esc(id)}">${esc(map.get(id)?.name ?? id)}</a>`).join(" ");
@@ -2430,7 +2440,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
 </details>`;
 
   const STATUS_ZH: Record<string, string> = { todo: "待办", doing: "进行中", done: "已完成", blocked: "受阻" };
-  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(g.ideas).by[s]}`).join(" · ");
+  const countsOf = (ideas: Idea[]) => STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(ideas).by[s]}`).join(" · ");
 
   // Every editable field ships twice: the prose a reader sees, and the input a
   // writer types into. CSS shows one or the other; no text is ever built from
@@ -2444,7 +2454,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
 
   const card = (i: Idea) => `<section class="idea ${cls(i)}" id="${esc(i.id)}">
   <h3><span class="ro">${esc(i.name)}</span><input class="rw" data-idea="${attr(i.id)}" data-field="name" value="${attr(i.name)}"> <span class="badge ro">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${statusPicker(i)}${ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<button class="edit-toggle" data-edit="${attr(i.id)}">编辑</button><button class="edit-toggle danger" data-remove="${attr(i.id)}" title="标记待删，再点一次撤销">删除</button><span class="iid">${esc(i.id)}</span></h3>
-  <dl>${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
+  <dl>${field(i, "parent", "父想法")}${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
     <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}
   </dl>
@@ -2455,6 +2465,38 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   ${i.log?.length ? `<details class="log"><summary>修改记录 (${i.log.length})</summary>${i.log.map((l) =>
     `<div>${esc(l.date)}${l.by ? " · " + esc(l.by) : ""} — ${esc(l.note)}</div>`).join("")}</details>` : ""}
 </section>`;
+
+  // One row per child on its parent's page: name, status, the first line of
+  // `what`, and the way in. The full card lives on the child's own page, so
+  // every id appears exactly once and editing, drafts and signing stay as they are.
+  const brief = (i: Idea) => `<a class="brief ${cls(i)}" href="#${esc(i.id)}" data-brief="${attr(i.id)}">
+    <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${
+    ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<span class="blurb">${
+    esc(String(i.what ?? "").split("\n")[0].trim())}</span><span class="enter">进入 →</span></a>`;
+
+  /** One page: the home page (`owner` null) or one idea's. Sections are all in
+   *  the document, hidden; the script shows the one the hash names. */
+  const page = (owner: Idea | null) => {
+    const id = owner ? owner.id : "";
+    const kids = kidsOf(id);
+    const scope = descendants(id);
+    return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
+${owner ? card(owner) : ""}
+${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} · 点击任意节点进入它的页面</p>
+${worklist("待人工验证", scope.filter(awaitingSignature).map((i) => ({
+  id: i.id, name: i.name, note: i.verify?.manual ?? "",
+})))}
+${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
+  const waiting = waitingOn(i).map((n) => map.get(n)!.name || n);
+  // A plain sentence, not the dash that means "no information": this says one
+  // definite thing — no other idea is in the way. It does NOT say somebody is
+  // working on it.
+  return { id: i.id, name: i.name, note: waiting.length ? `在等 ${waiting.join("、")}` : "没有前置挡着它" };
+}))}`}
+<h2>${owner ? "子想法" : "顶层想法"} <span class="legend">按依赖顺序排列</span></h2>
+<div class="children">${kids.map(brief).join("\n")}</div>
+</section>`;
+  };
 
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -2564,6 +2606,19 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
   .wl-note { color:#7d8896; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#7d8896; }
+  .crumbs a { color:#7dd3fc; text-decoration:none; }
+  .crumbs a.here { color:#e6edf3; font-weight:600; }
+  .crumbs button { margin-left:auto; }
+  .page[hidden] { display:none; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; margin:0 0 8px; text-decoration:none;
+    color:#e6edf3; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px; background:#0d1117; }
+  .brief:hover { border-color:#7dd3fc; }
+  .brief.done { border-left-color:#22c55e; } .brief.doing { border-left-color:#3b82f6; }
+  .brief.blocked { border-left-color:#f97316; } .brief.endpoint { border-left-color:#a855f7; }
+  .brief .bname { font-weight:600; flex:none; }
+  .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; }
 
   #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
@@ -2614,8 +2669,8 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   <i class="sw" style="background:#334155"></i>待办
   <i class="sw" style="background:#7c2d12"></i>受阻
   <i class="sw" style="background:#581c87"></i>终点
-  · ${esc(counts)} · 点击任意节点查看详情
 </p>
+<nav class="crumbs"><span id="crumbs"></span><button id="new-idea">＋ 新建想法</button></nav>
 <div class="graph">
   <div class="graph-tools">
     <button data-zoom="out" title="缩小">−</button>
@@ -2626,30 +2681,15 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   </div>
   <div class="viewport"><div class="canvas"><pre class="mermaid">${mermaid}</pre></div></div>
 </div>
-<p class="graph-hint">滚轮缩放（以光标为中心）· 拖拽平移 · 点击节点看详情</p>
-${worklist("待人工验证", g.ideas.filter(awaitingSignature).map((i) => ({
-  id: i.id, name: i.name, note: i.verify?.manual ?? "",
-})))}
-${worklist("进行中", g.ideas.filter((i) => i.status === "doing").map((i) => {
-  const waiting = waitingOn(i).map((n) => map.get(n)!.name || n);
-  // A plain sentence, not the dash that means "no information": this says one
-  // definite thing — no other idea is in the way. It does NOT say somebody is
-  // working on it. Two of this repo's three in-progress ideas wait on nothing
-  // and are both sitting on an unsigned manual check.
-  return { id: i.id, name: i.name, note: waiting.length ? `在等 ${waiting.join("、")}` : "没有前置挡着它" };
-}))}
-<h2>想法详情 <button id="new-idea">＋ 新建想法</button></h2>
-<p class="legend">卡片按依赖顺序排列 —— 每张都在它全部前置之后，不是文件里的书写顺序。</p>
+<p class="graph-hint">滚轮缩放（以光标为中心）· 拖拽平移 · 点击节点进入它的页面</p>
 <div id="offline-note" hidden>图暂时不可用（离线，画图要联网取一个第三方库）—— 编辑与提交照常。</div>
-<div id="cards">
+<div id="pages">
 ${
-  // I-061: the cards are the one place a reader goes through in order, so they
-  // come out in dependency order (topoOrder, I-060). Only the cards: the
-  // diagram's node order and the JSON model below keep the written order —
-  // the diagram's layout depends on declaration order, and the page re-derives
-  // the diagram from the model, so sorting either would make the picture jump
-  // on the first structural edit. Anchors are by id, so sorting costs nothing.
-  topoOrder(g).map(card).join("\n")}
+  // One section per page, every idea's card exactly once (on its own page).
+  // Siblings are in dependency order (topoOrder, I-060/I-061); the JSON model
+  // below keeps the written order — the diagram's layout depends on
+  // declaration order, and the page re-derives the diagram from the model.
+  [page(null), ...g.ideas.map(page)].join("\n")}
 </div>
 <!-- The same text the engine ran to draw the diagram above. A classic script,
      so it defines one global both module scripts below can reach. -->
@@ -2705,6 +2745,10 @@ ${
     if (box) box.classList.toggle("dirty", dirty);
     const card = document.getElementById(id);
     if (card) card.classList.toggle("dirty", touched(id));
+    if (f === "name") {                            // the row on the parent's page follows the name
+      const row = document.querySelector('[data-brief="' + id + '"] .bname');
+      if (row) row.textContent = value;
+    }
     if (typeof markIncomplete === "function") markIncomplete(id);
     refresh();
     writeDraft();
@@ -2846,10 +2890,55 @@ ${
     }
     for (const o of ledger.ops()) {
       if (o.op !== "add") continue;
-      out.push({ id: o.tmp, name: nameOf(o.tmp), status: "todo", needs: ledger.needsOf(o.tmp) });
+      out.push({ id: o.tmp, name: nameOf(o.tmp), status: "todo", needs: ledger.needsOf(o.tmp),
+        parent: effectiveField(o.tmp, "parent") });
     }
     return { version: DATA.version, endpoints: DATA.endpoints, ideas: out };
   }
+
+  // ── pages ─────────────────────────────────────────────────────────────────
+  // One page per idea, addressed by the hash. The page whose id the hash names
+  // is shown; every other section stays hidden. The diagram is shared and
+  // redrawn with the current page's children — a parent nobody has counts as
+  // top level here, the same rule the engine's render used.
+  const currentOwner = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    return id && document.getElementById("page-" + id) ? id : "";
+  };
+  function pageGraph(g) {
+    const owner = currentOwner();
+    const present = new Set(g.ideas.map((i) => i.id));
+    const key = (i) => (i.parent && present.has(i.parent) ? i.parent : "");
+    return { version: g.version, endpoints: g.endpoints, ideas: g.ideas.filter((i) => key(i) === owner) };
+  }
+  function ancestors(id) {
+    const out = [];
+    const seen = new Set();
+    for (let cur = id; cur && !seen.has(cur); cur = effectiveField(cur, "parent")) { seen.add(cur); out.unshift(cur); }
+    return out;
+  }
+  function showPage() {
+    const owner = currentOwner();
+    for (const p of document.querySelectorAll(".page")) p.hidden = p.id !== "page-" + (owner || "root");
+    const crumbs = document.getElementById("crumbs");
+    crumbs.replaceChildren();
+    const home = document.createElement("a");
+    home.href = "#"; home.textContent = DATA.project || "想法图";
+    crumbs.append(home);
+    for (const id of ancestors(owner)) {
+      crumbs.append(" › ");
+      const a = document.createElement("a");
+      a.href = "#" + id; a.textContent = nameOf(id);
+      if (id === owner) a.className = "here";
+      crumbs.append(a);
+    }
+    // A page with no children has nothing to draw: hide the empty diagram box.
+    const empty = pageGraph(snapshot()).ideas.length === 0;
+    for (const el of document.querySelectorAll(".graph, .graph-hint")) el.hidden = empty;
+    if (!empty && typeof window.redrawGraph === "function") window.redrawGraph(window.currentMermaidSource(), true);
+    try { window.scrollTo(0, 0); } catch (e) { /* not every host scrolls */ }
+  }
+  window.addEventListener("hashchange", showPage);
 
   // The diagram module may never arrive (it loads from a CDN). Empty its source
   // out of the page right now: an undrawn block shows the raw flowchart text as
@@ -2858,7 +2947,7 @@ ${
   if (pre) pre.textContent = "";
   const offline = document.getElementById("offline-note");
 
-  window.currentMermaidSource = () => buildMermaidSource(snapshot());
+  window.currentMermaidSource = () => buildMermaidSource(pageGraph(snapshot()));
   window.graphReady = () => { if (offline) offline.hidden = true; };
 
   function redraw() {
@@ -3101,7 +3190,9 @@ ${
   if (submitBtn) submitBtn.addEventListener("click", () => { submitChanges(); });
 
   document.getElementById("new-idea").addEventListener("click", () => {
-    const tmp = ledger.addIdea({ name: "", what: "", why: "", expected: "" });
+    // Born under the page it was made on: parent is the current page's idea.
+    const owner = currentOwner();
+    const tmp = ledger.addIdea({ name: "", what: "", why: "", expected: "", parent: owner });
     const proto = document.querySelector(".idea");
     const el = proto.cloneNode(true);
     el.id = tmp;
@@ -3120,12 +3211,31 @@ ${
     // 以后再加只读格也不会漏。
     for (const n of el.querySelectorAll("dd:not([data-f])")) n.textContent = "—";
     for (const n of el.querySelectorAll(".log, .badge.end")) n.remove();
-    document.getElementById("cards").append(el);
+    const parentBox = el.querySelector('[data-field="parent"]');
+    if (parentBox) parentBox.value = owner;
+    // Its own page, and a row on the page it was made from — then go there.
+    const sec = document.createElement("section");
+    sec.className = "page"; sec.id = "page-" + tmp; sec.hidden = true;
+    sec.append(el);
+    document.getElementById("pages").append(sec);
+    const list = document.querySelector("#page-" + (owner || "root") + " .children");
+    if (list) {
+      const row = document.createElement("a");
+      row.className = "brief todo"; row.href = "#" + tmp; row.setAttribute("data-brief", tmp);
+      const bname = document.createElement("span");
+      bname.className = "bname"; bname.textContent = "（新想法）";
+      const enter = document.createElement("span");
+      enter.className = "enter"; enter.textContent = "进入 →";
+      row.append(bname, enter);
+      list.append(row);
+    }
     markIncomplete(tmp);
     afterStructure(tmp);
+    location.hash = tmp;
   });
 
   refresh();
+  showPage();
 </script>
 <script type="module">
   // ── the diagram ───────────────────────────────────────────────────────────
@@ -3237,15 +3347,9 @@ ${
     });
   });
 
-  function gotoNode(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
-  }
-  window.nodeClick = gotoNode;
-  document.querySelectorAll("[data-goto]").forEach((a) =>
-    a.addEventListener("click", (e) => { e.preventDefault(); gotoNode(a.getAttribute("data-goto")); }));
+  // A node is a page: clicking it goes there. Every in-page link is a plain
+  // href="#id" for the same reason, so the hash handler above does the rest.
+  window.nodeClick = (id) => { location.hash = id; };
 
   /** Draw one source. mermaid stamps what it has processed, so replace the node. */
   async function draw(src) {
@@ -3263,7 +3367,9 @@ ${
   // The one bridge to the editing module above — the same trick as nodeClick.
   // It keeps the human's zoom and pan, because a redraw on every edit that
   // snapped back to the whole graph would make editing unusable.
-  window.redrawGraph = (src) => { draw(src).then(() => apply()); };
+  // refit is for a page change: a new subgraph under the old pan would sit
+  // off-screen, whereas an edit on the same page must keep the human's view.
+  window.redrawGraph = (src, refit) => { draw(src).then(() => (refit ? fit() : apply())); };
   window.graphReady();
   new ResizeObserver(() => { if (k === 1 && tx === 0 && ty === 0) fit(); }).observe(viewport);
 </script></body></html>`;

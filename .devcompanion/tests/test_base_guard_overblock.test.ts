@@ -203,7 +203,7 @@ ideas:
     const v = decide(shell("node checker.cjs"), dir);
     expect(v.allow).toBe(false);
     expect(v.reason, "理由里得有那个想法的编号").toMatch(/I-001/);
-    expect(v.reason, "理由里得说清缺的是方案批准").toMatch(/request-approval --gate plan/);
+    expect(v.reason, "理由里得说清缺的是方案批准").toMatch(/request-approval --node/);
     expect(v.reason).toMatch(/D7/);
   });
 });
