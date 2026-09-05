@@ -69,16 +69,12 @@ export interface CodeRef { file: string; symbol?: string; lines?: string }
 export interface Verify { command?: string; test_files?: string[]; pass?: string; manual?: string; signed_off?: string | null }
 export interface LogEntry { date: string; by?: string; note: string }
 
-// I-085: one entry of the step overview (FORMAT.md, "The step overview") —
-// `name` is the short word ideas claim with `step`, `blurb` the one sentence.
-export interface Step { name: string; blurb?: string }
-
 export interface Idea {
   id: string;
   name: string;
   status?: Status;
   needs?: string[];
-  step?: string;                  // which step of the overview this idea belongs to
+  parent?: string;                // the idea this one sits under; absent = top level (FORMAT.md, "The tree")
   what?: string; why?: string; expected?: string; how?: string; why_this_way?: string;
   code?: CodeRef[];
   verify?: Verify;
@@ -92,13 +88,12 @@ export interface Graph {
   overview?: string;
   endpoints?: string[];
   next_id?: number;
-  steps?: Step[];                 // the step overview; optional, ordered
   ideas: Idea[];
 }
 
 /** How many ideas a group holds, how many are finished, and how many sit in
- *  each status — ONE count for the legend and the step overview, so the two
- *  numbers on the page can never disagree (I-085). */
+ *  each status — ONE count for every legend on the page, so no two numbers
+ *  can disagree (I-085). */
 export function tally(ideas: Idea[]): { total: number; done: number; by: Record<Status, number> } {
   const by: Record<Status, number> = { todo: 0, doing: 0, done: 0, blocked: 0 };
   for (const i of ideas) by[(i.status ?? "todo") as Status] = (by[(i.status ?? "todo") as Status] ?? 0) + 1;
@@ -692,34 +687,34 @@ export function check(g: Graph, projectDir: string, file?: string): CheckResult 
     }
   }
 
-  // I-085: the step overview, in two tiers on purpose. A step nobody declared
-  // is a certain typo that makes the page under-count — an error. Everything
-  // else is a warning: "not assigned yet" is the normal state of every graph
-  // that predates the field, and turning those red would bill other people's
-  // repositories for our new field. A graph with no `steps` at all is not
-  // nagged — the rule is for those who want it, not a fine for those who don't.
-  const steps = g.steps ?? [];
-  const stepName = (s: string | undefined) => String(s ?? "").trim();
-  const declared = new Set(steps.map((s) => stepName(s?.name)));
-  for (const [n, s] of steps.entries()) {
-    if (!stepName(s?.name)) errors.push(`\`steps\` 第 ${n + 1} 步没有名字（\`name\`）`);
-  }
+  // The tree (FORMAT.md, "The tree"): `parent` is containment, not order.
+  // A dangling parent or a parent cycle breaks the page — errors. Too many at
+  // one level is only unreadable — warnings. Nothing nags a flat graph.
+  const parentOf = new Map(g.ideas.map((i) => [i.id, String(i.parent ?? "").trim()]));
+  const childCount = new Map<string, number>();
+  const inReportedCycle = new Set<string>();
+  let roots = 0;
   for (const idea of g.ideas) {
-    const step = stepName(idea.step);
-    if (step && !declared.has(step)) {
-      errors.push(`${idea.id || "(missing id)"}: step「${step}」不在 \`steps\` 里 —— 归到了一个不存在的步骤，页面上的分步计数会凭空少它一个`);
+    const at = idea.id || "(missing id)";
+    const parent = parentOf.get(idea.id) ?? "";
+    if (!parent) { roots += 1; continue; }
+    if (!parentOf.has(parent)) { errors.push(`${at}: parent「${parent}」不是图里的想法`); continue; }
+    childCount.set(parent, (childCount.get(parent) ?? 0) + 1);
+    if (inReportedCycle.has(idea.id)) continue;         // one report per cycle, like findCycle
+    const path = [idea.id];
+    for (let up = parent; up && parentOf.has(up); up = parentOf.get(up) ?? "") {
+      path.push(up);
+      if (up === idea.id) {
+        errors.push(`parent 成环：${path.join(" → ")} —— 一个想法不能是自己的祖先`);
+        for (const id of path) inReportedCycle.add(id);
+        break;
+      }
+      if (path.length > g.ideas.length) break;   // a cycle that does not pass through us — reported from inside it
     }
   }
-  if (steps.length > 0) {
-    if (steps.length < 3 || steps.length > 7) {
-      warnings.push(`\`steps\` 有 ${steps.length} 步 —— 概览该是三到七步：少于三步不需要概览，多于七步是目录、人一眼扫不完`);
-    }
-    for (const idea of g.ideas) {
-      if (!stepName(idea.step)) warnings.push(`${idea.id || "(missing id)"}: 没有归到任何一步（\`step\`）—— 页面上的分步计数会少算它`);
-    }
-    for (const name of declared) {
-      if (name && !g.ideas.some((i) => stepName(i.step) === name)) warnings.push(`步骤「${name}」一个想法都没有`);
-    }
+  if (roots > 7) warnings.push(`顶层有 ${roots} 个想法 —— 最多七个，人一眼扫不完；同类的归到一个父想法下`);
+  for (const [pid, n] of childCount) {
+    if (n > 7) warnings.push(`${pid}: 直接子想法 ${n} 个 —— 最多七个，再分一层`);
   }
 
   const cycle = findCycle(g);
@@ -865,34 +860,78 @@ export function addIdea(doc: Document, graph: Graph, name: string, needs: string
 // every use — never cached. Honest boundary (D26): this is a behavioural
 // guardrail, not cryptography; hook trust, git and CI carry the real security.
 
-export type Gate = "decomposition" | "plan" | "red-waiver" | "manual-check";
+export type Gate = "plan" | "red-waiver" | "manual-check";
 
 const sha256 = (text: string) =>
   createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
 
+/** One projected idea: exactly what the human is asked to approve, and exactly
+ *  what the digest covers — this idea's own review content and nothing else.
+ *  `code` stops at file+symbol and `verify` leaves out `signed_off`: line
+ *  numbers are written back by ccbuild after implementing and the signature by
+ *  the manual-check reply, so neither is something a reviewer approves, and
+ *  putting them in the digest made every finished implementation void its own
+ *  approval. Status, log and every other idea are outside it on purpose (D7). */
+export interface ApprovalEntry {
+  id: string; name: string; parent: string; needs: string[];
+  what: string; why: string; expected: string;
+  how: string; why_this_way: string; future: string;
+  code: { file: string; symbol: string }[];
+  verify: { command: string; test_files: string[]; pass: string; manual: string };
+}
+
 /**
- * What the human is deemed to have reviewed, per gate (D7):
- * decomposition — the whole graph's names, edges and first three questions;
- * plan/red-waiver/manual-check — the named nodes' full eight-question plan.
+ * The content a human is asked to approve, one entry per named idea. Handing
+ * the projection out (rather than hashing a local and throwing it away) means
+ * the printed text and the hashed text are one value, not two paths that
+ * drift (I-102).
+ *
+ * **The object literal below is load-bearing byte for byte.** The digest is
+ * `sha256(JSON.stringify(...))`, so key ORDER is part of it: tidying the field
+ * order here silently voids every receipt on disk — this repo's and those of
+ * every repo that installed the base.
  */
-export function approvalSnapshot(graph: Graph, gate: Gate, nodeIds?: string[]): string {
+export function approvalProjection(graph: Graph, nodeIds: string[]): ApprovalEntry[] {
   const map = byId(graph);
-  const three = (i: Idea) => ({
-    id: i.id, name: i.name, needs: i.needs ?? [],
-    what: i.what ?? "", why: i.why ?? "", expected: i.expected ?? "",
+  return nodeIds.map((id) => {
+    const i = map.get(id);
+    if (!i) throw new Error(`no idea with id ${id}`);
+    const v = i.verify ?? {};
+    return {
+      id: i.id, name: i.name, parent: i.parent ?? "", needs: i.needs ?? [],
+      what: i.what ?? "", why: i.why ?? "", expected: i.expected ?? "",
+      how: i.how ?? "", why_this_way: i.why_this_way ?? "", future: i.future ?? "",
+      code: (i.code ?? []).map((c) => ({ file: c.file, symbol: c.symbol ?? "" })),
+      verify: { command: v.command ?? "", test_files: v.test_files ?? [], pass: v.pass ?? "", manual: v.manual ?? "" },
+    };
   });
-  const projection = gate === "decomposition"
-    ? graph.ideas.map(three)
-    : (nodeIds ?? []).map((id) => {
-        const i = map.get(id);
-        if (!i) throw new Error(`no idea with id ${id}`);
-        return {
-          ...three(i),
-          how: i.how ?? "", why_this_way: i.why_this_way ?? "", future: i.future ?? "",
-          code: i.code ?? [], verify: i.verify ?? {},
-        };
-      });
-  return sha256(JSON.stringify(projection)).slice(0, 12);
+}
+
+/** The twelve-hex digest of ONE idea's review content. Each idea stands alone:
+ *  a receipt for I-101 says nothing about I-102, and editing I-102 cannot
+ *  touch I-101's approval (D7). */
+export function approvalSnapshot(graph: Graph, nodeId: string): string {
+  return sha256(JSON.stringify(approvalProjection(graph, [nodeId])[0])).slice(0, 12);
+}
+
+/**
+ * The projection as text for a person to read before answering a challenge.
+ * It takes the PROJECTION, never the graph — so it cannot print a field the
+ * digest does not cover, and the guarantee is a type rather than a discipline.
+ * That matters: the cheap wrong implementation here is to re-run `show`, which
+ * would add status, resolved prerequisites and the log — three things nobody
+ * hashed, printed as if they were part of what was approved (I-102).
+ */
+export function approvalLines(entries: ApprovalEntry[]): string[] {
+  const out: string[] = [];
+  for (const e of entries) {
+    out.push(`${e.id}  ${e.name}`);
+    out.push(`父想法  ${e.parent || "—（顶层）"}`);
+    out.push(`前置想法  ${e.needs.length ? e.needs.join(", ") : "—"}`);
+    for (const block of questionLines(e)) out.push(`\n${block}`);
+    out.push("");
+  }
+  return out;
 }
 
 const pendingDir = (projectDir: string) => join(paths(projectDir).runtime, "pending");
@@ -900,26 +939,28 @@ const approvalsDir = (projectDir: string) => join(paths(projectDir).runtime, "ap
 
 export interface Challenge { challenge: string; gate: Gate; file: string }
 
+/** One challenge may name several ideas — one reply, one receipt, but a digest
+ *  PER idea inside it, so each idea's approval lives and dies on its own
+ *  content. The receipt is `{ v: 2, snapshots: { "I-101": "…", … } }`; the v1
+ *  shape (`node_ids` + one `snapshot`) is no longer read anywhere. */
 export function requestApproval(
-  projectDir: string, graph: Graph, gate: Gate, nodeIds?: string[],
+  projectDir: string, graph: Graph, gate: Gate, nodeIds: string[],
   meta: { by?: string; date?: string } = {},
 ): Challenge {
-  if (gate !== "decomposition" && !(nodeIds?.length)) {
-    throw new Error(`${gate} 关卡必须点名想法（nodeIds）`);
-  }
+  if (!nodeIds.length) throw new Error(`${gate} 关卡必须点名想法（nodeIds）`);
   if (gate === "manual-check") {
-    for (const id of nodeIds!) {
+    for (const id of nodeIds) {
       const idea = byId(graph).get(id);
       if (!idea?.verify?.manual) throw new Error(`${id} 的验证不是人工检查（manual）——manual-check 关卡只签人工验收`);
       if (idea.verify.signed_off) throw new Error(`${id} 已经有人签过字了，不能覆盖`);
     }
   }
-  const snapshot = approvalSnapshot(graph, gate, nodeIds);
+  const snapshots = Object.fromEntries(nodeIds.map((id) => [id, approvalSnapshot(graph, id)]));
   const challenge = `CC-${randomBytes(4).toString("hex").toUpperCase()}`;
   const file = join(pendingDir(projectDir), `${challenge}.json`);
   mkdirSync(pendingDir(projectDir), { recursive: true });
   atomicWrite(file, JSON.stringify({
-    v: 1, challenge, gate, node_ids: nodeIds ?? null, snapshot,
+    v: 2, challenge, gate, snapshots,
     requested_at: meta.date ?? "", by: meta.by ?? "",
   }, null, 2));
   return { challenge, gate, file };
@@ -947,12 +988,15 @@ export function applyApproval(
   if (!existsSync(file)) return { ok: false, reason: `口令 ${challenge} 不存在或已用过 —— 重新 request-approval` };
 
   const pending = JSON.parse(readFileSync(file, "utf8")) as
-    { gate: Gate; node_ids?: string[] | null; snapshot: string; by?: string };
+    { gate: Gate; snapshots?: Record<string, string>; by?: string };
   const { graph } = load(graphPath(projectDir));
-  let current: string;
-  try { current = approvalSnapshot(graph, pending.gate, pending.node_ids ?? undefined); }
-  catch { current = "<node-gone>"; }
-  if (current !== pending.snapshot) {
+  const ids = Object.keys(pending.snapshots ?? {});
+  const drifted = ids.some((id) => {
+    let current: string;
+    try { current = approvalSnapshot(graph, id); } catch { current = "<node-gone>"; }
+    return current !== pending.snapshots![id];
+  });
+  if (ids.length === 0 || drifted) {
     rmFileQuietly(file);   // self-destruct on drift: a stale challenge must not linger answerable
     return { ok: false, reason: "被批的内容在请求之后被改过了，口令作废 —— 重新 request-approval" };
   }
@@ -969,7 +1013,7 @@ export function applyApproval(
   // signature digest back into the graph, traceable to the one-time reply.
   if (decision === "approved" && pending.gate === "manual-check") {
     const { doc, graph: g } = load(graphPath(projectDir));
-    for (const id of pending.node_ids ?? []) {
+    for (const id of ids) {
       const index = g.ideas.findIndex((i) => i.id === id);
       if (index < 0) continue;
       doc.setIn(["ideas", index, "verify", "signed_off"],
@@ -984,18 +1028,18 @@ function rmFileQuietly(file: string): void {
   try { unlinkSync(file); } catch { /* already gone is fine */ }
 }
 
-/** Is there a receipt for exactly this content, right now? Re-derived, never cached. */
-export function validApproval(projectDir: string, graph: Graph, gate: Gate, nodeIds?: string[]): boolean {
+/** Is there a receipt for exactly this idea's current content? Re-derived on
+ *  every call, never cached, and never expired by time or session: the only
+ *  thing that retires an approval is a change to what was approved (D7). */
+export function validApproval(projectDir: string, graph: Graph, gate: Gate, nodeId: string): boolean {
   const dirPath = approvalsDir(projectDir);
   if (!existsSync(dirPath)) return false;
   let want: string;
-  try { want = approvalSnapshot(graph, gate, nodeIds); } catch { return false; }
-  const sameIds = (a?: string[] | null, b?: string[] | null) =>
-    JSON.stringify([...(a ?? [])].sort()) === JSON.stringify([...(b ?? [])].sort());
+  try { want = approvalSnapshot(graph, nodeId); } catch { return false; }
   for (const name of readdirSync(dirPath)) {
     try {
       const r = JSON.parse(readFileSync(join(dirPath, name), "utf8"));
-      if (r.decision === "approved" && r.gate === gate && r.snapshot === want && sameIds(r.node_ids, nodeIds)) return true;
+      if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
     } catch { /* an unreadable receipt proves nothing */ }
   }
   return false;
@@ -1148,7 +1192,7 @@ export function redGateReady(projectDir: string, graph: Graph, id: string): Gate
   // 这一条必须留在 red-waiver 分支之上够得着的位置。
   const declared = idea.verify.test_files ?? [];
   if (presentTests(projectDir, idea).length === 0) {
-    if (validApproval(projectDir, graph, "red-waiver", [id])) {
+    if (validApproval(projectDir, graph, "red-waiver", id)) {
       return { ready: true, reason: "没有可失败的测试文件 + 人批的豁免" };
     }
     const gap = declared.length === 0
@@ -1160,7 +1204,7 @@ export function redGateReady(projectDir: string, graph: Graph, id: string): Gate
     };
   }
   if (evidence.red.outcome === "unexpected_pass") {
-    return validApproval(projectDir, graph, "red-waiver", [id])
+    return validApproval(projectDir, graph, "red-waiver", id)
       ? { ready: true, reason: "unexpected_pass + 人批的豁免" }
       : { ready: false, reason: `测试意外先绿（unexpected_pass）—— 需要人批一次 red-waiver（request-approval --gate red-waiver --node ${id}）` };
   }
@@ -1216,7 +1260,7 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
   const doing = graph.ideas.filter((i) => i.status === "doing" && !isBuildReady(i));
   const needsPlan = (idea: Idea) => ({
     allow: false,
-    reason: `${idea.id}「${idea.name}」的计划还没有当前有效的人工批准 —— request-approval --gate plan --node ${idea.id}，请人看过后整条消息回复口令（D7）。`,
+    reason: `${idea.id}「${idea.name}」的计划还没有当前有效的人工批准 —— request-approval --node ${idea.id}，请人看过后整条消息回复口令（D7）。`,
   });
 
   // D8: the failing test IS the legal first move, so this branch asks for no
@@ -1230,13 +1274,13 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
   // requires a plan approval before an idea can reach `doing` at all.
   const testOwner = doing.find((i) => (i.verify?.test_files ?? []).some((f) => sameFile(f, rel)));
   if (testOwner) {
-    if (!validApproval(projectDir, graph, "plan", [testOwner.id])) return needsPlan(testOwner);
+    if (!validApproval(projectDir, graph, "plan", testOwner.id)) return needsPlan(testOwner);
     return { allow: true, reason: `${testOwner.id} 的测试文件 —— 先写会失败的测试正是第一步` };
   }
 
   const codeOwner = doing.find((i) => (i.code ?? []).some((c) => c.file && sameFile(c.file, rel)));
   if (codeOwner) {
-    if (!validApproval(projectDir, graph, "plan", [codeOwner.id])) return needsPlan(codeOwner);
+    if (!validApproval(projectDir, graph, "plan", codeOwner.id)) return needsPlan(codeOwner);
     const gate = redGateReady(projectDir, graph, codeOwner.id);
     if (!gate.ready) return { allow: false, reason: `测试先行（D8）：${gate.reason}` };
     return { allow: true, reason: `${codeOwner.id} 认领了它，批准与失败记录俱在` };
@@ -1297,10 +1341,10 @@ function verifyCommandRefusal(projectDir: string, graph: Graph, idea: Idea, comm
   // D7: the plan snapshot covers `verify`, so editing the command destroys the
   // approval — that self-destruct is the whole reason a graph-written command
   // can be trusted enough to execute at all.
-  if (!validApproval(projectDir, graph, "plan", [idea.id])) {
+  if (!validApproval(projectDir, graph, "plan", idea.id)) {
     return `${idea.id}「${idea.name}」的计划没有当前有效的人工批准，不跑它的 verify.command（D7）——`
       + `命令是图里的散文，没人过目就等于让 agent 自己写一条命令再自己执行。`
-      + `先 \`request-approval --gate plan --node ${idea.id}\`，请人回一句「批准 CC-…」；改过 how/code/verify 之后批准会作废，要重新请。`;
+      + `先 \`request-approval --node ${idea.id}\`，请人回一句「批准 CC-…」；改过 how/code/verify 之后批准会作废，要重新请。`;
   }
   return null;
 }
@@ -1646,19 +1690,14 @@ export function setStatus(
     if (unmet) throw new Error(`${id}: cannot be doing — ${unmet}`);
     const clash = fileClash(idea, graph);
     if (clash) throw new Error(`${id}: cannot be doing — ${clash}`);
-    // D17: both of D7's regular stop points must be valid AT the transition —
-    // decomposition (a human saw the split) and plan (a human saw this node's
-    // eight answers). Receipts live under the project dir, so a caller without
-    // one keeps the three checks above and nothing more (pure unit use).
-    // The gate is on ENTERING doing, not on `from`: todo → blocked → doing is
-    // in the transition table, and an approval a detour walks around is none.
-    if (projectDir) {
-      if (!validApproval(projectDir, graph, "decomposition")) {
-        throw new Error(`${id}: cannot be doing — 拆分还没有当前有效的人工批准 —— request-approval --gate decomposition，请人看过整张图的名称、边和前三问，再整条消息回复口令（D7/D17）`);
-      }
-      if (!validApproval(projectDir, graph, "plan", [id])) {
-        throw new Error(`${id}: cannot be doing — 计划还没有当前有效的人工批准 —— request-approval --gate plan --node ${id}，请人看过这个想法的八问，再整条消息回复口令（D7/D17）`);
-      }
+    // D17: D7's one regular stop point must be valid AT the transition — a
+    // human saw THIS idea's eight answers. Receipts live under the project dir,
+    // so a caller without one keeps the three checks above and nothing more
+    // (pure unit use). The gate is on ENTERING doing, not on `from`: todo →
+    // blocked → doing is in the transition table, and an approval a detour
+    // walks around is none.
+    if (projectDir && !validApproval(projectDir, graph, "plan", id)) {
+      throw new Error(`${id}: cannot be doing — 计划还没有当前有效的人工批准 —— request-approval --node ${id}，请人看过这个想法的八问，再整条消息回复口令（D7/D17）`);
     }
   }
   if (status === "done") {
@@ -1711,20 +1750,20 @@ const BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
 
 /** What a new idea may bring with it. Everything else is stripped — a change
  *  file must not be able to conjure a `done` idea with a forged signature. */
-const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
+const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
 
 /** What a `set` may reach: the name plus the six prose answers the browser puts
  *  in a text box. D24 — `status`, `verify` (and with it `signed_off`), `code`
  *  and `log` are lifecycle, and lifecycle only moves through the CLI. Without
  *  this list a `set` on `status` is a `done` with no gate at all: it writes a
  *  folded scalar that reads back as a perfectly valid status. */
-const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "step"];
+const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
 
-/** `step` is a name, not prose: it is compared by exact value against
- *  `steps[].name`, so it is stored as one plain line — a folded block would
- *  read back with a trailing newline and match nothing (I-085). */
+/** `parent` is an id, not prose: it is compared by exact value against other
+ *  ideas' ids, so it is stored as one plain line — a folded block would read
+ *  back with a trailing newline and match nothing. */
 const fieldNode = (doc: Document, field: string, value: unknown) =>
-  field === "step" ? String(value ?? "").trim() : proseNode(doc, value);
+  field === "parent" ? String(value ?? "").trim() : proseNode(doc, value);
 
 const idNumber = (id: string) => {
   const m = /^I-(\d+)$/.exec(String(id));
@@ -2045,6 +2084,53 @@ const askedAs = (n: number) => QUESTIONS[n - 1].label;
 /** The six prose answers a person can retype in the browser — straight off the
  *  one list above, never a second hand-kept copy of the same words. */
 const PROSE = QUESTIONS.filter((q) => q.prose) as readonly { key: string; label: string }[];
+
+/** Question 6 as one line. Deliberately NOT shared with the card's `codeOf`:
+ *  that one separates with a middle dot and a line break and says 尚未实现 when
+ *  empty, this one uses parentheses, commas and an em dash. Merging them is a
+ *  visible product change and does not belong inside I-102. */
+export function codeText(code?: CodeRef[]): string {
+  return (code ?? [])
+    .map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`)
+    .join(", ");
+}
+
+/**
+ * Question 7, all five fields. Before I-102 no surface printed them all:
+ * `show` printed `command ?? manual` and nothing else, the browser card had
+ * `pass` and `signed_off` but never `test_files`. `test_files` is the one that
+ * hurt — the approval digest covers it, so editing it voids a token, and the
+ * human could not see the field that did it (D31).
+ */
+export function verifyText(v?: Verify): string {
+  if (!v) return "";
+  const bits: string[] = [];
+  if (v.command) bits.push(v.command);
+  if (v.pass) bits.push(`通过条件：${v.pass}`);
+  if (v.test_files?.length) bits.push(`测试文件：${v.test_files.join("、")}`);
+  if (v.manual) bits.push(`人工检查：${v.manual}`);
+  if (v.signed_off) bits.push(`签字：${v.signed_off}`);
+  return bits.join("\n");
+}
+
+/** The eight answers, one block each, as `show` has always laid them out:
+ *  `N 标签`, then the answer indented two spaces with its own line breaks kept.
+ *
+ *  It reads the eight keys and NOTHING else — that is the point, not an
+ *  accident. `show` hands it a whole Idea and the approval prompt hands it a
+ *  projection entry; because the parameter type admits only the eight answers,
+ *  neither caller can leak a field the approval digest does not cover (I-102).
+ */
+export function questionLines(
+  x: Partial<Pick<Idea, "what" | "why" | "expected" | "how" | "why_this_way" | "future" | "code" | "verify">>,
+): string[] {
+  return QUESTIONS.map((q) => {
+    const value = q.key === "code" ? codeText(x.code)
+      : q.key === "verify" ? verifyText(x.verify)
+        : x[q.key as "what"];
+    return `${q.n} ${q.label}\n  ${(value || "—").trim().replace(/\n/g, "\n  ")}`;
+  });
+}
 
 /**
  * `source` is the graph file's exact text and `projectDir` the repo it lives
@@ -3388,7 +3474,7 @@ export const SUBCOMMANDS: [name: string, args: string][] = [
   ["render", ""],
   ["apply", "[file]"],
   ["serve", "[--port 4173] [--no-open]"],
-  ["request-approval", "--gate decomposition|plan|red-waiver|manual-check [--node I-002[,I-003]] [--by 人名]"],
+  ["request-approval", "--node I-002 [I-003 …] [--gate plan|red-waiver|manual-check] [--by 人名]"],
   ["run-check", "<id> --phase red|green [--timeout 秒]"],
 ];
 
@@ -3552,14 +3638,10 @@ export function main(args: string[]): number {
       console.log(`${idea.id}  ${idea.name}  [${idea.status ?? "todo"}]`);
       // D11: the wording comes from QUESTIONS, the same list the card renders
       // from — this used to be a third hand-typed copy of the eight questions.
-      for (const q of QUESTIONS) {
-        const value = q.key === "code"
-          ? (idea.code ?? []).map((c) => `${c.file}${c.lines ? ":" + c.lines : ""}${c.symbol ? ` (${c.symbol})` : ""}`).join(", ")
-          : q.key === "verify"
-            ? idea.verify?.command ?? idea.verify?.manual
-            : idea[q.key];
-        console.log(`\n${q.n} ${q.label}\n  ${(value || "—").trim().replace(/\n/g, "\n  ")}`);
-      }
+      // The layout itself now lives in `questionLines`, shared with the approval
+      // prompt so the two can never drift apart (I-102); question 7 gained the
+      // three fields this branch used to drop on the floor.
+      for (const block of questionLines(idea)) console.log(`\n${block}`);
       console.log(`\n前置想法  ${(idea.needs ?? []).map((n) => `${n} (${map.get(n)?.status ?? "?"})`).join(", ") || "—"}`);
       console.log(`它是谁的前置  ${dependents(graph, idea.id).join(", ") || "—"}`);
       for (const l of idea.log ?? []) console.log(`  log ${l.date} ${l.by ?? ""} ${l.note}`);
@@ -3644,17 +3726,26 @@ export function main(args: string[]): number {
       return 0;
     }
     case "request-approval": {
-      const gate = flag(args, "gate") as Gate | undefined;
-      if (!gate || !["decomposition", "plan", "red-waiver", "manual-check"].includes(gate)) {
+      const gate = (flag(args, "gate") ?? "plan") as Gate;
+      // `--node I-101 I-102` or `--node I-101,I-102`: every id up to the next flag.
+      const at = args.indexOf("--node");
+      const nodes = at < 0 ? [] : args.slice(at + 1).join(",").split(/[,\s]+/)
+        .reduce<string[]>((acc, s) => { if (s.startsWith("--")) acc.push("--"); else if (s && !acc.includes("--")) acc.push(s); return acc; }, [])
+        .filter((s) => s !== "--");
+      if (!["plan", "red-waiver", "manual-check"].includes(gate) || nodes.length === 0) {
         console.error(usageOf("request-approval"));
         return 2;
       }
-      const nodes = (flag(args, "node") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const r = requestApproval(projectDir, graph, gate, nodes.length ? nodes : undefined,
-        { by: flag(args, "by"), date: today });
-      console.log(`一次性口令：${r.challenge}（${gate}${nodes.length ? ` · ${nodes.join(", ")}` : ""}）`);
-      console.log(`请人看过内容后，整条消息回复：批准 ${r.challenge}`);
+      const r = requestApproval(projectDir, graph, gate, nodes, { by: flag(args, "by"), date: today });
+      // The content FIRST, the token after it (I-102). Until this landed the
+      // command printed three lines and not one word of what was being
+      // approved — so "请人看过内容后" pointed at nothing, and the gate came
+      // down to trusting whatever the agent chose to retell.
+      console.log(approvalLines(approvalProjection(graph, nodes)).join("\n"));
+      console.log(`一次性口令：${r.challenge}（${gate} · ${nodes.join(", ")}）`);
+      console.log(`请人看过上面的内容后，整条消息回复：批准 ${r.challenge}`);
       console.log(`（拒绝就回：拒绝 ${r.challenge}。内容改动或口令用过一次即作废。）`);
+      console.log(`这一句只能由人在对话里亲手回，别处点什么都不算数。`);
       return 0;
     }
     case "status": {

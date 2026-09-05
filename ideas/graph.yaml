@@ -15,7 +15,7 @@ overview: >
 # 2026-08-29 /ccthink 新增 I-068「改图即改项目」；
 # 2026-08-29 /ccthink 新增 I-075「共同基座：改一处三边生效」）
 endpoints: [ I-057, I-058, I-059, I-068, I-075 ]
-next_id: 102
+next_id: 107
 
 # 分步概览（2026-09-03 I-085 按 FORMAT.md「The step overview」那一节写下；
 # 每个想法用 step 认领一步，check 会报归错步、漏归、空步和步数超出三到七）
@@ -696,7 +696,7 @@ ideas:
     step: 共同基座
     name: "终点：装进一个陌生仓库，并在那里真正跑起来"
     status: todo
-    needs: [ I-051, I-052, I-056, I-086, I-087 ]
+    needs: [ I-051, I-052, I-056, I-086, I-087, I-106 ]
     what: >
       在一个陌生仓库里装上这套工作流，五个命令和七条 hook 规则在那边真的生效、 能更新、能撤下来。
     why: >
@@ -1502,7 +1502,7 @@ ideas:
   - id: I-085
     step: 记录格式
     name: "引擎认识分步概览，并且校验它 —— 归错步当场报出来"
-    status: doing
+    status: done
     needs: [ I-041 ]
     what: >
       引擎认识顶层的步骤列表和每个想法的归属字段；校验命令检查这几件事： 归属指向一个不存在的步骤是错误；已经声明了步骤却有想法没归属、步数超出三到七、
@@ -1557,6 +1557,8 @@ ideas:
       - date: 2026-09-04
         by: ccbuild
         note: status → doing
+      - date: 2026-09-05
+        note: 引擎侧分步概览已落地并测通（7/7），本轮只补一次通过记录关掉长期挂着的 doing
 
   - id: I-086
     step: 网页编辑
@@ -1747,7 +1749,7 @@ ideas:
     step: 强制执行
     name: "人批准自己在网页上做的修改，而批准机制不被削弱"
     status: todo
-    needs: [ I-065, I-048 ]
+    needs: [ I-065, I-048, I-105 ]
     what: >
       设计并实现：改动写回之后，这张新图如何获得「人已批准」的地位 —— 同时保持既有底线：批准只能来自人亲手的动作，agent 自己造不出来。
     why: >
@@ -1822,7 +1824,7 @@ ideas:
     step: 网页编辑
     name: "终点：在网页上改一处想法，全程不碰 YAML，代码最终符合新图"
     status: todo
-    needs: [ I-064, I-066, I-067, I-080, I-081, I-083, I-084 ]
+    needs: [ I-064, I-066, I-067, I-080, I-081, I-083, I-084, I-103 ]
     what: >
       整条链路的验收：在一次真实的想法修改上，从打开图的网页，到编辑、提交、 写回、批准、agent 对齐代码、验证通过，完整走一遍。
     why: >
@@ -2872,3 +2874,329 @@ ideas:
       - date: 2026-09-03
         by: claude
         note: 空种子直接迁、非空图拒绝且说真话、坏 YAML 不当空图；ccscan 第 0 步补上「被拒 ≠ 无旧图」
+  - id: I-102
+    step: 日常命令
+    name: 请批准的时候把被批的八问全文打到终端上
+    status: done
+    needs:
+      - I-048
+    what: >
+      request-approval 打出口令之前，先把这次要批的内容全文打出来。计划、测试豁免、人工验收三道关卡
+      打被点名想法的八问加代码位置加验证方式；拆分关卡打全图每个想法的名称、前置和前三问。 内容不另外攒一份，而是从 approvalSnapshot
+      那份投影里取 —— 它今天算完哈希就把内容扔了， 改成先交出投影再哈希，让「印出来的」和「被哈希的」在代码上就是同一份。
+      顺带把终端今天漏掉的三栏补上：verify.pass、verify.test_files、verify.signed_off。 （step
+      不进被批内容 —— 它今天不在投影里，加它会让现有回执全部作废，另找时机。）
+    why: >
+      今天这条命令只打三行，被批的内容一个字都没有（companion/ideas.ts:3655-3657）。 人只能开网页去看，或者信 agent
+      在对话里的复述 —— 而 agent 复述什么、复述多少、 有没有粉饰，没有任何东西管得着。这道人工关卡因此是盲批：口令只证明「有人回了一句话」，
+      不证明「这个人看过要批的东西」。讽刺的是引擎自己在两条拒绝语里明写了人该看什么
+      （companion/ideas.ts:1657「请人看过整张图的名称、边和前三问」、:1660「请人看过这个想法的八问」），
+      却从来没有把那些东西送到人眼前。
+    expected: >
+      跑 request-approval --gate plan --node I-104，终端上先出现 I-104 的八问全文、
+      代码位置和验证方式，然后才是口令。跑 --gate decomposition，先出现全图每个想法的名称、
+      前置和前三问，然后才是口令。人不开网页、不问 agent，就能判断该不该批。 改一个字再跑一次，打出来的内容跟着变，口令也跟着换。
+    how: >
+      四步。一，把 approvalSnapshot（companion/ideas.ts:878-896）切成两个：
+      approvalProjection(graph, gate, nodeIds) 交出投影数组，approvalSnapshot 变成
+      sha256(JSON.stringify(approvalProjection(...))).slice(0,12)。对象字面量逐字搬、键序一个不动
+      —— 键序即摘要，顺手整理一下顺序就作废现有全部回执。三个调用点（:917 requestApproval、 :953
+      applyApproval、:992 validApproval）一行不改。 二，把 show 里那段八问循环（:3555-3561）抽成
+      questionLines(idea)，只出八问主体， 不带状态、不带前置、不带修改记录 —— 那三样不在投影里，混进去就等于把没被哈希的东西
+      印成「被批的内容」。show 改用它。 三，新写一个 verifyText(v)
+      覆盖五个字段（command、pass、test_files、manual、signed_off）： 这五个今天没有任何一处凑齐过，show
+      只打前两个里的一个，网页卡片缺 test_files。 questionLines 的第 7 问用它。 四，request-approval
+      的分支（:3646-3658）先调 approvalProjection，逐条打印，再打口令三行，
+      末尾补一句边界：这一句只能你在对话里回，别处点什么都不算。 **打印器只吃投影、不吃图** ——
+      用类型把「印出来的」和「被哈希的」焊死，而不是靠纪律。
+    why_this_way: >
+      为什么切 approvalSnapshot 而不是另写一个取内容的函数：另写一个就有两条平行路径， 人看到的和被哈希的从此各自演化 ——
+      而这个想法要修的恰恰就是这种脱节。 为什么不用 sessionBriefing（companion/guard.ts:1773-1781）那套劫持
+      console.log 跑 main(["show"]) 的省事办法：它会把状态、带状态的前置和修改记录一起印出来，三样都不在投影里， 等于把要修的
+      bug 换个方向重犯；而且 show 找不到编号时走 console.error（:3550）， 只劫持 log 收不到。 为什么不用
+      MERMAID_SOURCE_FN 那种字符串源码加 new Function：那手法是为「同一份代码在 Node
+      和浏览器两个运行时跑」准备的，这里两处都是同一个 main 的两个分支、同一个进程，白丢类型检查。 为什么不把命令行和网页那两份第 6
+      问的格式化合并：codeOf（:2293-2294）用「· 符号」加换行标签
+      加「尚未实现」，命令行用「(符号)」加逗号加「—」，分隔符、连接符、空态三处都不同 —— 合并是一次看得见的产品改动，不该搭在这个想法里顺手做掉。
+      为什么不加新子命令：加命令要连改 FORMAT.md 的 D28 三处、两个测试文件，还要把「十七条」
+      改成「十八条」；而人要的是「请批准的时候看得见」，不是「多一条命令可以看」。 为什么 step 不进投影：它会改 JSON.stringify
+      的输出，现有仍然有效的回执全部作废， 本仓任何 todo→doing 当场被 :1657/:1660 挡住，另外六个已安装仓库更新后同样要重批。
+      这笔账要单独还，不搭车。
+    code:
+      - file: companion/ideas.ts
+        symbol: approvalProjection
+        lines: "901-919"
+      - file: companion/ideas.ts
+        symbol: approvalSnapshot
+        lines: "920-922"
+      - file: companion/ideas.ts
+        symbol: approvalLines
+        lines: "932-943"
+      - file: companion/ideas.ts
+        symbol: codeText
+        lines: "2100-2105"
+      - file: companion/ideas.ts
+        symbol: verifyText
+        lines: "2113-2123"
+      - file: companion/ideas.ts
+        symbol: questionLines
+        lines: "2133-2145"
+      - file: companion/ideas.ts
+        symbol: main (case show)
+        lines: "3644-3659"
+      - file: companion/ideas.ts
+        symbol: main (case request-approval)
+        lines: "3738-3757"
+      - file: .devcompanion/tests/test_base_approval.test.ts
+        lines: "168-263"
+    verify:
+      command: "npx vitest run --dir .devcompanion/tests test_base_approval"
+      test_files: [ .devcompanion/tests/test_base_approval.test.ts ]
+      pass: "exit 0"
+    future: >
+      以后任何「要人过目才能继续」的关卡，内容都从同一份投影里出，不必再各写一份复述； 新增一个关卡时，「人看得见」是白送的。
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+      - date: 2026-09-05
+        note: status → doing
+      - date: 2026-09-05
+        note: request-approval 先打被批内容全文再打口令；approvalSnapshot 拆成投影加哈希，打印器只吃投影；show
+          与批准提示共用 questionLines，第 7 问补齐五个字段
+  - id: I-103
+    step: 网页编辑
+    name: 网页上印出正在等你批：口令、关卡和被批内容的全文
+    status: todo
+    needs:
+      - I-102
+      - I-079
+    what: >
+      网页上多一块「正在等你批」的面板：列出还没答的每一份一次性口令 —— 口令本身、 是哪道关卡、覆盖哪些想法，以及和终端上一模一样的那份被批内容全文。
+      面板上明写这一句只能由人在对话里回，页面上点什么都不算数 —— 边界摆在人看得见的地方。
+      同时修掉卡片上两处看不见的东西：有验证命令的想法在页面上看不到签字栏 （verifyOf 提前返回），以及 verify.test_files
+      两个显示面都不显示。
+    why: >
+      人在网页上改完图、点了提交，服务端其实已经把口令随响应发回来了 （companion/ideas.ts:3299），页面却把它整个丢掉 ——
+      成功分支只读 changed.length。 结果是在网页上签字的人看不到自己刚请求的那个口令，它只出现在跑 serve 的那个终端里。
+      render 从头到尾不读待答口令的目录，也没有任何一条命令能把它们列出来。 人要么盯着终端，要么去问 agent，网页这条链在最后一步断了。
+    expected: >
+      打开网页，有待答口令时页面上就有一块面板，写着口令、关卡、覆盖的想法和内容全文；
+      没有待答口令时这块面板不出现。人在页面上看完内容，把口令抄进对话里回一句就能批完， 全程不用切回终端。有验证命令又签过字的想法，卡片上看得见签字；
+      声明了测试文件的想法，终端和网页两个显示面都列得出来。
+    how: >
+      四步，第一步最短。 一，页面提交成功的回调（companion/ideas.ts:3002-3011）今天只读 changed 的条数，
+      把服务端已经随响应送过来的 signs（:3299）整个丢了 —— 改成显示出来，口令做成可全选的一块。 不需要新路由、新请求、新令牌校验，三行
+      DOM。 二，render 时读一次待答口令目录：用已导出的 paths(dir).runtime 拼路径（不碰私有的 pendingDir）， 照
+      validApproval（:988-1001）那套三层防御写 —— existsSync 早退、逐文件 try/catch。
+      新装的仓库根本没有这个目录，裸读会把整个 render 带崩，而 render 有十个不传或传假 projectDir 的测试调用点。
+      三，每份待答口令拿它的 node_ids 回**当前**图重投影（用 I-102 切出来的 approvalProjection），
+      投影和文件里的摘要对不上就当场标「已作废」—— 省得人抄一个必然被 :955-958 拒掉的口令。 四，面板照
+      worklist（:2340-2344）的「没有就不输出」写，用原生折叠标签； 引用块抄 #sign-panel .what
+      的样式（:2507）并补 white-space: pre-wrap —— 现有两种行样式（.wl-note、#restore-list
+      span）都会把全文截成一行省略号。 顺手修两处：先改 verifyOf 的提前返回（:2299），再把签字按钮的条件挂到
+      awaitingSignature（:2314）。**顺序固定** —— 不先改 :2299，就永远走不到渲染签字栏那几行。
+    why_this_way: >
+      为什么先修「口令已经送到页面却被丢掉」：它是三行，而且是人今天真实撞的那堵墙 ——
+      在网页上签完字，口令只出现在跑服务的那个终端里，签字的人自己看不到。 为什么面板走服务端渲染，不抄顶部那四块面板（:2518-2524）的显隐机制：
+      那四块是浏览器里的状态驱动的，待答口令是磁盘上的状态，render 的时候就知道有没有。 走 worklist
+      的「没有就不输出」更省，还白送键盘可达、屏幕阅读器语义、以及全文检索能展开。 为什么内容要回图重投影，而不是在铸口令时把内容存进待答文件：
+      待答文件里只有 12 位摘要（:921-924），而且真正该显示的是「现在这张图的内容」——
+      如果它和当初被哈希的那份已经不一样，人该看到的是「这个口令作废了」，不是当初那一份。 为什么不给磁盘上那份 graph.html
+      也印口令：redraw（:3415-3418）产出的是死文件， 把一次性口令写进去当场开始过期，而那份文件是会被发给别人的。 为什么两个显示面都要补
+      test_files：摘要绑着它，人改一次 test_files 口令就作废， 却在页面上找不到任何变化 —— 这不是将来可能漂移，是已经在漂。
+    code:
+      - file: companion/ideas.ts
+        symbol: render (submit 成功回调)
+        lines: "3002-3011"
+      - file: companion/ideas.ts
+        symbol: render (verifyOf)
+        lines: "2296-2307"
+      - file: companion/ideas.ts
+        symbol: render (worklist / 待答口令面板)
+        lines: "2314-2344"
+      - file: .devcompanion/tests/test_render_pending.test.ts
+    verify:
+      command: "npx vitest run --dir .devcompanion/tests test_render_pending"
+      test_files: [ .devcompanion/tests/test_render_pending.test.ts ]
+      pass: "exit 0"
+    future: >
+      页面从此读得到磁盘上的运行期状态，不只是图本身 —— 红绿证据、扫描进度这些今天 在任何显示面上都看不到的东西，以后走同一条路就能印出来。
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+  - id: I-104
+    step: 强制执行
+    name: 守卫看得见 agent 在驱动浏览器，冲着本地服务去的调用一律拦下
+    status: done
+    needs:
+      - I-047
+    what: >
+      守卫认得出 agent 在驱动浏览器。今天任何 MCP 调用只要不带文件路径、也不带内容字段， 就被归成 other
+      直接放行（companion/guard.ts:1510，注释原话「a read-shaped MCP call is not ours to
+      block」）。改成：先看这次调用有没有指向本地服务 —— 地址落在回环地址 加 serve
+      端口上的一律拦下并说清为什么，在页面里执行脚本的调用同样拦下。 拦的理由要写成人读得懂的一句话，并且诚实说明这是护栏不是沙箱。
+    why: >
+      页面上任何有权力的按钮，只要 agent 能去点，那个权力就等于零。今天这条路是通的： 浏览器工具的 navigate 打开页面、computer
+      点按钮、javascript_tool 直接在页面里跑脚本， 三个都不带文件路径、不带内容字段，全部命中那条放行分支。而 shell 那边下载器整族
+      早就被当写文件动词拦掉了（companion/guard.ts:705），解释器墙也拦掉了 node --eval ——
+      也就是说前门关得死死的，后门开着一扇没人看见的。这个洞今天就存在， 和后面做不做网页批准无关。
+    expected: >
+      agent 试图把浏览器开到本地服务的地址上，被当场拒绝，理由说清是哪条规则、为什么。
+      人自己在浏览器里打开同一个地址不受任何影响。守卫崩了或者认不出这次调用时按原样放行， 不把人锁在外面。
+    how: >
+      三步。 一，规则加在 decideInner 的分派表里（companion/guard.ts:164 一带），**不要写进 mcpEvent**。
+      normalize() 跑在 decide 的 try/catch 之外（:1821），而 readStdin().then() 后面没有
+      .catch —— 在 mcpEvent 里抛异常等于未处理的 promise rejection、退出码 1、宿主按放行， 而且那一次 hook
+      里 shell 墙和写前墙一起没跑。要拦得住就得放在 try/catch 管得着的地方。
+      二，判据**按目标认，不按工具名认**：从调用参数里把网址取出来，落在回环地址上的一律拦下 —— 整个回环族，不挑端口。serve 有
+      --port（:3681），端口写死人一加参数规则就漏。 三，在页面里执行脚本的调用单独一条理由拦下。拒绝语照现有三条的结构写：
+      哪条规则、为什么、出路在哪，并写明这是护栏不是沙箱。 新事件类型要同时改 encodeClaude（:1588-1603），否则拒绝会掉到裸退出码
+      2 —— 宿主认这个码，但拿不到结构化理由，人只看到一次没有说明的失败。
+    why_this_way: >
+      为什么按网址认而不按工具名认：按名字枚举浏览器（比如匹配带 browser 的工具名） 既漏掉各家不同命名的接入，又会当场打红
+      test_base_guard_shell_targets.test.ts:231 那条 「导航到 example.com 必须放行」——
+      那条测试是对的，人让 agent 上网是正常工作， 该被拦的只有冲着本机服务去的那一下。 为什么拦整个回环族而不是 serve
+      那一个端口：守卫和服务是两个进程， 守卫没有可靠办法知道服务此刻跑在哪个端口上。
+      为什么不假设浏览器工具今天齐刷刷放行：MCP_WRITEISH（:1410）含 create 和 write，
+      开新标签页、写剪贴板这类调用今天已经被 :193 那句「这个调用可能写文件，但看不出写到哪」 拒掉了 ——
+      新规则要避开，否则同一次调用会叠出两套互相矛盾的理由。 **诚实的边界，必须写进拒绝语**：2026-09-05 在本机实测 ——
+      用浏览器工具点一下按钮， 页面读到的 isTrusted 为真、navigator.userActivation.isActive
+      为真、navigator.webdriver 为假， 和人手点的一模一样。所以这条规则的价值是把「顺手就能做到」变成「必须明确绕过」，
+      不是让它不可能。宣称后者会让下一个读代码的人高估这道墙。
+    code:
+      - file: companion/guard.ts
+        symbol: decideInner
+        lines: "161-172"
+      - file: companion/guard.ts
+        symbol: urlsIn
+        lines: "1512-1525"
+      - file: companion/guard.ts
+        symbol: isLoopback
+        lines: "1531-1539"
+      - file: companion/guard.ts
+        symbol: fetchEvent
+        lines: "1546-1554"
+      - file: companion/guard.ts
+        symbol: ruleFetch
+        lines: "1570-1594"
+      - file: companion/guard.ts
+        symbol: encodeClaude
+        lines: "1690-1706"
+      - file: .devcompanion/tests/test_base_guard_localhost.test.ts
+        lines: "1-160"
+    verify:
+      command: "npx vitest run --dir .devcompanion/tests test_base_guard_localhost"
+      test_files: [ .devcompanion/tests/test_base_guard_localhost.test.ts ]
+      pass: "exit 0"
+    future: >
+      守卫从此有了「按目标网址判」这一类规则的落点 —— 以后要护住别的本地端口 （比如将来的其它本地服务），加一条判据就够，不用再改事件归一那一层。
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+      - date: 2026-09-05
+        note: status → doing
+      - date: 2026-09-05
+        note: 守卫新增 R8：按目标网址认，冲着回环地址去的工具调用一律拦下；在页面里执行脚本的调用按名字拦，弱点写在拒绝语里
+  - id: I-105
+    step: 强制执行
+    name: 裁决网页上的一次动作凭什么算人做的，并据此修订已有的两条裁决
+    status: todo
+    needs:
+      - I-104
+    what: >
+      把「网页上的一次动作凭什么算数」裁决下来，答案是：不算 —— 页面上的动作只能发起，
+      不能落地，批准的唯一落点仍然是人在对话里亲手打的那一句。写成规范里的一条新裁决行， 并据此修订已有的两条（D26 批准机制的安全边界、D27
+      人工验证如何签字）。 裁决理由里要逐条写清：现有的三样东西（serve 的令牌、两步确认、信封指纹）为什么都不算，
+      为什么生物识别和安全密钥这条路也是死的，以及这套东西形同虚设的那几种情况。 2026-09-05 在本机做的那次实测要原样记进去当证据。
+    why: >
+      这件事今天的答案是「不算」，而且理由就写在代码注释里（companion/ideas.ts:1892-1894： 一份改动文件不是一个人，agent
+      写得出来，还能从别处跑写回）。D27 在 2026-09-02 刚刚按这个理由把网页签字降级成「只提出请求」。要让页面上点一下就算批准，
+      就是正面推翻这条刚落地的裁决 —— 那必须先给出一个比「它更方便」更硬的理由，
+      否则就是把一道刚关上的门重新拆掉。裁决表存在的意义就是让这种反复有据可查。
+    expected: >
+      规范里多一条裁决行，三段齐全：现状、裁决、理由。D26 和 D27 各多一段落地情况，
+      写清这次为什么维持原判、以及多了哪条新证据。一个没参与这次讨论的人读完这三条， 能自己复现那个实测、能自己判断这套东西防住了什么、防不住什么。
+      将来再有人提「让页面上点一下就算批准」，读这一条就够，不必把这轮调研重做一遍。 这条只能由人验收。
+    how: >
+      不写代码，写三段规范，全在 companion/FORMAT.md 的裁决表里。
+      一，新增一行，三段齐全。**现状**：页面上的动作今天不产生任何机器可验证的「来自人」的证据 —— serve 的令牌是进程级、不作废、GET /
+      不校验就把它明文写进页面（拿到令牌等于能访问这个端口）； 两步确认是同一条路由跑两遍，脚本连发两次效果相同；信封指纹是乐观锁，证明新鲜度不证明来源。
+      **裁决**：页面上的动作只能发起，不能落地；批准的唯一落点是人在对话里亲手打的那一句。 **理由**：见下。 二，理由里把 2026-09-05
+      在本机的实测原样记进去 —— 用浏览器自动化点一下按钮， 页面读到 isTrusted
+      为真、navigator.userActivation.isActive 为真、navigator.webdriver 为假，
+      和人手点的一模一样，所以由用户激活才会发的那个请求头也会照发。 再记一条外部事实：浏览器调试协议的虚拟安全密钥默认就把「人在场」模拟成真
+      （automaticPresenceSimulation 默认为 true），所以指纹、面容和硬件密钥这条路同样是死的。 三，D26 和 D27
+      各补一段落地情况：这次维持原判、多了哪条新证据，以及形同虚设的四种情况 —— 逃生开关打开、守卫看不见的出口（I-104 和 I-106
+      补的正是这一类）、 守卫自己在归一化那一步崩掉、以及人不看内容就粘口令（这一条守卫一个字都管不着， 它正是 I-102 存在的全部理由）。
+    why_this_way: >
+      为什么维持原判而不是想办法做成：三条证据都指向「本地服务分不出人和自动化」， 而唯一结构上成立的带外办法是第二台设备 ——
+      对一个本地单人的想法图守卫，那是重型方案。 更要紧的是收益账：网页直接批准想省的九成，I-102 和 I-103 已经给了（内容送到人眼前，
+      人就不再盲批），真正被省掉的只剩「抄一次口令」这一个动作。 用一次抄写，换一整条需要新裁决、新威胁模型、新代码路径来支撑的信任链，不划算。
+      为什么必须写下来而不是口头维持：D27 在 2026-09-02 刚裁过同一件事，三天后又被重新提出来 ——
+      说明「维持现状」的理由没有记在一个下次会被读到的地方。裁决表存在的意义 就是让这种反复只发生一次。
+      为什么理由里必须带实测而不只带引用：这轮调研里关于同一件事的一条结论， 出处是编造的规范章节号，是对抗核对去打开规范才发现的。一个自己能跑的实验，
+      比一串引用可靠 —— 而且下一个人能照着重跑。 为什么明确否决生物识别和硬件密钥：它们看起来是最像样的答案，不写清为什么不行，
+      下一轮一定会有人再提一次。 为什么是人工验收：这条的产出是散文，机器判不了它写清楚没有。
+    code:
+      - file: companion/FORMAT.md
+    verify:
+      manual: "找一个没参与这次讨论的人（或者你自己隔一个月之后）只读这三条裁决行，让他做两件事：一，照着理由里写的步骤自己把那个实测重跑一遍；二，用自己的\
+        话说出这套批准机制防住了什么、明确防不住什么。两件里有一件做不到，就是没写清楚。"
+    future: >
+      以后任何「看起来该做、查下来不该做」的事，都照这条的样子留一份带证据的否决记录 —— 项目里最贵的返工是同一个方案被反复提出、反复调研、反复否掉。
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+  - id: I-106
+    step: 强制执行
+    name: 三份接线清单补上取网页的工具，并让漏配这件事有测试守着
+    status: todo
+    needs:
+      - I-104
+    what: >
+      三家的 hook 接线清单（.claude/settings.json、.cursor/hooks.json、.codex/hooks.json）
+      现在只把编辑类、shell 类和以 mcp__ 开头的调用送进守卫。取网页的工具（Claude 这边叫 WebFetch）
+      两类都不沾，守卫连这次调用都看不见。三份清单各补上它，安装器种进新仓库的那一份也补上。 再加一条测试：清单里该被守卫看见的工具，少一个就红。
+    why: >
+      I-104 在守卫里立的那条规则，判的是「这次调用冲着本地服务去」。 但规则再对，事件送不到守卫手里就等于没有 —— 取网页的工具正是这样一条路：
+      它能直接请求 127.0.0.1 上的本地服务，而 PreToolUse 的两个匹配器 （.claude/settings.json:54 的编辑与
+      shell 类、:68 的 mcp__ 前缀）一个都不匹配它。 这类漏配今天没有任何东西守着：test_base_manifests.test.ts
+      有一张 GUARDED 白名单， 但它只断言清单里已经写了的那些，不会因为少写一个而变红 —— 也就是说
+      同一个错误将来还会再犯一次，而且照样没人发现。
+    expected: >
+      三份清单都把取网页的工具送进守卫，安装器种出来的新仓库也一样。 agent 用取网页的工具去请求本地服务时被拦下，理由和 I-104 那条一致。
+      从任意一份清单里删掉一个本该被守卫看见的工具，测试当场变红。 人自己在浏览器里访问同一个地址不受影响。
+    how: >
+      三步。 一，三份清单（.claude/settings.json、.cursor/hooks.json、.codex/hooks.json）的
+      PreToolUse 各补上本平台取网页的工具名。Claude 这边现在的两个匹配器是 .claude/settings.json:54（编辑与
+      shell 类）和 :68（mcp__ 前缀），取网页的工具两个都不沾。
+      二，安装器种进新仓库的那一份清单同步补上（companion/install.ts）—— 不补的话，以后每装一个新仓库就复制一个同样的洞。 三，把
+      test_base_manifests.test.ts 的 GUARDED 白名单从「断言清单里写了这些」
+      改成「清单必须覆盖这张表，少一个就红」。三家的工具名不同，白名单按平台分。
+    why_this_way: >
+      为什么和 I-104 分成两个想法：I-104 改的是守卫的判断，这一条改的是事件送不送得到 守卫手里。两者的失败方式完全不同 ——
+      规则写错会拦错东西，人当场看得见； 接线漏配是什么都不发生，没有任何迹象。合成一个想法，验证就只能覆盖其中一半。
+      为什么白名单要改成反向断言：现在这张表只断言已经写了的那些，少写一个不会变红 ——
+      也就是说同一个错误将来还会再犯，而且照样没人发现。这次这个洞就不是测试报出来的， 是人读接线读出来的，这件事本身就是证据。
+      为什么不顺手把所有能发请求的工具都列上：列不全，而且列表会过期。 真正兜底的是 I-104
+      那条按目标网址判的规则；这里补的是「让事件到得了守卫」—— 两条一起才成立，各自都不够。写清这一点，免得以后有人以为补了名单就万事大吉。
+    code:
+      - file: .claude/settings.json
+      - file: .cursor/hooks.json
+      - file: .codex/hooks.json
+      - file: companion/install.ts
+      - file: .devcompanion/tests/test_base_manifests.test.ts
+    verify:
+      command: "npx vitest run --dir .devcompanion/tests test_base_manifests"
+      test_files: [ .devcompanion/tests/test_base_manifests.test.ts ]
+      pass: "exit 0"
+    future: >
+      三份接线清单从此由一张表管着，加一个该被守卫看见的工具就是往表里加一行， 三家一起跟上，漏一家测试当场报出来。
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
