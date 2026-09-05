@@ -7843,39 +7843,38 @@ function addIdea(doc, graph, name, needs, date) {
   return id;
 }
 var sha256 = (text) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
-function approvalProjection(graph, gate, nodeIds) {
+function approvalProjection(graph, nodeIds) {
   const map = byId(graph);
-  const three = (i) => ({
-    id: i.id,
-    name: i.name,
-    needs: i.needs ?? [],
-    what: i.what ?? "",
-    why: i.why ?? "",
-    expected: i.expected ?? ""
-  });
-  return gate === "decomposition" ? graph.ideas.map(three) : (nodeIds ?? []).map((id) => {
+  return nodeIds.map((id) => {
     const i = map.get(id);
     if (!i) throw new Error(`no idea with id ${id}`);
+    const v = i.verify ?? {};
     return {
-      ...three(i),
+      id: i.id,
+      name: i.name,
+      parent: i.parent ?? "",
+      needs: i.needs ?? [],
+      what: i.what ?? "",
+      why: i.why ?? "",
+      expected: i.expected ?? "",
       how: i.how ?? "",
       why_this_way: i.why_this_way ?? "",
       future: i.future ?? "",
-      code: i.code ?? [],
-      verify: i.verify ?? {}
+      code: (i.code ?? []).map((c) => ({ file: c.file, symbol: c.symbol ?? "" })),
+      verify: { command: v.command ?? "", test_files: v.test_files ?? [], pass: v.pass ?? "", manual: v.manual ?? "" }
     };
   });
 }
-function approvalSnapshot(graph, gate, nodeIds) {
-  return sha256(JSON.stringify(approvalProjection(graph, gate, nodeIds))).slice(0, 12);
+function approvalSnapshot(graph, nodeId) {
+  return sha256(JSON.stringify(approvalProjection(graph, [nodeId])[0])).slice(0, 12);
 }
 function approvalLines(entries) {
   const out = [];
   for (const e of entries) {
-    const upTo = "how" in e ? 8 : 3;
     out.push(`${e.id}  ${e.name}`);
+    out.push(`\u7236\u60F3\u6CD5  ${e.parent || "\u2014\uFF08\u9876\u5C42\uFF09"}`);
     out.push(`\u524D\u7F6E\u60F3\u6CD5  ${e.needs.length ? e.needs.join(", ") : "\u2014"}`);
-    for (const block of questionLines(e, upTo)) out.push(`
+    for (const block of questionLines(e)) out.push(`
 ${block}`);
     out.push("");
   }
@@ -7884,9 +7883,7 @@ ${block}`);
 var pendingDir = (projectDir) => join(paths(projectDir).runtime, "pending");
 var approvalsDir = (projectDir) => join(paths(projectDir).runtime, "approvals");
 function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
-  if (gate !== "decomposition" && !nodeIds?.length) {
-    throw new Error(`${gate} \u5173\u5361\u5FC5\u987B\u70B9\u540D\u60F3\u6CD5\uFF08nodeIds\uFF09`);
-  }
+  if (!nodeIds.length) throw new Error(`${gate} \u5173\u5361\u5FC5\u987B\u70B9\u540D\u60F3\u6CD5\uFF08nodeIds\uFF09`);
   if (gate === "manual-check") {
     for (const id of nodeIds) {
       const idea = byId(graph).get(id);
@@ -7894,16 +7891,15 @@ function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
       if (idea.verify.signed_off) throw new Error(`${id} \u5DF2\u7ECF\u6709\u4EBA\u7B7E\u8FC7\u5B57\u4E86\uFF0C\u4E0D\u80FD\u8986\u76D6`);
     }
   }
-  const snapshot = approvalSnapshot(graph, gate, nodeIds);
+  const snapshots = Object.fromEntries(nodeIds.map((id) => [id, approvalSnapshot(graph, id)]));
   const challenge = `CC-${randomBytes(4).toString("hex").toUpperCase()}`;
   const file = join(pendingDir(projectDir), `${challenge}.json`);
   mkdirSync(pendingDir(projectDir), { recursive: true });
   atomicWrite(file, JSON.stringify({
-    v: 1,
+    v: 2,
     challenge,
     gate,
-    node_ids: nodeIds ?? null,
-    snapshot,
+    snapshots,
     requested_at: meta.date ?? "",
     by: meta.by ?? ""
   }, null, 2));
@@ -7919,13 +7915,17 @@ function applyApproval(projectDir, prompt, meta) {
   if (!existsSync(file)) return { ok: false, reason: `\u53E3\u4EE4 ${challenge} \u4E0D\u5B58\u5728\u6216\u5DF2\u7528\u8FC7 \u2014\u2014 \u91CD\u65B0 request-approval` };
   const pending = JSON.parse(readFileSync(file, "utf8"));
   const { graph } = load(graphPath(projectDir));
-  let current;
-  try {
-    current = approvalSnapshot(graph, pending.gate, pending.node_ids ?? void 0);
-  } catch {
-    current = "<node-gone>";
-  }
-  if (current !== pending.snapshot) {
+  const ids = Object.keys(pending.snapshots ?? {});
+  const drifted = ids.some((id) => {
+    let current;
+    try {
+      current = approvalSnapshot(graph, id);
+    } catch {
+      current = "<node-gone>";
+    }
+    return current !== pending.snapshots[id];
+  });
+  if (ids.length === 0 || drifted) {
     rmFileQuietly(file);
     return { ok: false, reason: "\u88AB\u6279\u7684\u5185\u5BB9\u5728\u8BF7\u6C42\u4E4B\u540E\u88AB\u6539\u8FC7\u4E86\uFF0C\u53E3\u4EE4\u4F5C\u5E9F \u2014\u2014 \u91CD\u65B0 request-approval" };
   }
@@ -7941,7 +7941,7 @@ function applyApproval(projectDir, prompt, meta) {
   rmFileQuietly(file);
   if (decision === "approved" && pending.gate === "manual-check") {
     const { doc, graph: g } = load(graphPath(projectDir));
-    for (const id of pending.node_ids ?? []) {
+    for (const id of ids) {
       const index = g.ideas.findIndex((i) => i.id === id);
       if (index < 0) continue;
       doc.setIn(
@@ -7959,20 +7959,19 @@ function rmFileQuietly(file) {
   } catch {
   }
 }
-function validApproval(projectDir, graph, gate, nodeIds) {
+function validApproval(projectDir, graph, gate, nodeId) {
   const dirPath = approvalsDir(projectDir);
   if (!existsSync(dirPath)) return false;
   let want;
   try {
-    want = approvalSnapshot(graph, gate, nodeIds);
+    want = approvalSnapshot(graph, nodeId);
   } catch {
     return false;
   }
-  const sameIds = (a, b) => JSON.stringify([...a ?? []].sort()) === JSON.stringify([...b ?? []].sort());
   for (const name of readdirSync(dirPath)) {
     try {
       const r = JSON.parse(readFileSync(join(dirPath, name), "utf8"));
-      if (r.decision === "approved" && r.gate === gate && r.snapshot === want && sameIds(r.node_ids, nodeIds)) return true;
+      if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
     } catch {
     }
   }
@@ -8063,7 +8062,7 @@ function redGateReady(projectDir, graph, id) {
   }
   const declared = idea.verify.test_files ?? [];
   if (presentTests(projectDir, idea).length === 0) {
-    if (validApproval(projectDir, graph, "red-waiver", [id])) {
+    if (validApproval(projectDir, graph, "red-waiver", id)) {
       return { ready: true, reason: "\u6CA1\u6709\u53EF\u5931\u8D25\u7684\u6D4B\u8BD5\u6587\u4EF6 + \u4EBA\u6279\u7684\u8C41\u514D" };
     }
     const gap = declared.length === 0 ? `${id} \u6CA1\u6709 verify.test_files` : `${id} \u58F0\u660E\u7684\u6D4B\u8BD5\u6587\u4EF6\u4E00\u4E2A\u90FD\u4E0D\u5B58\u5728\uFF08${declared.join("\u3001")}\uFF09`;
@@ -8073,7 +8072,7 @@ function redGateReady(projectDir, graph, id) {
     };
   }
   if (evidence.red.outcome === "unexpected_pass") {
-    return validApproval(projectDir, graph, "red-waiver", [id]) ? { ready: true, reason: "unexpected_pass + \u4EBA\u6279\u7684\u8C41\u514D" } : { ready: false, reason: `\u6D4B\u8BD5\u610F\u5916\u5148\u7EFF\uFF08unexpected_pass\uFF09\u2014\u2014 \u9700\u8981\u4EBA\u6279\u4E00\u6B21 red-waiver\uFF08request-approval --gate red-waiver --node ${id}\uFF09` };
+    return validApproval(projectDir, graph, "red-waiver", id) ? { ready: true, reason: "unexpected_pass + \u4EBA\u6279\u7684\u8C41\u514D" } : { ready: false, reason: `\u6D4B\u8BD5\u610F\u5916\u5148\u7EFF\uFF08unexpected_pass\uFF09\u2014\u2014 \u9700\u8981\u4EBA\u6279\u4E00\u6B21 red-waiver\uFF08request-approval --gate red-waiver --node ${id}\uFF09` };
   }
   return { ready: true };
 }
@@ -8114,16 +8113,16 @@ function decideProductWrite(projectDir, graph, filePath) {
   const doing = graph.ideas.filter((i) => i.status === "doing" && !isBuildReady(i));
   const needsPlan = (idea) => ({
     allow: false,
-    reason: `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --gate plan --node ${idea.id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u540E\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7\uFF09\u3002`
+    reason: `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --node ${idea.id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u540E\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7\uFF09\u3002`
   });
   const testOwner = doing.find((i) => (i.verify?.test_files ?? []).some((f) => sameFile(f, rel)));
   if (testOwner) {
-    if (!validApproval(projectDir, graph, "plan", [testOwner.id])) return needsPlan(testOwner);
+    if (!validApproval(projectDir, graph, "plan", testOwner.id)) return needsPlan(testOwner);
     return { allow: true, reason: `${testOwner.id} \u7684\u6D4B\u8BD5\u6587\u4EF6 \u2014\u2014 \u5148\u5199\u4F1A\u5931\u8D25\u7684\u6D4B\u8BD5\u6B63\u662F\u7B2C\u4E00\u6B65` };
   }
   const codeOwner = doing.find((i) => (i.code ?? []).some((c) => c.file && sameFile(c.file, rel)));
   if (codeOwner) {
-    if (!validApproval(projectDir, graph, "plan", [codeOwner.id])) return needsPlan(codeOwner);
+    if (!validApproval(projectDir, graph, "plan", codeOwner.id)) return needsPlan(codeOwner);
     const gate = redGateReady(projectDir, graph, codeOwner.id);
     if (!gate.ready) return { allow: false, reason: `\u6D4B\u8BD5\u5148\u884C\uFF08D8\uFF09\uFF1A${gate.reason}` };
     return { allow: true, reason: `${codeOwner.id} \u8BA4\u9886\u4E86\u5B83\uFF0C\u6279\u51C6\u4E0E\u5931\u8D25\u8BB0\u5F55\u4FF1\u5728` };
@@ -8141,8 +8140,8 @@ function chainedCommandRefusal(idea, command) {
 function verifyCommandRefusal(projectDir, graph, idea, command) {
   const chained = chainedCommandRefusal(idea, command);
   if (chained) return chained;
-  if (!validApproval(projectDir, graph, "plan", [idea.id])) {
-    return `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF0C\u4E0D\u8DD1\u5B83\u7684 verify.command\uFF08D7\uFF09\u2014\u2014\u547D\u4EE4\u662F\u56FE\u91CC\u7684\u6563\u6587\uFF0C\u6CA1\u4EBA\u8FC7\u76EE\u5C31\u7B49\u4E8E\u8BA9 agent \u81EA\u5DF1\u5199\u4E00\u6761\u547D\u4EE4\u518D\u81EA\u5DF1\u6267\u884C\u3002\u5148 \`request-approval --gate plan --node ${idea.id}\`\uFF0C\u8BF7\u4EBA\u56DE\u4E00\u53E5\u300C\u6279\u51C6 CC-\u2026\u300D\uFF1B\u6539\u8FC7 how/code/verify \u4E4B\u540E\u6279\u51C6\u4F1A\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8BF7\u3002`;
+  if (!validApproval(projectDir, graph, "plan", idea.id)) {
+    return `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF0C\u4E0D\u8DD1\u5B83\u7684 verify.command\uFF08D7\uFF09\u2014\u2014\u547D\u4EE4\u662F\u56FE\u91CC\u7684\u6563\u6587\uFF0C\u6CA1\u4EBA\u8FC7\u76EE\u5C31\u7B49\u4E8E\u8BA9 agent \u81EA\u5DF1\u5199\u4E00\u6761\u547D\u4EE4\u518D\u81EA\u5DF1\u6267\u884C\u3002\u5148 \`request-approval --node ${idea.id}\`\uFF0C\u8BF7\u4EBA\u56DE\u4E00\u53E5\u300C\u6279\u51C6 CC-\u2026\u300D\uFF1B\u6539\u8FC7 how/code/verify \u4E4B\u540E\u6279\u51C6\u4F1A\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8BF7\u3002`;
   }
   return null;
 }
@@ -8402,13 +8401,8 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
     if (unmet) throw new Error(`${id}: cannot be doing \u2014 ${unmet}`);
     const clash = fileClash(idea, graph);
     if (clash) throw new Error(`${id}: cannot be doing \u2014 ${clash}`);
-    if (projectDir) {
-      if (!validApproval(projectDir, graph, "decomposition")) {
-        throw new Error(`${id}: cannot be doing \u2014 \u62C6\u5206\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --gate decomposition\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u6574\u5F20\u56FE\u7684\u540D\u79F0\u3001\u8FB9\u548C\u524D\u4E09\u95EE\uFF0C\u518D\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7/D17\uFF09`);
-      }
-      if (!validApproval(projectDir, graph, "plan", [id])) {
-        throw new Error(`${id}: cannot be doing \u2014 \u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --gate plan --node ${id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u8FD9\u4E2A\u60F3\u6CD5\u7684\u516B\u95EE\uFF0C\u518D\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7/D17\uFF09`);
-      }
+    if (projectDir && !validApproval(projectDir, graph, "plan", id)) {
+      throw new Error(`${id}: cannot be doing \u2014 \u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --node ${id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u8FD9\u4E2A\u60F3\u6CD5\u7684\u516B\u95EE\uFF0C\u518D\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7/D17\uFF09`);
     }
   }
   if (status === "done") {
@@ -8653,8 +8647,8 @@ function verifyText(v) {
   if (v.signed_off) bits.push(`\u7B7E\u5B57\uFF1A${v.signed_off}`);
   return bits.join("\n");
 }
-function questionLines(x, upTo = 8) {
-  return QUESTIONS.slice(0, upTo).map((q) => {
+function questionLines(x) {
+  return QUESTIONS.map((q) => {
     const value = q.key === "code" ? codeText(x.code) : q.key === "verify" ? verifyText(x.verify) : x[q.key];
     return `${q.n} ${q.label}
   ${(value || "\u2014").trim().replace(/\n/g, "\n  ")}`;
@@ -8820,7 +8814,11 @@ function render(g, source = "", projectDir = "", token = "") {
   const map = byId(g);
   const ends = new Set(g.endpoints ?? []);
   const cls = (i) => ends.has(i.id) ? "endpoint" : i.status ?? "todo";
-  const mermaid = buildMermaidSource(g);
+  const parentKey = (i) => i.parent && map.has(i.parent) ? i.parent : "";
+  const ordered = topoOrder(g);
+  const kidsOf = (owner) => ordered.filter((i) => parentKey(i) === owner);
+  const descendants = (owner) => kidsOf(owner).flatMap((k) => [k, ...descendants(k.id)]);
+  const mermaid = buildMermaidSource({ ...g, ideas: kidsOf("") });
   const links = (ids) => ids.length === 0 ? NONE : ids.map((id) => `<a class="xlink" href="#${esc(id)}" data-goto="${esc(id)}">${esc(map.get(id)?.name ?? id)}</a>`).join(" ");
   const needChip = (from, to) => `<span class="chip"><a class="xlink" href="#${esc(from)}" data-goto="${esc(from)}">${esc(map.get(from)?.name ?? from)}</a><button class="cut" title="\u65AD\u5F00\u8FD9\u6761\u524D\u7F6E" data-unlink-from="${attr(from)}" data-unlink-to="${attr(to)}">\xD7</button></span>`;
   const linkPicker = (i) => `<select class="rw-edge" data-link-to="${attr(i.id)}">
@@ -8839,14 +8837,14 @@ function render(g, source = "", projectDir = "", token = "") {
   ${rows.map((r) => `<div class="wl-row"><a class="xlink" href="#${esc(r.id)}" data-goto="${esc(r.id)}">${esc(r.name)}</a><span class="wl-note">${esc(r.note)}</span></div>`).join("\n  ")}
 </details>`;
   const STATUS_ZH = { todo: "\u5F85\u529E", doing: "\u8FDB\u884C\u4E2D", done: "\u5DF2\u5B8C\u6210", blocked: "\u53D7\u963B" };
-  const counts = STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(g.ideas).by[s]}`).join(" \xB7 ");
+  const countsOf = (ideas) => STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(ideas).by[s]}`).join(" \xB7 ");
   const field = (i, name, label) => `
     <dt>${label}</dt><dd data-f="${name}"><span class="ro">${esc(i[name]) || NONE}</span
       ><textarea class="rw" data-idea="${attr(i.id)}" data-field="${name}" rows="3">${esc(i[name] ?? "")}</textarea></dd>`;
   const statusPicker = (i) => `<select class="rw" data-idea="${attr(i.id)}" data-field="status">${STATUSES.map((s) => `<option value="${s}"${(i.status ?? "todo") === s ? " selected" : ""}>${STATUS_ZH[s]}</option>`).join("")}</select>`;
   const card = (i) => `<section class="idea ${cls(i)}" id="${esc(i.id)}">
   <h3><span class="ro">${esc(i.name)}</span><input class="rw" data-idea="${attr(i.id)}" data-field="name" value="${attr(i.name)}"> <span class="badge ro">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${statusPicker(i)}${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<button class="edit-toggle" data-edit="${attr(i.id)}">\u7F16\u8F91</button><button class="edit-toggle danger" data-remove="${attr(i.id)}" title="\u6807\u8BB0\u5F85\u5220\uFF0C\u518D\u70B9\u4E00\u6B21\u64A4\u9500">\u5220\u9664</button><span class="iid">${esc(i.id)}</span></h3>
-  <dl>${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
+  <dl>${field(i, "parent", "\u7236\u60F3\u6CD5")}${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
     <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}
   </dl>
@@ -8854,6 +8852,28 @@ function render(g, source = "", projectDir = "", token = "") {
   <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
   ${i.log?.length ? `<details class="log"><summary>\u4FEE\u6539\u8BB0\u5F55 (${i.log.length})</summary>${i.log.map((l) => `<div>${esc(l.date)}${l.by ? " \xB7 " + esc(l.by) : ""} \u2014 ${esc(l.note)}</div>`).join("")}</details>` : ""}
 </section>`;
+  const brief = (i) => `<a class="brief ${cls(i)}" href="#${esc(i.id)}" data-brief="${attr(i.id)}">
+    <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<span class="blurb">${esc(String(i.what ?? "").split("\n")[0].trim())}</span><span class="enter">\u8FDB\u5165 \u2192</span></a>`;
+  const page = (owner) => {
+    const id = owner ? owner.id : "";
+    const kids = kidsOf(id);
+    const scope = descendants(id);
+    return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
+${owner ? card(owner) : ""}
+${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} \xB7 \u70B9\u51FB\u4EFB\u610F\u8282\u70B9\u8FDB\u5165\u5B83\u7684\u9875\u9762</p>
+${worklist("\u5F85\u4EBA\u5DE5\u9A8C\u8BC1", scope.filter(awaitingSignature).map((i) => ({
+      id: i.id,
+      name: i.name,
+      note: i.verify?.manual ?? ""
+    })))}
+${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((i) => {
+      const waiting = waitingOn(i).map((n) => map.get(n).name || n);
+      return { id: i.id, name: i.name, note: waiting.length ? `\u5728\u7B49 ${waiting.join("\u3001")}` : "\u6CA1\u6709\u524D\u7F6E\u6321\u7740\u5B83" };
+    }))}`}
+<h2>${owner ? "\u5B50\u60F3\u6CD5" : "\u9876\u5C42\u60F3\u6CD5"} <span class="legend">\u6309\u4F9D\u8D56\u987A\u5E8F\u6392\u5217</span></h2>
+<div class="children">${kids.map(brief).join("\n")}</div>
+</section>`;
+  };
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</title>
@@ -8962,6 +8982,19 @@ function render(g, source = "", projectDir = "", token = "") {
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
   .wl-note { color:#7d8896; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#7d8896; }
+  .crumbs a { color:#7dd3fc; text-decoration:none; }
+  .crumbs a.here { color:#e6edf3; font-weight:600; }
+  .crumbs button { margin-left:auto; }
+  .page[hidden] { display:none; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; margin:0 0 8px; text-decoration:none;
+    color:#e6edf3; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px; background:#0d1117; }
+  .brief:hover { border-color:#7dd3fc; }
+  .brief.done { border-left-color:#22c55e; } .brief.doing { border-left-color:#3b82f6; }
+  .brief.blocked { border-left-color:#f97316; } .brief.endpoint { border-left-color:#a855f7; }
+  .brief .bname { font-weight:600; flex:none; }
+  .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; }
 
   #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
@@ -9012,8 +9045,8 @@ function render(g, source = "", projectDir = "", token = "") {
   <i class="sw" style="background:#334155"></i>\u5F85\u529E
   <i class="sw" style="background:#7c2d12"></i>\u53D7\u963B
   <i class="sw" style="background:#581c87"></i>\u7EC8\u70B9
-  \xB7 ${esc(counts)} \xB7 \u70B9\u51FB\u4EFB\u610F\u8282\u70B9\u67E5\u770B\u8BE6\u60C5
 </p>
+<nav class="crumbs"><span id="crumbs"></span><button id="new-idea">\uFF0B \u65B0\u5EFA\u60F3\u6CD5</button></nav>
 <div class="graph">
   <div class="graph-tools">
     <button data-zoom="out" title="\u7F29\u5C0F">\u2212</button>
@@ -9024,27 +9057,14 @@ function render(g, source = "", projectDir = "", token = "") {
   </div>
   <div class="viewport"><div class="canvas"><pre class="mermaid">${mermaid}</pre></div></div>
 </div>
-<p class="graph-hint">\u6EDA\u8F6E\u7F29\u653E\uFF08\u4EE5\u5149\u6807\u4E3A\u4E2D\u5FC3\uFF09\xB7 \u62D6\u62FD\u5E73\u79FB \xB7 \u70B9\u51FB\u8282\u70B9\u770B\u8BE6\u60C5</p>
-${worklist("\u5F85\u4EBA\u5DE5\u9A8C\u8BC1", g.ideas.filter(awaitingSignature).map((i) => ({
-    id: i.id,
-    name: i.name,
-    note: i.verify?.manual ?? ""
-  })))}
-${worklist("\u8FDB\u884C\u4E2D", g.ideas.filter((i) => i.status === "doing").map((i) => {
-    const waiting = waitingOn(i).map((n) => map.get(n).name || n);
-    return { id: i.id, name: i.name, note: waiting.length ? `\u5728\u7B49 ${waiting.join("\u3001")}` : "\u6CA1\u6709\u524D\u7F6E\u6321\u7740\u5B83" };
-  }))}
-<h2>\u60F3\u6CD5\u8BE6\u60C5 <button id="new-idea">\uFF0B \u65B0\u5EFA\u60F3\u6CD5</button></h2>
-<p class="legend">\u5361\u7247\u6309\u4F9D\u8D56\u987A\u5E8F\u6392\u5217 \u2014\u2014 \u6BCF\u5F20\u90FD\u5728\u5B83\u5168\u90E8\u524D\u7F6E\u4E4B\u540E\uFF0C\u4E0D\u662F\u6587\u4EF6\u91CC\u7684\u4E66\u5199\u987A\u5E8F\u3002</p>
+<p class="graph-hint">\u6EDA\u8F6E\u7F29\u653E\uFF08\u4EE5\u5149\u6807\u4E3A\u4E2D\u5FC3\uFF09\xB7 \u62D6\u62FD\u5E73\u79FB \xB7 \u70B9\u51FB\u8282\u70B9\u8FDB\u5165\u5B83\u7684\u9875\u9762</p>
 <div id="offline-note" hidden>\u56FE\u6682\u65F6\u4E0D\u53EF\u7528\uFF08\u79BB\u7EBF\uFF0C\u753B\u56FE\u8981\u8054\u7F51\u53D6\u4E00\u4E2A\u7B2C\u4E09\u65B9\u5E93\uFF09\u2014\u2014 \u7F16\u8F91\u4E0E\u63D0\u4EA4\u7167\u5E38\u3002</div>
-<div id="cards">
-${// I-061: the cards are the one place a reader goes through in order, so they
-  // come out in dependency order (topoOrder, I-060). Only the cards: the
-  // diagram's node order and the JSON model below keep the written order —
-  // the diagram's layout depends on declaration order, and the page re-derives
-  // the diagram from the model, so sorting either would make the picture jump
-  // on the first structural edit. Anchors are by id, so sorting costs nothing.
-  topoOrder(g).map(card).join("\n")}
+<div id="pages">
+${// One section per page, every idea's card exactly once (on its own page).
+  // Siblings are in dependency order (topoOrder, I-060/I-061); the JSON model
+  // below keeps the written order — the diagram's layout depends on
+  // declaration order, and the page re-derives the diagram from the model.
+  [page(null), ...g.ideas.map(page)].join("\n")}
 </div>
 <!-- The same text the engine ran to draw the diagram above. A classic script,
      so it defines one global both module scripts below can reach. -->
@@ -9099,6 +9119,10 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
     if (box) box.classList.toggle("dirty", dirty);
     const card = document.getElementById(id);
     if (card) card.classList.toggle("dirty", touched(id));
+    if (f === "name") {                            // the row on the parent's page follows the name
+      const row = document.querySelector('[data-brief="' + id + '"] .bname');
+      if (row) row.textContent = value;
+    }
     if (typeof markIncomplete === "function") markIncomplete(id);
     refresh();
     writeDraft();
@@ -9240,10 +9264,55 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
     }
     for (const o of ledger.ops()) {
       if (o.op !== "add") continue;
-      out.push({ id: o.tmp, name: nameOf(o.tmp), status: "todo", needs: ledger.needsOf(o.tmp) });
+      out.push({ id: o.tmp, name: nameOf(o.tmp), status: "todo", needs: ledger.needsOf(o.tmp),
+        parent: effectiveField(o.tmp, "parent") });
     }
     return { version: DATA.version, endpoints: DATA.endpoints, ideas: out };
   }
+
+  // \u2500\u2500 pages \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // One page per idea, addressed by the hash. The page whose id the hash names
+  // is shown; every other section stays hidden. The diagram is shared and
+  // redrawn with the current page's children \u2014 a parent nobody has counts as
+  // top level here, the same rule the engine's render used.
+  const currentOwner = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    return id && document.getElementById("page-" + id) ? id : "";
+  };
+  function pageGraph(g) {
+    const owner = currentOwner();
+    const present = new Set(g.ideas.map((i) => i.id));
+    const key = (i) => (i.parent && present.has(i.parent) ? i.parent : "");
+    return { version: g.version, endpoints: g.endpoints, ideas: g.ideas.filter((i) => key(i) === owner) };
+  }
+  function ancestors(id) {
+    const out = [];
+    const seen = new Set();
+    for (let cur = id; cur && !seen.has(cur); cur = effectiveField(cur, "parent")) { seen.add(cur); out.unshift(cur); }
+    return out;
+  }
+  function showPage() {
+    const owner = currentOwner();
+    for (const p of document.querySelectorAll(".page")) p.hidden = p.id !== "page-" + (owner || "root");
+    const crumbs = document.getElementById("crumbs");
+    crumbs.replaceChildren();
+    const home = document.createElement("a");
+    home.href = "#"; home.textContent = DATA.project || "\u60F3\u6CD5\u56FE";
+    crumbs.append(home);
+    for (const id of ancestors(owner)) {
+      crumbs.append(" \u203A ");
+      const a = document.createElement("a");
+      a.href = "#" + id; a.textContent = nameOf(id);
+      if (id === owner) a.className = "here";
+      crumbs.append(a);
+    }
+    // A page with no children has nothing to draw: hide the empty diagram box.
+    const empty = pageGraph(snapshot()).ideas.length === 0;
+    for (const el of document.querySelectorAll(".graph, .graph-hint")) el.hidden = empty;
+    if (!empty && typeof window.redrawGraph === "function") window.redrawGraph(window.currentMermaidSource(), true);
+    try { window.scrollTo(0, 0); } catch (e) { /* not every host scrolls */ }
+  }
+  window.addEventListener("hashchange", showPage);
 
   // The diagram module may never arrive (it loads from a CDN). Empty its source
   // out of the page right now: an undrawn block shows the raw flowchart text as
@@ -9252,7 +9321,7 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
   if (pre) pre.textContent = "";
   const offline = document.getElementById("offline-note");
 
-  window.currentMermaidSource = () => buildMermaidSource(snapshot());
+  window.currentMermaidSource = () => buildMermaidSource(pageGraph(snapshot()));
   window.graphReady = () => { if (offline) offline.hidden = true; };
 
   function redraw() {
@@ -9495,7 +9564,9 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
   if (submitBtn) submitBtn.addEventListener("click", () => { submitChanges(); });
 
   document.getElementById("new-idea").addEventListener("click", () => {
-    const tmp = ledger.addIdea({ name: "", what: "", why: "", expected: "" });
+    // Born under the page it was made on: parent is the current page's idea.
+    const owner = currentOwner();
+    const tmp = ledger.addIdea({ name: "", what: "", why: "", expected: "", parent: owner });
     const proto = document.querySelector(".idea");
     const el = proto.cloneNode(true);
     el.id = tmp;
@@ -9514,12 +9585,31 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
     // \u4EE5\u540E\u518D\u52A0\u53EA\u8BFB\u683C\u4E5F\u4E0D\u4F1A\u6F0F\u3002
     for (const n of el.querySelectorAll("dd:not([data-f])")) n.textContent = "\u2014";
     for (const n of el.querySelectorAll(".log, .badge.end")) n.remove();
-    document.getElementById("cards").append(el);
+    const parentBox = el.querySelector('[data-field="parent"]');
+    if (parentBox) parentBox.value = owner;
+    // Its own page, and a row on the page it was made from \u2014 then go there.
+    const sec = document.createElement("section");
+    sec.className = "page"; sec.id = "page-" + tmp; sec.hidden = true;
+    sec.append(el);
+    document.getElementById("pages").append(sec);
+    const list = document.querySelector("#page-" + (owner || "root") + " .children");
+    if (list) {
+      const row = document.createElement("a");
+      row.className = "brief todo"; row.href = "#" + tmp; row.setAttribute("data-brief", tmp);
+      const bname = document.createElement("span");
+      bname.className = "bname"; bname.textContent = "\uFF08\u65B0\u60F3\u6CD5\uFF09";
+      const enter = document.createElement("span");
+      enter.className = "enter"; enter.textContent = "\u8FDB\u5165 \u2192";
+      row.append(bname, enter);
+      list.append(row);
+    }
     markIncomplete(tmp);
     afterStructure(tmp);
+    location.hash = tmp;
   });
 
   refresh();
+  showPage();
 </script>
 <script type="module">
   // \u2500\u2500 the diagram \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -9631,15 +9721,9 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
     });
   });
 
-  function gotoNode(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
-  }
-  window.nodeClick = gotoNode;
-  document.querySelectorAll("[data-goto]").forEach((a) =>
-    a.addEventListener("click", (e) => { e.preventDefault(); gotoNode(a.getAttribute("data-goto")); }));
+  // A node is a page: clicking it goes there. Every in-page link is a plain
+  // href="#id" for the same reason, so the hash handler above does the rest.
+  window.nodeClick = (id) => { location.hash = id; };
 
   /** Draw one source. mermaid stamps what it has processed, so replace the node. */
   async function draw(src) {
@@ -9657,7 +9741,9 @@ ${// I-061: the cards are the one place a reader goes through in order, so they
   // The one bridge to the editing module above \u2014 the same trick as nodeClick.
   // It keeps the human's zoom and pan, because a redraw on every edit that
   // snapped back to the whole graph would make editing unusable.
-  window.redrawGraph = (src) => { draw(src).then(() => apply()); };
+  // refit is for a page change: a new subgraph under the old pan would sit
+  // off-screen, whereas an edit on the same page must keep the human's view.
+  window.redrawGraph = (src, refit) => { draw(src).then(() => (refit ? fit() : apply())); };
   window.graphReady();
   new ResizeObserver(() => { if (k === 1 && tx === 0 && ty === 0) fit(); }).observe(viewport);
 </script></body></html>`;
@@ -9817,7 +9903,7 @@ var SUBCOMMANDS = [
   ["render", ""],
   ["apply", "[file]"],
   ["serve", "[--port 4173] [--no-open]"],
-  ["request-approval", "--gate decomposition|plan|red-waiver|manual-check [--node I-002[,I-003]] [--by \u4EBA\u540D]"],
+  ["request-approval", "--node I-002 [I-003 \u2026] [--gate plan|red-waiver|manual-check] [--by \u4EBA\u540D]"],
   ["run-check", "<id> --phase red|green [--timeout \u79D2]"]
 ];
 var usageOf = (name) => {
@@ -10047,21 +10133,20 @@ ${block}`);
       return 0;
     }
     case "request-approval": {
-      const gate = flag(args2, "gate");
-      if (!gate || !["decomposition", "plan", "red-waiver", "manual-check"].includes(gate)) {
+      const gate = flag(args2, "gate") ?? "plan";
+      const at = args2.indexOf("--node");
+      const nodes = at < 0 ? [] : args2.slice(at + 1).join(",").split(/[,\s]+/).reduce((acc, s) => {
+        if (s.startsWith("--")) acc.push("--");
+        else if (s && !acc.includes("--")) acc.push(s);
+        return acc;
+      }, []).filter((s) => s !== "--");
+      if (!["plan", "red-waiver", "manual-check"].includes(gate) || nodes.length === 0) {
         console.error(usageOf("request-approval"));
         return 2;
       }
-      const nodes = (flag(args2, "node") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const r = requestApproval(
-        projectDir,
-        graph,
-        gate,
-        nodes.length ? nodes : void 0,
-        { by: flag(args2, "by"), date: today }
-      );
-      console.log(approvalLines(approvalProjection(graph, gate, nodes.length ? nodes : void 0)).join("\n"));
-      console.log(`\u4E00\u6B21\u6027\u53E3\u4EE4\uFF1A${r.challenge}\uFF08${gate}${nodes.length ? ` \xB7 ${nodes.join(", ")}` : ""}\uFF09`);
+      const r = requestApproval(projectDir, graph, gate, nodes, { by: flag(args2, "by"), date: today });
+      console.log(approvalLines(approvalProjection(graph, nodes)).join("\n"));
+      console.log(`\u4E00\u6B21\u6027\u53E3\u4EE4\uFF1A${r.challenge}\uFF08${gate} \xB7 ${nodes.join(", ")}\uFF09`);
       console.log(`\u8BF7\u4EBA\u770B\u8FC7\u4E0A\u9762\u7684\u5185\u5BB9\u540E\uFF0C\u6574\u6761\u6D88\u606F\u56DE\u590D\uFF1A\u6279\u51C6 ${r.challenge}`);
       console.log(`\uFF08\u62D2\u7EDD\u5C31\u56DE\uFF1A\u62D2\u7EDD ${r.challenge}\u3002\u5185\u5BB9\u6539\u52A8\u6216\u53E3\u4EE4\u7528\u8FC7\u4E00\u6B21\u5373\u4F5C\u5E9F\u3002\uFF09`);
       console.log(`\u8FD9\u4E00\u53E5\u53EA\u80FD\u7531\u4EBA\u5728\u5BF9\u8BDD\u91CC\u4EB2\u624B\u56DE\uFF0C\u522B\u5904\u70B9\u4EC0\u4E48\u90FD\u4E0D\u7B97\u6570\u3002`);
@@ -10763,14 +10848,14 @@ function ruleShell(event, projectDir) {
     declared = graph.ideas.find((i) => i.status === "doing" && i.verify?.command?.trim() === command);
     const chained = declared && chainedCommandRefusal(declared, command);
     if (chained) return { allow: false, reason: chained };
-    if (declared && validApproval(projectDir, graph, "plan", [declared.id])) return OK;
+    if (declared && validApproval(projectDir, graph, "plan", declared.id)) return OK;
   } catch {
   }
   const verdict = screenShell(command, projectDir);
   if (verdict.allow || !declared) return verdict;
   return {
     allow: false,
-    reason: `\u8FD9\u662F ${declared.id}\u300C${declared.name}\u300D\u5728\u56FE\u91CC\u58F0\u660E\u7684 verify.command\uFF08\u300C${command.slice(0, 80)}\u300D\uFF09\uFF0C\u62E6\u4E0B\u5B83\u7684\u4E0D\u662F\u547D\u4EE4\u672C\u8EAB\uFF0C\u662F\u8FD9\u4E2A\u60F3\u6CD5\u7684\u65B9\u6848\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF08D7\uFF09\uFF1A\u53BB\u8981\u4E00\u6B21 \u2014\u2014 request-approval --gate plan --node ${declared.id}\uFF0C\u4EBA\u56DE\u300C\u6279\u51C6\u300D\u4E4B\u540E\u8FD9\u6761\u547D\u4EE4\u5C31\u7167\u539F\u6837\u653E\u884C\u3002\uFF08\u6279\u51C6\u7ED1\u5728\u56FE\u7684\u5185\u5BB9\u4E0A\uFF1A\u4E4B\u540E\u518D\u6539 how / verify\uFF0C\u6279\u51C6\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8981\u3002\u82E5\u786E\u5B9E\u60F3\u6539\u547D\u4EE4\u672C\u8EAB\uFF0C\u5148\u6539\u56FE\u518D\u8981\u6279\u51C6\u3002\u539F\u672C\u6321\u4F4F\u5B83\u7684\u89C4\u5219\uFF1A${verdict.reason}\uFF09`
+    reason: `\u8FD9\u662F ${declared.id}\u300C${declared.name}\u300D\u5728\u56FE\u91CC\u58F0\u660E\u7684 verify.command\uFF08\u300C${command.slice(0, 80)}\u300D\uFF09\uFF0C\u62E6\u4E0B\u5B83\u7684\u4E0D\u662F\u547D\u4EE4\u672C\u8EAB\uFF0C\u662F\u8FD9\u4E2A\u60F3\u6CD5\u7684\u65B9\u6848\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF08D7\uFF09\uFF1A\u53BB\u8981\u4E00\u6B21 \u2014\u2014 request-approval --node ${declared.id}\uFF0C\u4EBA\u56DE\u300C\u6279\u51C6\u300D\u4E4B\u540E\u8FD9\u6761\u547D\u4EE4\u5C31\u7167\u539F\u6837\u653E\u884C\u3002\uFF08\u6279\u51C6\u7ED1\u5728\u56FE\u7684\u5185\u5BB9\u4E0A\uFF1A\u4E4B\u540E\u518D\u6539 how / verify\uFF0C\u6279\u51C6\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8981\u3002\u82E5\u786E\u5B9E\u60F3\u6539\u547D\u4EE4\u672C\u8EAB\uFF0C\u5148\u6539\u56FE\u518D\u8981\u6279\u51C6\u3002\u539F\u672C\u6321\u4F4F\u5B83\u7684\u89C4\u5219\uFF1A${verdict.reason}\uFF09`
   };
 }
 function screenShell(command, projectDir) {

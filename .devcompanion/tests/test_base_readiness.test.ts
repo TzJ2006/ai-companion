@@ -124,15 +124,15 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     return String(doc);
   };
 
-  // 真实用法（命令行 set 就是这条）：带项目目录，D17 的两道批准闸门生效。
+  // 真实用法（命令行 set 就是这条）：带项目目录，D17 的批准闸门生效。
   const trySetHere = (id: string, status: string) => {
     const { doc, graph } = load(graphPath(dir));
     setStatus(doc, graph, id, status as Idea["status"] & string, { date: "2026-08-31" }, dir);
     return String(doc);
   };
 
-  const approve = (gate: "decomposition" | "plan", nodes?: string[]) => {
-    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, gate, nodes);
+  const approve = (nodes: string[]) => {
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", nodes);
     applyApproval(dir, `批准 ${challenge}`, { date: "2026-08-31" });
   };
 
@@ -152,31 +152,25 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(trySet("I-002", "doing")).toContain("status: doing");
   });
 
-  // D17：开工要的是两次当前有效的批准 —— 拆分（人看过整张图）和计划（人看过这个
-  // 节点的八问）。缺哪次就点名该跑的那条命令，不让人猜。
-  it("refuses doing with no approval at all, and names the decomposition command", () => {
-    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate decomposition/);
+  // D17：开工要的是这个想法当前有效的计划批准（人看过它的八问）。缺了就点名该跑
+  // 的那条命令，不让人猜。
+  it("refuses doing with no approval, and names the plan command for this idea", () => {
+    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --node I-002/);
   });
 
-  it("refuses doing when only the plan is approved — the split still needs a human", () => {
-    approve("plan", ["I-002"]);
-    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate decomposition/);
+  it("another idea's approval does not count — each idea is approved on its own", () => {
+    approve(["I-003"]);
+    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --node I-002/);
   });
 
-  it("refuses doing when only the decomposition is approved, and names the plan command", () => {
-    approve("decomposition");
-    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --gate plan --node I-002/);
-  });
-
-  it("allows doing once both approvals are current", () => {
-    approve("decomposition");
-    approve("plan", ["I-002"]);
+  it("allows doing once this idea's approval is current", () => {
+    approve(["I-002"]);
     expect(trySetHere("I-002", "doing")).toContain("status: doing");
   });
 
   // 走 blocked 绕一圈也没用：闸门看的是「进入 doing」，不是上一个状态。
-  it("refuses blocked → doing without the two approvals as well", () => {
-    expect(() => trySetHere("I-007", "doing")).toThrow(/request-approval --gate decomposition/);
+  it("refuses blocked → doing without the approval as well", () => {
+    expect(() => trySetHere("I-007", "doing")).toThrow(/request-approval --node I-007/);
   });
 
   it("enforces the small transition table", () => {

@@ -15,21 +15,7 @@ overview: >
 # 2026-08-29 /ccthink 新增 I-068「改图即改项目」；
 # 2026-08-29 /ccthink 新增 I-075「共同基座：改一处三边生效」）
 endpoints: [ I-057, I-058, I-059, I-068, I-075 ]
-next_id: 107
-
-# 分步概览（2026-09-03 I-085 按 FORMAT.md「The step overview」那一节写下；
-# 每个想法用 step 认领一步，check 会报归错步、漏归、空步和步数超出三到七）
-steps:
-  - name: 记录格式
-    blurb: 定下一个想法要回答哪八个问题，并写出读取、校验、排序和渲染这些想法的程序。
-  - name: 强制执行
-    blurb: 让这些规矩由程序执行而不是靠自觉 —— 没想清楚不许写代码，没有失败过的测试不许写实现，批准只能来自人亲手回复的一句话。
-  - name: 日常命令
-    blurb: 把建图、想清楚、动手做、查错、看图这五件事各做成一条命令，装到哪个仓库都一样用。
-  - name: 网页编辑
-    blurb: 让人直接在网页上读图、改图、签字，改完自动写回项目文件。
-  - name: 共同基座
-    blurb: 把三个编码助手（Claude Code、Cursor、Codex）各自的一套实现合成一份核心，各留一层薄接入，规则改一处三边同时生效。
+next_id: 112
 
 ideas:
 
@@ -38,9 +24,10 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-041
-    step: 记录格式
     name: "想法节点的记录格式：每个想法必须回答八个问题"
     status: done
+    code:
+      - file: companion/FORMAT.md
     needs: []
     what: >
       一个想法节点的格式：id / name / status / needs，加上八个必答问题
@@ -59,9 +46,6 @@ ideas:
       选一层扁平结构而不是需求／特性／模块／函数四层 —— FORMAT.md 结尾写明：
       诉求是「所有想法都变成一个个模块」，模块不是分类法，四层结构本身就是让人 看不懂项目的那种复杂度。YAML 而不是
       JSON，因为八个回答都是成段散文。
-    code:
-      - file: archive/claude-companion/FORMAT.md
-        lines: "1-160"
     verify:
       manual: "拿一个真实想法填一遍八问，看有没有哪个问题填不进去、或者填完还说不清这个想法"
       signed_off: "Zijia Tang 2026-08-31 —— 人的原话：「八问够用，40 个想法都填进去了，没有填不进去的」；由 ccbuild
@@ -85,11 +69,18 @@ ideas:
         by: ccbuild
         note: 人已签字：「八问够用，40 个想法都填进去了，没有填不进去的」（signed_off 已录，原话在 log）；同轮修掉三处过期数据：lines
           143→160、how 里「三个 companion 各有一份副本」作废、补两条节点记录
+    parent: I-107
 
   - id: I-042
-    step: 记录格式
     name: "读取想法图，并检查它有没有坏掉"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: check
+      - file: companion/ideas.ts
+        symbol: findCycle
+      - file: companion/ideas.ts
+        symbol: orphans
     needs: [ I-041 ]
     what: >
       读 graph.yaml，检查 id 唯一、needs 指向存在的想法、图无环、done 的节点必须有 code 和 verify、done 的
@@ -104,26 +95,19 @@ ideas:
     why_this_way: >
       把「done 必须有 code + verify」做成硬错误而不是警告 —— 代码注释写明这是整套
       东西成立的前提：如果「完成」可以没有证据，这张图就只是一份愿望清单。 todo 的 code 路径刻意不查，否则计划本身会被当成错误。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: check
-        lines: "260-327"
-      - file: archive/claude-companion/ideas.ts
-        symbol: findCycle
-        lines: "119-137"
-      - file: archive/claude-companion/ideas.ts
-        symbol: orphans
-        lines: "140-154"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       /ccbuild 动手前先跑它；/ccgraph 用它的输出告诉人接下来该做什么； guard 的 R5 用它拦住「回合结束时图是坏的」。
+    parent: I-107
 
   - id: I-043
-    step: 记录格式
     name: "算出现在可以立刻动手做的想法有哪些"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: frontier
     needs: [ I-042 ]
     what: >
       算出现在可以做哪些想法：status 是 todo、且所有前置都已 done 的节点。
@@ -135,20 +119,19 @@ ideas:
       一次过滤：status === todo 且 needs.every(前置已 done)。
     why_this_way: >
       不做拓扑排序 —— 代码注释写明「现在可以做什么」只需要一次过滤，做完一个再算一次即可， 少一个可能出错的地方。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: frontier
-        lines: "111-116"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       /ccbuild 的入口；互不相干的、都可以立刻动手的想法可以并行交给多个 subagent。
+    parent: I-107
 
   - id: I-044
-    step: 记录格式
     name: "修改想法状态时，自动留下一条修改记录"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: setStatus
     needs: [ I-042 ]
     what: >
       改一个想法的状态，同时在它自己的 log 里追加一条记录；写回时保留 YAML 注释； 拒绝没有 code / verify 的
@@ -162,23 +145,19 @@ ideas:
     why_this_way: >
       走 Document 而不是 parse → 改 → stringify：后者会抹掉整个文件的注释和排版， 而注释正是人留给自己的东西。rename
       是原子的，写到一半崩溃不会毁掉原图 （代码注释：a crash mid-write leaves the old graph intact）。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: setStatus
-        lines: "331-355"
-      - file: archive/claude-companion/ideas.ts
-        symbol: save
-        lines: "95-99"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       五个命令都通过它写状态，所以不存在「忘了记一笔」这条路径。
+    parent: I-107
 
   - id: I-045
-    step: 记录格式
     name: "把想法图渲染成一个可以点击、缩放的网页"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: render
     needs: [ I-042 ]
     what: >
       渲染成一个自包含网页：上面是只显示想法名称的完整项目图，可平移缩放； 点任意节点跳到下面的详情卡片，卡片里是八个问题的全部回答，以及它的前置想法和
@@ -194,20 +173,23 @@ ideas:
       用 Mermaid 而不是 d3 / cytoscape：静态 HTML，没有构建步骤也不用起服务器。 缩放刻意不用 CSS scale() ——
       代码注释写明 scale 会把图层栅格化一次再拉伸， 那正是之前看起来发虚的原因；fit 只缩不放，因为把一张小图放到 235% 不是
       任何人说「适应窗口」时想要的。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "364-605"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       /ccthink 第 2 步用它让人在动手之前就看出拆分错了；/ccscan 用它交付结果。
+    parent: I-107
 
   - id: I-046
-    step: 记录格式
     name: "用一张文件清单证明项目真的被读完了"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: listProjectFiles
+      - file: companion/ideas.ts
+        symbol: strike
+      - file: companion/ideas.ts
+        symbol: scanIgnores
     needs: [ I-042 ]
     what: >
       /ccscan 开始时把项目里值得读的文件列成一张清单（ideas/.scan-todo）， 每 Read 一个文件由 hook
@@ -222,30 +204,23 @@ ideas:
     why_this_way: >
       用 git ls-files 而不是自己遍历，因为它已经懂 .gitignore、子模块和大小写； 加 -z 是因为不加时 git 会把非
       ASCII 路径转义成八进制，那些文件就永远划不掉 （代码注释明确写了这一点）。node_modules 显式排除，因为仓库可能真的把它提交了。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: listProjectFiles
-        lines: "192-210"
-      - file: archive/claude-companion/ideas.ts
-        symbol: strike
-        lines: "243-252"
-      - file: archive/claude-companion/ideas.ts
-        symbol: scanIgnores
-        lines: "184-190"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
       任何声称「通读了项目」的命令都可以挂在同一张清单上。
+    parent: I-107
 
   # ─────────────────────────────────────────────────────────────
   # 强制层：跑在 harness 里、agent 绕不过去的纪律
   # ─────────────────────────────────────────────────────────────
 
   - id: I-047
-    step: 强制执行
     name: "七条挂在 hook 上、agent 绕不过去的强制规则"
     status: done
+    code:
+      - file: companion/guard.ts
+        symbol: decide
     needs: [ I-042, I-046 ]
     what: >
       一个 guard.ts 挂在 PreToolUse / PostToolUse / Stop / UserPromptSubmit 上，
@@ -266,26 +241,21 @@ ideas:
       只强制机器判得了的事：文件存不存在、字段填没填、状态变没变、check 过不过。 八个回答的质量、联网搜索是否诚实强制不了，唯一的防线是让遗漏在
       check 和 渲染里可见 —— 硬拦一个判不准的东西比不拦更糟。所有异常路径一律 fail open （代码注释：a guard that
       crashes must never block work）， 守卫自己崩了不能把人锁在外面；AIDEV_GUARD=off 是逃生口。
-    code:
-      - file: archive/claude-companion/guard.ts
-        symbol: decide
-        lines: "159-190"
-      - file: archive/claude-companion/guard.ts
-        symbol: ruleTestFirst
-        lines: "217-274"
-      - file: archive/claude-companion/guard.ts
-        symbol: ruleGraphIsSound
-        lines: "307-320"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
       要加新纪律就在 decide 里加一条规则加一个测试 —— 前提是它机器判得了。
+    parent: I-108
 
   - id: I-048
-    step: 强制执行
     name: "只有人亲手输入「批准」才能生效的批准机制"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: applyApproval
+      - file: companion/guard.ts
+        symbol: handlePrompt
     needs: [ I-047 ]
     what: >
       批准绑定在图的 sha256 前 12 位上，只有 UserPromptSubmit 事件里整条消息就是 「批准 / approve /
@@ -302,28 +272,18 @@ ideas:
       把「我做了」绑到一个不真做就产生不了的事件上：UserPromptSubmit 只有人亲手敲
       消息才会触发。判断「整条消息就是批准」而不是「消息里含批准」，否则 「我不批准」会被算成批准。 已知天花板（README 如实写出）：agent
       仍可以用 Bash 直接喂一个假的 UserPromptSubmit 给 guard.ts。R6 挡的是顺手跳过，不是铁了心要绕过去的 agent。
-    code:
-      - file: archive/claude-companion/guard.ts
-        symbol: graphHash
-        lines: "92-98"
-      - file: archive/claude-companion/guard.ts
-        symbol: isApproval
-        lines: "112-119"
-      - file: archive/claude-companion/guard.ts
-        symbol: recordApproval
-        lines: "280-285"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
       任何「必须由人点头」的关卡都可以用同一招：绑到 agent 造不出来的事件上。
+    parent: I-108
 
   # ─────────────────────────────────────────────────────────────
   # 工作流：五个命令
   # ─────────────────────────────────────────────────────────────
 
   - id: I-049
-    step: 日常命令
     name: "五个斜杠命令，覆盖从建图到实现的完整工作流"
     status: doing
     needs: [ I-041, I-043, I-044, I-045 ]
@@ -343,16 +303,11 @@ ideas:
       /ccfix 刻意不让 AI 自己判断代码和想法哪边对：它恰恰是判断不了的那一方。 /ccscan 明确禁止编造
       why_this_way，因为编出来的理由会被下一个 agent 当成 事实并一直维护下去，这是这个命令能造成的最大伤害。
     code:
-      - file: archive/claude-companion/commands/ccscan.md
-        lines: "1-125"
-      - file: archive/claude-companion/commands/ccthink.md
-        lines: "1-153"
-      - file: archive/claude-companion/commands/ccbuild.md
-        lines: "1-122"
-      - file: archive/claude-companion/commands/ccfix.md
-        lines: "1-110"
-      - file: archive/claude-companion/commands/ccgraph.md
-        lines: "1-42"
+      - file: companion/skills/ccscan/SKILL.md
+      - file: companion/skills/ccthink/SKILL.md
+      - file: companion/skills/ccbuild/SKILL.md
+      - file: companion/skills/ccfix/SKILL.md
+      - file: companion/skills/ccgraph/SKILL.md
     verify:
       manual: "五个命令各在一个真实项目上跑一遍，确认每一步都做到了它承诺的事；尤其看 /ccfix 是否报出准确行号"
       signed_off: Thomas T 2026-09-01 —— 人的原话：「我尝试了/ccscan, /ccthink 都按照正常的方式成功跑通了」；在网页上签的
@@ -362,15 +317,18 @@ ideas:
       - date: "2026-08-25"
         by: ccscan
         note: "五个命令都写完并装出去了，但没有一个在真项目上从头到尾走过；人工验证未签字"
+    parent: I-109
 
   # ─────────────────────────────────────────────────────────────
   # 多 agent 共存与分发
   # ─────────────────────────────────────────────────────────────
 
   - id: I-050
-    step: 共同基座
     name: "用文件名后缀区分不同 agent，各写各的文件"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: paths
     needs: [ I-042 ]
     what: >
       ideas/graph.yaml 空着就用它并在文件里写 agent: claude；被别人占了就用
@@ -386,21 +344,14 @@ ideas:
     why_this_way: >
       先到的保留干净名字。用「文件是否存在」当状态，而不是另存一份配置 —— 少一个可能和现实不一致的地方。agent: 键不是装饰，代码注释写明没有它，
       下一次调用会把我们自己写的、不带后缀的图误认成别人的，从而悄悄换到 带后缀的文件、抛弃刚写的图。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: nameIsTaken
-        lines: "34-44"
-      - file: archive/claude-companion/ideas.ts
-        symbol: agentName
-        lines: "47-52"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       再加第四个 agent 只需要换一个 AGENT 常量。
+    parent: I-111
 
   - id: I-051
-    step: 共同基座
     name: "把这套工作流安装进其它仓库"
     status: doing
     needs: [ I-047, I-049, I-050 ]
@@ -420,22 +371,23 @@ ideas:
       不会出现五个仓库跑着五个版本。代价是这个目录挪了位置之后需要重装。 graph 和 log.md 进 git（那是记录），.scan-todo 和
       .approved 不进 （半途的扫描和一个人的签字是本机状态）。
     code:
-      - file: archive/claude-companion/install.ts
+      - file: companion/install.ts
         symbol: install
-        lines: "67-117"
-      - file: archive/claude-companion/install.ts
-        symbol: installHooks
-        lines: "34-65"
     verify:
       manual: "在一个真实的、不是这个仓库的项目上装好，重启 Claude Code，确认五个命令能调起来且 hook 真的拦得住"
       signed_off: Thomas T 2026-09-01 —— 人的原话：「我装进了其他仓库，都能跑通」；在网页上签的
     future: >
       新项目的第一步：装上，跑 /ccscan。
+    parent: I-111
 
   - id: I-052
-    step: 共同基座
     name: "记录装到了哪些仓库，并能检查是否过期、批量更新"
     status: done
+    code:
+      - file: companion/install.ts
+        symbol: statusOf
+      - file: companion/install.ts
+        symbol: updateAll
     needs: [ I-051 ]
     what: >
       每次安装把目标绝对路径记进 claude-companion/.installs.json； --status 逐文件报 current /
@@ -450,24 +402,14 @@ ideas:
     why_this_way: >
       不用版本号：commit 里写明「一个你必须记得去 bump 的数字，总有一天会是错的， 而内容自己知道对不对」。归一化换行是必须的 ——
       Windows 上 git 给的源文件是 CRLF、装出去的是 LF，不归一化的话每个安装都会被永远报成过期，这个检查就废了。
-    code:
-      - file: archive/claude-companion/install.ts
-        symbol: statusOf
-        lines: "156-167"
-      - file: archive/claude-companion/install.ts
-        symbol: updateAll
-        lines: "170-179"
-      - file: archive/claude-companion/install.ts
-        symbol: targets
-        lines: "127-135"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_graph.test.ts"
       pass: "exit 0"
     future: >
       claude-companion/ 整个目录挪位置之后也用 --update 修 —— 命令文件里烧的是绝对路径。
+    parent: I-111
 
   - id: I-053
-    step: 共同基座
     name: "Cursor 版本：没有进行中的想法时，不允许写产品代码"
     status: blocked
     needs: [ I-041, I-050 ]
@@ -508,9 +450,9 @@ ideas:
       - date: 2026-08-29
         by: ccthink
         note: 被共同基座取代：Cursor 独立版本不再补齐，改由 I-073 通过基座接入
+    parent: I-111
 
   - id: I-054
-    step: 共同基座
     name: "Codex 版本：用 Python 实现的同一套想法图工作流"
     status: blocked
     needs: [ I-041, I-050 ]
@@ -540,13 +482,13 @@ ideas:
       - date: 2026-08-29
         by: ccthink
         note: 被共同基座取代：Python 版本不再补齐，改由 I-074 退役并通过基座接入
+    parent: I-111
 
   # ─────────────────────────────────────────────────────────────
   # 已知缺陷
   # ─────────────────────────────────────────────────────────────
 
   - id: I-055
-    step: 记录格式
     name: "修复扫描清单被多个进程同时写入时会丢记录的问题"
     status: done
     needs: [ I-046 ]
@@ -599,27 +541,6 @@ ideas:
       已经判过这条分歧：所有生成状态原子写，append log 用进程锁或单次原子追加。 已知边界，写在这里免得以后被当成
       bug：追加的原子性在网络盘上不成立， 本地磁盘且单行远小于一个扇区时才是安全的 —— 这里存的是文件路径，远远够。
     code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: strike
-        lines: "359-381"
-      - file: archive/claude-companion/ideas.ts
-        symbol: doneFile
-        lines: "312-329"
-      - file: archive/claude-companion/ideas.ts
-        symbol: readWorklist
-        lines: "331-335"
-      - file: archive/claude-companion/ideas.ts
-        symbol: writeWorklist
-        lines: "337-343"
-      - file: archive/claude-companion/ideas.ts
-        symbol: save
-        lines: "95-121"
-      - file: archive/claude-companion/guard.ts
-        symbol: ruleRecord
-        lines: "289-303"
-      - file: archive/claude-companion/guard.ts
-        symbol: decide
-        lines: "177-190"
       - file: ideas/.gitignore
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_scan_concurrency.test.ts"
@@ -636,9 +557,9 @@ ideas:
           appendFileSync、返回 -1 或本次快照剩余数；save 用 pid+随机名临时文件并对 EPERM/EBUSY/EACCES
           重试；scan 一次性迁移（真实仓库 49 文件、45 已读，残缺行 n 消失）；.scan-done 进 guard 写保护与
           ideas/.gitignore
+    parent: I-107
 
   - id: I-056
-    step: 强制执行
     name: "清理掉指向已删除代码的过期 hook 配置"
     status: done
     needs: [ I-047 ]
@@ -687,13 +608,13 @@ ideas:
         by: ccbuild
         note: 删掉两条指向已删除的 packages/hook/dist 的 hook；新增 test_settings_hooks.test.ts（3
           个断言：脚本文件必须存在、四个事件各留一条 guard.ts hook），先红后绿
+    parent: I-108
 
   # ─────────────────────────────────────────────────────────────
   # 终点
   # ─────────────────────────────────────────────────────────────
 
   - id: I-057
-    step: 共同基座
     name: "终点：装进一个陌生仓库，并在那里真正跑起来"
     status: todo
     needs: [ I-051, I-052, I-056, I-086, I-087, I-106 ]
@@ -713,9 +634,9 @@ ideas:
       signed_off: Thomas T 2026-09-01 —— 人的原话：「装成功了，跑通了」；在网页上签的
     future: >
       装好之后，每个项目都有一张自己的想法图。
+    parent: I-111
 
   - id: I-058
-    step: 日常命令
     name: "终点：用这套工作流完整地改进它自己一次"
     status: todo
     needs: [ I-048, I-049, I-051, I-055 ]
@@ -737,9 +658,9 @@ ideas:
       signed_off: Thomas T 2026-09-01 —— 人的原话：「确实改进了，而且现在还在继续改进」；在网页上签的
     future: >
       跑通之后，才有资格决定接下来往哪个方向加东西。
+    parent: I-109
 
   - id: I-059
-    step: 共同基座
     name: "终点：三个 agent 接手同一张项目想法图，不再各自维护副本"
     status: todo
     needs: [ I-050, I-073, I-074 ]
@@ -771,15 +692,18 @@ ideas:
       - date: "2026-08-29"
         by: codex
         note: "共同基座复审：从三份互不覆盖的图改为一张项目级图；后缀文件仅作为显式迁移输入"
+    parent: I-111
 
   # ─────────────────────────────────────────────────────────────
   # 阅读顺序（2026-08-25 /ccthink，人已对齐第 1 步）
   # ─────────────────────────────────────────────────────────────
 
   - id: I-060
-    step: 记录格式
     name: "把想法按依赖顺序排列：前置的永远排在前面"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: topoOrder
     needs: [ I-042 ]
     what: >
       给定一张图，返回按拓扑序排好的想法列表：每个想法都排在它全部前置之后； 同一层内按 id
@@ -820,10 +744,6 @@ ideas:
       topoOrder 绝不能变得知道状态， frontier 也不该改成建立在它之上。 已知边界：「按 id 排」是按字符排的。现在的 id
       是补零的三位数，字符顺序正好等于数字顺序； 一个用一位数和两位数混排 id 的项目会排反。用普通的排序（和这个文件里另外两处一致），
       不用跟语言环境相关的比较 —— 那会让同样的输入在不同机器上给出不同的输出。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: topoOrder
-        lines: "157-213"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_toposort.test.ts"
       pass: "exit 0"
@@ -837,9 +757,9 @@ ideas:
         by: ccbuild
         note: 新增 topoOrder（分层 Kahn，层内按 id 排、悬空边跳过、环里的节点按 id 接在末尾、按下标取不经 id
           查找表）；test_ideas_toposort.test.ts 9 个测试，含两个能分开「每步取最小」和「先进先出」的夹具，先红后绿
+    parent: I-107
 
   - id: I-061
-    step: 记录格式
     name: "网页里的详情卡片按依赖顺序显示，而不是按书写顺序"
     status: done
     needs: [ I-060, I-045 ]
@@ -894,6 +814,7 @@ ideas:
       - date: 2026-09-04
         by: ccbuild
         note: render 的详情卡片改为 topoOrder 顺序输出，标题下加一句说明；流程图、JSON 模型、锚点都不动
+    parent: I-107
 
   # ─────────────────────────────────────────────────────────────
   # 网页编辑：改图即改项目
@@ -903,9 +824,13 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-062
-    step: 网页编辑
     name: "在网页上直接修改一个想法的文字和状态"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: render
+      - file: companion/ideas.ts
+        symbol: applyChanges
     needs: [ I-045 ]
     what: >
       想法图网页里的详情卡片从只读变成可编辑：八个问题的文字、想法名称、状态， 人都能直接在浏览器里修改；改动先留在页面里并被标记出来，等待提交。
@@ -926,13 +851,6 @@ ideas:
       拼接出来的，反解析必丢结构。不引前端框架，用原生表单元素，维持这个网页零构建、
       双击即用的现状。草稿只当安全网不当传输通道（mermaid-live-editor 的先例）； 「恢复必须人确认」是因为 file://
       协议下所有本地网页共享同一个浏览器存储， 别的页面写进来的东西不能被当成人的改动（对抗审查发现的注入路径）。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "404-804"
-      - file: archive/claude-companion/ideas.ts
-        symbol: fingerprint
-        lines: "372-373"
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_edit.test.ts"
       pass: "exit 0"
@@ -948,11 +866,14 @@ ideas:
           按项目路径命名空间的草稿键；每张卡片可改名称/状态/六个散文字段，改动有可见标记；草稿存 localStorage 全包
           try/catch，恢复要人逐条点。12
           个测试全绿；浏览器实测：编辑开关、脏标记、改回原值取消标记、存储不可用时降级为纯内存、草稿恢复/丢弃逐条生效
+    parent: I-110
 
   - id: I-076
-    step: 记录格式
     name: "把「一张图画成流程图」这段算法抽成网页和引擎共用的一份源码"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: buildMermaidSource
     needs: [ I-062 ]
     what: >
       现在「一张想法图 → 流程图的源文本」这段算法只活在生成网页的那个函数里，
@@ -979,13 +900,6 @@ ideas:
       但那是为了保住一个在这里没有任何收益的机制，凭空多出两处新东西。而生成页面脚本本来就是用模板
       字符串手写的（这个文件里已经这么干了），把函数体写成字符串常量是零额外机制。
       代价要说清楚：字符串常量那一份失去类型检查。所以那条「两边输出逐字相同」的测试不是锦上添花， 它就是这条决定的安全网，缺了它这个选择就不成立。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: buildMermaidSource
-        lines: "516-583"
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "591,740"
     verify:
       command: "npx vitest run .devcompanion/tests/test_mermaid_source.test.ts"
       pass: "exit 0"
@@ -1001,11 +915,14 @@ ideas:
           toString，绕开 tsx 的 keepNames 注入 __name）；六个自由变量全部内联；删掉变成死代码的
           wrapLabel。test_mermaid_source.test.ts 10 条先红后绿；另在真实的 40
           个想法上验证新旧算法输出逐字节相同
+    parent: I-107
 
   - id: I-077
-    step: 记录格式
     name: "改动记账本：字段改动和结构改动用同一种格式，浏览器草稿和磁盘文件也用同一种"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: applyChanges
     needs: [ I-062 ]
     what: >
       页面记录「人这一次改了什么」的那本账，从「想法编号 + 字段名 → 新值」的表，
@@ -1035,13 +952,6 @@ ideas:
       Patch：它对数组只能整体替换， 而且它用 null 表示删除，和这张图里真实存在的「人工签字：尚未签」直接冲突。
       自定义的、按编号寻址的操作清单，语义上对齐 Kubernetes 那套按键合并的先例，实现只有约三十行。
       版本号那一位借流程图在线编辑器的做法：加一个前缀，好让写回端能明确拒绝一份旧格式， 而不是似是而非地读进去。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: createLedger
-        lines: "585-716"
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "1017-1120"
     verify:
       command: "npx vitest run .devcompanion/tests/test_change_envelope.test.ts"
       pass: "exit 0"
@@ -1056,9 +966,9 @@ ideas:
         note: 改动记账本：六种操作的有序清单 + 信封（版本/项目/图指纹），草稿和磁盘文件同一格式；createLedger
           做成共用源码字符串，引擎和页面求值同一段文本；页面的编辑脚本改接这本账，草稿改存信封，并补上原来存了却从不比对的指纹过期检查。test_change_envelope.test.ts
           15 条先红后绿 + 2 条页面接线断言（后补，非先红）
+    parent: I-107
 
   - id: I-078
-    step: 记录格式
     name: "把取号计数器和改动文件格式写进格式规范"
     status: done
     needs: [ I-041 ]
@@ -1086,7 +996,6 @@ ideas:
       两件事合在一个节点里，是因为它们是同一件事的两半：都是「这条链路新增的东西，规范里必须查得到」，
       而且都要动同一个受管的文件。分成两个节点会让同一份规范被批准两次。
     code:
-      - file: archive/claude-companion/FORMAT.md
       - file: companion/FORMAT.md
     verify:
       manual: "读两份
@@ -1100,11 +1009,14 @@ ideas:
       - date: 2026-08-31
         by: ccbuild
         note: 两份 FORMAT.md 补上取号计数器和改动文件格式；人已签字「I-078 验证通过」（原话在 log）
+    parent: I-107
 
   - id: I-063
-    step: 网页编辑
     name: "在网页上增删想法和前置关系"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: applyChanges
     needs: [ I-076, I-077 ]
     what: >
       在网页上新建想法（页面先给一个临时号，真编号由引擎发）、删除想法、 在两个想法之间加上或去掉「前置」箭头；新建的想法至少要填够前三个问题
@@ -1139,10 +1051,6 @@ ideas:
       满屏源码），加了重画之后会被更频繁地撞见， 顺手修掉比单开一个想法便宜。 为什么节点和边不再拆成两个想法：它们用的是同一套机器 ——
       同一本账、同一条重画通路、同一份共用 函数，拆开会得到两个几乎一样的节点和两份几乎一样的测试。拆分的收益是「能各自验证」，
       而这里同一个测试文件里的两组断言就能各自验证。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "731-742,1058-1207"
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_structure.test.ts"
       pass: "exit 0"
@@ -1159,11 +1067,14 @@ ideas:
           window.redrawGraph
           做桥，编辑模块不再排在跨网请求后面；断网时增删提交照常、明说图不可用且不露出图源。test_render_structure.test.ts
           12 条（真 DOM 驱动）先红后绿
+    parent: I-110
 
   - id: I-064
-    step: 网页编辑
     name: "网页上的「提交」：有本地服务器就直接存盘，没有就下载成一个改动文件"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: render
     needs: [ I-063, I-079 ]
     what: >
       网页上有一个「提交」动作，把人这一次做的全部改动（改文字、改状态、新建删除想法、增删前置关系）
@@ -1192,10 +1103,6 @@ ideas:
       file:// 下同样经常不可用， 而一个能全选的文本框在任何浏览器里都不会失败 —— 兜底那一级的唯一要求就是不会失败。
       每条改动带旧值，是给写回端做逐条比对和冲突展示用的：只带新值的改动记录一遇冲突只能整体作废。 成功不清草稿：写回一旦被拒（图在编辑期间被别的会话改过
       —— 调研当天就真实发生过一次）， 人的改动不能一份都不剩。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "1128-1130,1433-1524"
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_submit.test.ts"
       pass: "exit 0"
@@ -1212,11 +1119,16 @@ ideas:
           一个能全选复制的兜底文本框，并写清放到哪个目录、跑哪条命令。test_render_submit.test.ts 11 条先红后绿 +
           整条链真实验收（真浏览器→真服务→真文件：needs 从 [I-041] 变成 []、18 条注释一条不少、整份文件只差 2
           行、服务端记了日志、草稿保留）
+    parent: I-110
 
   - id: I-065
-    step: 网页编辑
     name: "一条指令把改动文件写回想法图，注释原样保留"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: applyChanges
+      - file: companion/ideas.ts
+        symbol: main
     needs: [ I-077, I-078, I-044 ]
     what: >
       引擎新增一个子命令：读改动文件，把每一处修改写进 ideas/graph.claude.yaml —— 文字改动定点写入，状态改动走既有的「set
@@ -1262,13 +1174,6 @@ ideas:
       6902，按下标定位不认编号）也不借 JSON Merge Patch（RFC 7396，数组只能整体替换）：保注释要求应用端逐条走 yaml 的
       Document 接口，任何现成补丁库的应用引擎都是死重；自定义按编号的操作清单， 语义对齐 Kubernetes strategic merge
       patch 的 merge-by-key 先例。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: applyChanges
-        lines: "487-700"
-      - file: archive/claude-companion/ideas.ts
-        symbol: main
-        lines: "1708-1738"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_apply.test.ts"
       pass: "exit 0"
@@ -1286,11 +1191,14 @@ ideas:
           createNode+flow、删第一个想法时分节标题挂在序列上。临时号统一发放、剩一个就拒；新建强制 todo
           并剥掉状态/记录/签字；已完成想法被改行为字段自动降回 doing。test_ideas_apply.test.ts 20 条先红后绿 +
           端到端真跑（新想法拿到 I-081、next_id 落在 endpoints 旁边、改动文件归档、页面重渲染）
+    parent: I-110
 
   - id: I-079
-    step: 网页编辑
     name: "本地小服务：当场把想法图渲染给浏览器，并接住浏览器发回来的改动"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: serve
     needs: [ I-065 ]
     what: >
       引擎新增一个子命令，启动一个只监听本机的小服务：当场把当前的图渲染成网页送给浏览器，
@@ -1320,13 +1228,6 @@ ideas:
       防护做三件便宜的事：只绑本机、一次性令牌、写入永远走 apply 的完整校验。
       被参考的那个工具自己的文档也警告它的服务是无鉴权的、只该本地开发用；这里比它多一层， 因为写入要过校验 ——
       而且最关键的一点没有被触碰：批准仍然只能由人亲手打字产生， 服务碰不到那条路径。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: serve
-        lines: "1580-1723"
-      - file: archive/claude-companion/ideas.ts
-        symbol: main
-        lines: "1857-1871"
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_serve.test.ts"
       pass: "exit 0"
@@ -1343,9 +1244,9 @@ ideas:
           接收改动），接收那条分两步——先只算不写回逐条对照，人确认后才调同一个 apply 核心落盘；端口被占自动加一；写回复用
           applyChanges，指纹校验、坏图不落盘、写日志全部照旧。test_ideas_serve.test.ts 14 条（真起服务真发
           HTTP）先红后绿 + 真浏览器验收（页面渲染 40 节点、带令牌、健康检查通、带令牌预览成功且不写盘、不带令牌写入 403）
+    parent: I-110
 
   - id: I-080
-    step: 网页编辑
     name: "根目录放一个双击就能打开想法图的入口"
     status: doing
     needs: [ I-079 ]
@@ -1379,9 +1280,9 @@ ideas:
       - date: 2026-08-31
         by: ccbuild
         note: 开始做双击入口
+    parent: I-110
 
   - id: I-081
-    step: 网页编辑
     name: "在网页上给人工验证签字，签的是人自己打的那句话"
     status: done
     needs: [ I-064, I-065 ]
@@ -1416,16 +1317,6 @@ ideas:
       真正落进图的那一下仍然由不可复用的用户响应触发 —— 那是 I-066 的事。 在它做完之前，这条路是一笔明知故欠的账，已经同时记进 D27
       的裁决表， 免得以后被当成已经解决了。 为什么不做覆盖已有签字：谁能在什么情况下推翻另一个人的签字，是一件要先想清楚的事， 本轮不猜。
     code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: applyChanges
-        lines: "637-666"
-      - file: archive/claude-companion/ideas.ts
-        symbol: createLedger
-        lines: "690-696"
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "1010-1018,1494-1551"
-      - file: archive/claude-companion/FORMAT.md
       - file: companion/FORMAT.md
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_sign.test.ts"
@@ -1442,13 +1333,13 @@ ideas:
           sign，页面上只在「人工验证且未签字」的卡片出现入口、点开先显示那条人工检查的原文，两个框（名字存本地只填一次、你自己的话）；引擎拒三种情况（验证不是人工的、名字或话是空的、已经签过）。test_render_sign.test.ts
           11 条先红后绿。**已记入 D27 的未结冲突**：这产出的是 agent 也能造的签名，和 D27「只能通过 manual-check
           challenge」相左，和解归 I-066
+    parent: I-110
 
   # ─────────────────────────────────────────────────────────────
   # 网页读起来：打开就看得懂，找得到该自己动手的东西
   # ─────────────────────────────────────────────────────────────
 
   - id: I-082
-    step: 记录格式
     name: "格式规范里定下：一张想法图要带一份分步概览，以及那几句话怎么写"
     status: doing
     needs: [ I-041, I-086 ]
@@ -1487,7 +1378,6 @@ ideas:
       而这套工具已经为「三份副本各写各的」付过一次账了。
     code:
       - file: companion/FORMAT.md
-      - file: archive/claude-companion/FORMAT.md
     verify:
       manual: "看着按这条规矩真生成出来的那份概览（先在本仓库的网页上看）：它说清楚这个项目分几步、每步做了什么了吗？一个从没打开过这个仓库的人读完能不能懂\
         ？看不清楚的话，指出是五条规矩里的哪一条没写好——那说明要改的是规范，不是硬凑那几句话"
@@ -1498,9 +1388,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 开始把分步概览的规矩写进两份格式规范
+    parent: I-107
 
   - id: I-085
-    step: 记录格式
     name: "引擎认识分步概览，并且校验它 —— 归错步当场报出来"
     status: done
     needs: [ I-041 ]
@@ -1559,9 +1449,9 @@ ideas:
         note: status → doing
       - date: 2026-09-05
         note: 引擎侧分步概览已落地并测通（7/7），本轮只补一次通过记录关掉长期挂着的 doing
+    parent: I-107
 
   - id: I-086
-    step: 网页编辑
     name: "网页把分步概览印在标题下面，历史说明收进折叠"
     status: todo
     needs: [ I-085 ]
@@ -1590,16 +1480,16 @@ ideas:
       为什么编号从某处重新开始），删了就没别的地方记着了。它只是不该占第一屏。
       **为什么没写步骤时整块不输出**：一个空的框会让人以为坏了，而「什么都不显示」 清楚地表示「这张图还没写概览」。
     code:
-      - file: archive/claude-companion/ideas.ts
+      - file: companion/ideas.ts
         symbol: render
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_steps.test.ts"
       pass: "exit 0"
     future: >
       这份概览也是「把图发给别人看」时对方读到的第一段话。
+    parent: I-110
 
   - id: I-087
-    step: 日常命令
     name: "建图和新增想法的命令，照规范写出并维护那份分步概览"
     status: done
     needs: [ I-041 ]
@@ -1647,11 +1537,14 @@ ideas:
       - date: 2026-09-04
         by: ccbuild
         note: ccscan 第 4 步、ccthink 第 2 步各加一段：先写 steps、每个想法认领 step、加步要说明理由；人已签字
+    parent: I-109
 
   - id: I-083
-    step: 网页编辑
     name: "图下面一个能收起的索引：列出所有等着人工验收签字的想法"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: render
     needs: [ I-045 ]
     what: >
       图的下面加一个默认收起的区域，点一下展开，列出所有「如何验证」是人工检查、 但签字栏还空着的想法。每一行显示想法的名字，和那条人工检查的原文；
@@ -1683,10 +1576,6 @@ ideas:
       现有的签字测试有五处用那个标记去找元素，索引在卡片上面，多出来的那个会先被找到， 于是五条断言全部在测另一个东西 ——
       而且它们仍然是绿的。这类「测试还绿着但测的 已经不是原来那个东西」的改动，比测试变红危险得多。
       **为什么零条时整块不出现**：一个写着「（0）」的空框会让人点进去看，然后发现什么都没有； 而这一块不在，本身就说明没有待办。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "1020-1050,1176-1184,1246-1248"
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_worklist.test.ts"
       pass: "exit 0"
@@ -1701,11 +1590,14 @@ ideas:
         note: 图下面加了「待人工验证」折叠索引：用浏览器自带的 details（零脚本）、默认收起靠不写 open
           属性、每行带真锚点地址（跳转函数在联网取画图库的模块里，断网时不执行）、行上不带签字标记（否则会静默劫持签字测试的五处定位）、零条时整块不出现。判断条件复用签字按钮那一个，不另写。test_render_worklist.test.ts
           11 条先红后绿
+    parent: I-110
 
   - id: I-084
-    step: 网页编辑
     name: "图下面一个能收起的索引：列出正在进行中的想法，以及每个在等谁"
     status: done
+    code:
+      - file: companion/ideas.ts
+        symbol: render
     needs: [ I-083 ]
     what: >
       和上面那个索引同一套做法，列的是状态为「进行中」的想法。每一行显示名字， 以及它还在等哪些前置想法（只列那些还没做完的）。点一行跳到卡片。
@@ -1724,10 +1616,6 @@ ideas:
       所以它只能靠测试抓，不能靠肉眼。 **为什么「没有前置挡着它」这句话要小心措辞**：原来这个想法的预期结果里写的是
       「那说明它是真的在做，不是卡着」—— 实测推不出来：三个进行中的想法里有两个
       一个前置都不等，而这两个恰恰都是卡在等人签字。所以这句话只能说「没有别的想法挡路」， 不能暗示「有人正在做它」，否则页面对三分之二的行说了假话。
-    code:
-      - file: archive/claude-companion/ideas.ts
-        symbol: render
-        lines: "1035-1043,1256-1263"
     verify:
       command: "npx vitest run .devcompanion/tests/test_render_ongoing.test.ts"
       pass: "exit 0"
@@ -1744,9 +1632,9 @@ ideas:
         note: 图下面加了「进行中」折叠索引，复用 I-083 那套 worklist（同一个
           details、同一种零条不出现）；「还没做完的前置」写成「不等于已完成」而不是「等于待办」——受阻的前置同样挡路，按后者筛页面会说反话；一个前置都不挡时写「没有前置挡着它」这句明白话，不用表示「无」的破折号，而且这句只说没人挡路、不暗示有人在做。test_render_ongoing.test.ts
           10 条先红后绿
+    parent: I-110
 
   - id: I-066
-    step: 强制执行
     name: "人批准自己在网页上做的修改，而批准机制不被削弱"
     status: todo
     needs: [ I-065, I-048, I-105 ]
@@ -1773,21 +1661,16 @@ ideas:
       这套机制把伪造成本提高到「必须经过人的权限提示」，不是数学上不可伪造。 明确否决的方案：headless 管道喂「批准」（claude
       -p），任何脚本都能跑，等于把门拆了。
     code:
-      - file: archive/claude-companion/guard.ts
-        symbol: decide
-      - file: archive/claude-companion/guard.ts
-        symbol: isApproval
-      - file: archive/claude-companion/guard.ts
-        symbol: recordApproval
+      - file: companion/guard.ts
       - file: .claude/settings.json
     verify:
       command: "npx vitest run .devcompanion/tests/test_ideas_guard.test.ts"
       pass: "exit 0"
     future: >
       任何「人自己发起的修改」以后都能用同一条通道快速获得批准。
+    parent: I-108
 
   - id: I-067
-    step: 日常命令
     name: "提交之后，人敲一条指令，agent 就把代码对齐到新图"
     status: todo
     needs: [ I-065, I-066, I-049 ]
@@ -1811,17 +1694,15 @@ ideas:
       全部照常生效，批准环节留在人手里。实现范围限定在本次改动触到的想法， 全图对齐是 /ccfix
       的事——一次提交不该引发全仓库漫游。轻量修改的分工也写进命令： 改一个错别字直接在对话里说更快（改散文字段本来就允许 agent 用 Edit
       做）， 网页链路的价值在批量散文修改和增删节点边的结构变更。
-    code:
-      - file: archive/claude-companion/commands/ccapply.md
     verify:
       manual: "真实走一遍：网页改字段 + 新建一个三问想法、提交、/ccapply——报告里 diff
         完整、新想法被列为「未齐不实现」、批准后被改想法实现完成且 verify 通过"
       signed_off: null
     future: >
       「网页上改一句话，代码跟着变」从此是一条指令的事。
+    parent: I-109
 
   - id: I-068
-    step: 网页编辑
     name: "终点：在网页上改一处想法，全程不碰 YAML，代码最终符合新图"
     status: todo
     needs: [ I-064, I-066, I-067, I-080, I-081, I-083, I-084, I-103 ]
@@ -1843,6 +1724,7 @@ ideas:
       signed_off: null
     future: >
       跑通之后，这条链路就是这套工具的日常用法：图是控制面板，YAML 退成实现细节。
+    parent: I-110
 
   # ─────────────────────────────────────────────────────────────
   # 共同基座：一份核心，三个 agent 各留薄接入层
@@ -1850,7 +1732,6 @@ ideas:
   # ─────────────────────────────────────────────────────────────
 
   - id: I-069
-    step: 共同基座
     name: "把三套实现的分歧逐条裁决，写成一份共同规范"
     status: done
     needs: []
@@ -1894,12 +1775,12 @@ ideas:
       - date: 2026-08-30
         by: ccbuild
         note: 人已签字（signed_off 已录）；D1-D34 定稿，共同基座规范交付
+    parent: I-111
 
   # —— 2026-08-31 /ccthink：I-070/I-071/I-072 各自太大，拆成下面 11 个子想法；
   #    三个原节点降为「里程碑验收」，needs 改指子想法 ——
 
   - id: I-088
-    step: 共同基座
     name: "把 Claude 版的图引擎搬进共同目录 companion/，只读写一份不带后缀、属于项目的想法图"
     status: done
     needs: [ I-069 ]
@@ -1947,9 +1828,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: companion/ideas.ts 建成：复制 claude 引擎删后缀逻辑，新增 paths()；10 测试全绿，全套 246 绿
+    parent: I-111
 
   - id: I-089
-    step: 强制执行
     name: "吸收 Cursor 版的开工检查：想法没想清楚、前置没做完、文件和别人重叠，就不许开工"
     status: done
     needs: [ I-088 ]
@@ -1996,9 +1877,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: readiness 三件套+addIdea+allowWrite+转移表进 companion/ideas.ts 452-608；全套 263 绿
+    parent: I-108
 
   - id: I-090
-    step: 强制执行
     name: "吸收 Codex 版的批准机制：一次性口令绑定内容，只有人亲手回复才算数，回执由程序保管"
     status: done
     needs: [ I-088 ]
@@ -2047,9 +1928,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: approval 机制进 companion/ideas.ts 564-709 + request-approval CLI；全套 273 绿
+    parent: I-108
 
   - id: I-091
-    step: 强制执行
     name: "吸收 Codex 版的测试先行证据：先留下一次真实失败的测试记录，完成时必须有最新的通过记录"
     status: done
     needs: [ I-090 ]
@@ -2096,9 +1977,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 证据链进 companion/ideas.ts 710-836 + run-check CLI + set 的 GREEN 门；全套 282 绿
+    parent: I-108
 
   - id: I-092
-    step: 共同基座
     name: "一条显式的迁移命令，把三种旧格式的想法图搬进同一份项目图，拿不准就停下问人"
     status: done
     needs: [ I-088, I-090, I-091 ]
@@ -2144,9 +2025,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: migrate 进 companion/ideas.ts 837-1004；全套 289 绿
+    parent: I-111
 
   - id: I-093
-    step: 强制执行
     name: "一份三家共用的规则核心：事件进来，判成允许或拒绝出去，理由让人读得懂"
     status: done
     needs: [ I-089, I-090, I-091 ]
@@ -2199,9 +2080,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 规则核心 companion/guard.ts 1-316；纯函数 decide + record，19 测试绿
+    parent: I-108
 
   - id: I-094
-    step: 共同基座
     name: "给三个 agent 各配一层薄转换：把各家的 hook 事件翻译成同一种事件，把判决翻译回各家听得懂的回答"
     status: done
     needs: [ I-093 ]
@@ -2256,9 +2137,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 三家薄映射 companion/guard.ts 317-612；12 测试绿
+    parent: I-111
 
   - id: I-095
-    step: 日常命令
     name: "五条工作流写成三家都能加载的标准技能文件，正文只有一份"
     status: done
     needs: [ I-089 ]
@@ -2317,9 +2198,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 五个 cc 技能 + FORMAT.md D33 命名修订；13 测试绿
+    parent: I-109
 
   - id: I-096
-    step: 共同基座
     name: "把引擎、守卫和依赖打进一个单文件程序，装到哪里只要有 node 就能跑"
     status: done
     needs: [ I-070, I-071 ]
@@ -2367,9 +2248,9 @@ ideas:
         by: ccbuild
         note: esbuild 打包落地；修正一处：cli.ts 自带 shebang 被 esbuild 保留在首行，banner 里不能再放第二个
           shebang；产物 268KB
+    parent: I-111
 
   - id: I-097
-    step: 共同基座
     name: "给 Claude、Cursor、Codex 各写一份只含 hook 接线的小清单，三份都调同一个单文件程序"
     status: done
     needs: [ I-095, I-096 ]
@@ -2420,9 +2301,9 @@ ideas:
         by: ccbuild
         note: manifests.ts 落地；SessionStart 简报 Claude 侧用 status 命令输出进上下文，Cursor
           侧接线就位、简报出口留待 I-073 实测
+    parent: I-111
 
   - id: I-098
-    step: 共同基座
     name: "把共同基座装进其它仓库的安装器：一条命令装好，能查过期、能批量更新"
     status: done
     needs: [ I-097 ]
@@ -2470,9 +2351,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: install.ts 落地：装单文件产物+三份接线+双技能目录+图种子，装完当场冒烟要求退出码 2
+    parent: I-111
 
   - id: I-099
-    step: 共同基座
     name: "把裁决表已裁但没落地的三个口子收掉：旧图只读、读过的文件变了自动回到未读、allow 给出守卫的完整判决"
     status: done
     needs: [ I-089, I-091, I-093 ]
@@ -2521,9 +2402,9 @@ ideas:
         by: ccbuild
         note: decideProductWrite 落在 ideas.ts 而非 guard.ts（guard 依赖 ideas，反向即循环依赖），guard
           委托之；I-089 的 allow 测试夹具按人批准的语义升级补齐批准+红记录；全套 341 绿
+    parent: I-111
 
   - id: I-070
-    step: 共同基座
     name: "把三份图引擎合成一份，并把遗留状态显式迁入同一张项目图"
     status: done
     needs: [ I-088, I-089, I-090, I-091, I-092, I-099 ]
@@ -2566,9 +2447,9 @@ ideas:
         by: ccbuild
         note: 里程碑收口：六个子想法全 done；verify 双套件真跑（vitest 341+ / Python 14
           OK）；渲染握手由自动重渲染承接（expected 已记裁量）
+    parent: I-111
 
   - id: I-071
-    step: 共同基座
     name: "把三套强制规则合成一个策略核心，并在三种 hook 输入之间做薄映射"
     status: done
     needs: [ I-070, I-093, I-094 ]
@@ -2612,9 +2493,9 @@ ideas:
       - date: 2026-09-01
         by: ccbuild
         note: 里程碑收口：规则核心+三家薄映射落地，verify 加入两个新 base 测试文件同跑全绿；三组 fixture 同事件同判决
+    parent: I-111
 
   - id: I-072
-    step: 共同基座
     name: "用一套标准 Skills、一个单文件运行产物和三个小 manifest 分发共同基座"
     status: done
     needs: [ I-095, I-096, I-097, I-098 ]
@@ -2665,9 +2546,9 @@ ideas:
         by: ccbuild
         note: 里程碑收口：四个子想法全 done；本机七个旧安装的迁移预览由原 claude-companion/install.ts --status
           继续承担，新安装器不碰它们
+    parent: I-111
 
   - id: I-073
-    step: 共同基座
     name: "Cursor 用原生 hook 薄层接入共同基座，并迁入同一张项目图"
     status: todo
     needs: [ I-072 ]
@@ -2693,9 +2574,9 @@ ideas:
       signed_off: null
     future: >
       Cursor 侧只保留 manifest 与 hook 传输配置，概念调整自动跟进。
+    parent: I-111
 
   - id: I-074
-    step: 共同基座
     name: "Codex 用 apply_patch/MCP hook 薄层接入共同基座，并保留严格证据"
     status: todo
     needs: [ I-072 ]
@@ -2726,9 +2607,9 @@ ideas:
       signed_off: null
     future: >
       Codex 侧只保留 manifest 与 hook 传输配置，严格保证由共同核心继续维护。
+    parent: I-111
 
   - id: I-075
-    step: 共同基座
     name: "终点：三个 agent 接力使用同一张图，基座改一处便同时生效且保证不回退"
     status: todo
     needs: [ I-073, I-074 ]
@@ -2750,8 +2631,8 @@ ideas:
       signed_off: null
     future: >
       共同基座成为唯一日常入口；新 agent 只接传输层，不复制 workflow、状态或规则。
+    parent: I-111
   - id: I-100
-    step: 共同基座
     name: 切换收尾：修掉归档造成的失效断言，以及 2 大于 1 被当成写文件误拦
     status: done
     needs: []
@@ -2807,8 +2688,8 @@ ideas:
       - date: 2026-09-03
         by: claude
         note: 两处收尾完成，全套 491 测试通过；RED 因测试文件后改而作废，经 red-waiver 人工裁决
+    parent: I-111
   - id: I-101
-    step: 共同基座
     name: migrate 见到空种子图就说「没有可迁的位置」—— 改成说真话，空种子直接迁过去
     status: done
     needs: [ I-092 ]
@@ -2874,8 +2755,8 @@ ideas:
       - date: 2026-09-03
         by: claude
         note: 空种子直接迁、非空图拒绝且说真话、坏 YAML 不当空图；ccscan 第 0 步补上「被拒 ≠ 无旧图」
+    parent: I-111
   - id: I-102
-    step: 日常命令
     name: 请批准的时候把被批的八问全文打到终端上
     status: done
     needs:
@@ -2964,8 +2845,8 @@ ideas:
       - date: 2026-09-05
         note: request-approval 先打被批内容全文再打口令；approvalSnapshot 拆成投影加哈希，打印器只吃投影；show
           与批准提示共用 questionLines，第 7 问补齐五个字段
+    parent: I-109
   - id: I-103
-    step: 网页编辑
     name: 网页上印出正在等你批：口令、关卡和被批内容的全文
     status: todo
     needs:
@@ -3026,8 +2907,8 @@ ideas:
       - date: 2026-09-05
         by: new
         note: 创建
+    parent: I-110
   - id: I-104
-    step: 强制执行
     name: 守卫看得见 agent 在驱动浏览器，冲着本地服务去的调用一律拦下
     status: done
     needs:
@@ -3100,8 +2981,8 @@ ideas:
         note: status → doing
       - date: 2026-09-05
         note: 守卫新增 R8：按目标网址认，冲着回环地址去的工具调用一律拦下；在页面里执行脚本的调用按名字拦，弱点写在拒绝语里
+    parent: I-108
   - id: I-105
-    step: 强制执行
     name: 裁决网页上的一次动作凭什么算人做的，并据此修订已有的两条裁决
     status: todo
     needs:
@@ -3151,8 +3032,8 @@ ideas:
       - date: 2026-09-05
         by: new
         note: 创建
+    parent: I-108
   - id: I-106
-    step: 强制执行
     name: 三份接线清单补上取网页的工具，并让漏配这件事有测试守着
     status: todo
     needs:
@@ -3200,3 +3081,44 @@ ideas:
       - date: 2026-09-05
         by: new
         note: 创建
+    parent: I-108
+  - id: I-107
+    name: 记录格式
+    status: todo
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+    what: 定下一个想法要回答哪八个问题，并写出读取、校验、排序和渲染这些想法的程序。
+  - id: I-108
+    name: 强制执行
+    status: todo
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+    what: 让这些规矩由程序执行而不是靠自觉 —— 没想清楚不许写代码，没有失败过的测试不许写实现，批准只能来自人亲手回复的一句话。
+  - id: I-109
+    name: 日常命令
+    status: todo
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+    what: 把建图、想清楚、动手做、查错、看图这五件事各做成一条命令，装到哪个仓库都一样用。
+  - id: I-110
+    name: 网页编辑
+    status: todo
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+    what: 让人直接在网页上读图、改图、签字，改完自动写回项目文件。
+  - id: I-111
+    name: 共同基座
+    status: todo
+    log:
+      - date: 2026-09-05
+        by: new
+        note: 创建
+    what: 把三个编码助手（Claude Code、Cursor、Codex）各自的一套实现合成一份核心，各留一层薄接入，规则改一处三边同时生效。

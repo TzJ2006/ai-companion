@@ -13,63 +13,17 @@ agent。2026-08-29 起，概念性调整只改这一份，三边实现跟随本�
 **代码搬完了，本文件写下的事情还没有全部落地 —— 这份清单要和下面的裁决表对得上，
 所以逐条列出，不写「只剩一件」：**
 
-1. 本仓库自己的 hook 仍然指着 `claude-companion/guard.ts`（`.claude/settings.json`
-   里四条，都是本机绝对路径），这个检出里也还没有 `.companion/`。旧目录因此还不能
-   删，但已经冻结 —— 见 D35。
-   **这不只是「路径还没换」：那份守卫的策略比本文件写的弱得多。**逐条核对过
-   `claude-companion/guard.ts`：产品文件默认放行 —— 只有被某个想法 `code[].file`
-   点名的路径才进规则，其余一律不拦，D16 的默认拒绝没有；进了规则也只查
-   `how` / `why_this_way`，`expected`、`verify`、前置是否 done、想法是不是
-   `doing` 都不查。测试先行只看测试文件在不在盘上，不看跑没跑过、红没红过 ——
-   D8 的 RED 证据没有。批准认八个词（`批准` `approve` `approved` `同意` `ok`
-   `通过` `ccgraph approve` `/ccgraph approve`），整条消息先转小写、再去掉句末
-   标点，一个光秃秃的 `ok` 就算批准 —— D7 的一次性口令没有。shell 写入根本不进
-   守卫（PreToolUse 只匹配 `Edit|Write|NotebookEdit`）—— D21 没有。
-   **这道 shell 缺口把 R6 一起带塌了，这一条从前没写出来：**批准凭据只是
-   `ideas/.approved.claude` 里的一行 `<12 位十六进制>  approved <时间>`，R6 只拿它
-   的头一个词跟 `graphHash` 比，不问是谁写的。`Edit`/`Write` 写它会被拒（D24），
-   可 shell 不进守卫，本仓库 `.claude/settings.json` 又预先放行了
-   `Bash(npx tsx:*)`，一条重定向就能造出一张验得过的凭据。**所以在这个检出里
-   R6 是提示，不是闸门** —— 装上基座（D21 的 shell 闸门 + D7 的一次性口令）才是。
-   **但「本文件描述的守卫行为一条都不生效」是从前写在这里的一句错话**（2026-09-02
-   逐个事件喂给 `claude-companion/guard.ts` 核过）。下面五条裁决过的行为今天真的在
-   跑，别连它们一起当成不存在 —— 每一条都只兑现了自己那一行的一半，另一半随后写明：
-   - **D24 的一半** —— 写 `ideas/.approved.claude`、`.scan-todo.claude`、
-     `.scan-done.claude` 一律拒绝并退出 2（守卫里同一张表），手改图里已有想法的
-     `status:` 也拦得住（改前改后各解析一遍、比对状态表，只改散文照常放行）。
-     **D24 那一行自己的「现状」写的就是这件事**，两处对得上。另一半没有：没有
-     `.runtime/`，生成的网页和自动记录随便写，`signed_off` 也拦不住 —— 那个比对
-     只读 `status` 一栏。
-   - **D12 的一半** —— 只有真的 Read 事件才划得掉扫描清单上的一行，拿 Write 碰同一个
-     路径划不掉。另一半没有：划掉时只追加路径、不记内容哈希，读完再改这个文件，
-     它照样算读过。
-   - **D7 的内容绑定** —— 批准绑的是图的 sha256，图改一个字就失效，拒绝语会把
-     「已批准 X → 现在 Y」两个哈希都摆出来。缺的是两个关卡和一次性口令；再加上上面
-     那道 shell 缺口，所以是绑定还在、闸门不在。
-   - **D15 给写前拒绝定的那条传输** —— 退出码 2 加 stderr，正是那条裁决留下的最大
-     公约数。同时该给的结构化 JSON 没有，`{allow, reason, warn, message}` 的规则核心
-     和会话简报也没有。
-   - **D25 的逃生口** —— `AIDEV_GUARD=off` 是父进程环境变量，正是裁决保下来的形状。
-     缺的是它的记账：关掉之后既不出声警告，也不追加 `guard.disabled`。
-   **另有一条不是「还没落地」，是反着的：D9。** 这份守卫每一个事件都失败即放行 ——
-   事件解析不了、规则自己崩了，都是退出 0，写前也一样。D9 裁的正是「会造成副作用的
-   写前失败要拦下」，所以这里的现行行为站在被否掉的那一边。
-   CLAUDE.md 的「The guard is active in this repository — but it is the frozen one」
-   那一节把「今天真的拦你的」和「基座装上之后才拦你的」分成两张单子列了。
-2. 分步概览（`steps` / `step`）引擎里一行都没有 —— 见「The step overview」那一节
-   自己的落地说明。
-3. Cursor 收不到读文件事件（接线缺 `beforeReadFile`）—— 见 D22。
-4. 旧命令一个别名都没建 —— 见 D28。
-5. `verify.test_files` 的受限通配符没做，今天只做精确比对 —— 见 D31。
-6. 「纯文档或生成物节点用人工验证豁免代码引用」没做 —— 见 D32。
-7. `check` 还不校验 `verify.command` 是不是单条命令（守卫和 `run-check` 两扇门都
+1. 本检出当前没有装守卫。2026-09-05 按用户要求，本仓库和这台机器上其它仓库里的
+   全部安装 —— 三份接线、两处技能副本、单文件产物 —— 都已卸载并归档到
+   `archive/retired-20260905/`。装回去是一个显式动作
+   （`npx tsx companion/install.ts <目标仓库>`），不会自动发生。所以本文件描述的
+   守卫行为在这个检出里今天一条都不生效 —— 不是因为守卫弱，而是因为没有守卫。
+2. Cursor 收不到读文件事件（接线缺 `beforeReadFile`）—— 见 D22。
+3. 旧命令一个别名都没建 —— 见 D28。
+4. `verify.test_files` 的受限通配符没做，今天只做精确比对 —— 见 D31。
+5. 「纯文档或生成物节点用人工验证豁免代码引用」没做 —— 见 D32。
+6. `check` 还不校验 `verify.command` 是不是单条命令（守卫和 `run-check` 两扇门都
    在执行前拦，图却照收）—— 见 D21。
-
-**第 1 条的换线，今天没有任何想法认领，本文件从前把它记成 I-074 是错的。**
-去活着的想法图里核对过：I-073 是「Cursor 用原生 hook 薄层接入共同基座」，
-I-074 是「Codex 用 apply_patch/MCP hook 薄层接入共同基座」，两条都是接别人的产品，
-没有一条说的是把本仓库自己的四条 hook 换到 `.companion/companion.mjs`。
-这件事需要人新建一个想法来认领它 —— 本文件不替人建，也不改图。
 
 `claude-companion/FORMAT.md` 曾是一份被同时手改的孪生规范，已经**冻结**成一块
 指路牌：它那三条和本文件相反的规则 —— 人手写 `signed_off`、验证不写显式测试
@@ -80,9 +34,11 @@ One canonical file holds project intent: `ideas/graph.yaml`. Runtime evidence,
 approval receipts, scan progress, logs, and rendered HTML are generated beside
 it; they never become a second source of intent.
 
-Every idea in a project is one node. Every prerequisite is one arrow. There is
-no second document, no requirement/feature/module/function hierarchy, no phase
-vocabulary. If it isn't in this file, it isn't tracked.
+Every idea in a project is one node. Every prerequisite is one arrow. A node may
+sit under another node (`parent`): that is containment — a tree, at most seven
+wide at any level, so a reader opens the project one layer at a time (see "The
+tree") — not a second relation between ideas, and it carries no phase vocabulary.
+There is no second document. If it isn't in this file, it isn't tracked.
 
 ## A node
 
@@ -90,7 +46,8 @@ vocabulary. If it isn't in this file, it isn't tracked.
 - id: I-014
   name: "追踪每一次修改落在哪个函数上"   # 一句人话 — see "How to write the graph" below
   status: todo                    # todo | doing | done | blocked
-  needs: [I-003, I-008]           # prerequisites — the only kind of edge
+  needs: [I-003, I-008]           # prerequisites — the only dependency edge
+  parent: I-002                   # the idea this sits under; absent = top level
 
   what: >
     是什么。这个想法本身是什么、做什么事。
@@ -212,74 +169,72 @@ ideas:
 - **The frontier** — `todo` ideas whose `needs` are all `done` — is your
   next-actions list. It falls out of the data; there is no separate TODO file.
 
-## The step overview
+## The tree
 
-**落地情况（2026-09-02）：尚未落地。** 引擎里没有 `steps` / `step` 的任何一行 ——
-不解析、`check` 不校验、网页也不显示。下面写的是这一节建成之后的样子，不是现在跑得
-出来的行为：今天把 `steps` 写进图，它只是一段写给人看的注释，写错一个步名不会有人
-报错。这一节留在这里，是因为它是一条已经裁决过的格式，不是因为它已经生效。
-
-每一张想法图都在文件顶层带一份分步概览：这个项目分几步，每一步做完之后项目多了什么能力。
-它是打开网页的人读到的第一段话，也是把这张图发给别人看时对方读到的第一段话。
+每个想法可以归在另一个想法下面：`parent` 填上一级想法的编号，没有 `parent` 的就是
+顶层。这样整张图就是一棵树，人从顶层的几个想法读起，点进哪一个，就只看它下面那一层。
 
 ```yaml
-steps:
-  - name: 记录格式
-    blurb: 定下一个想法要回答哪八个问题，并写出读写这些想法的程序。
-  - name: 强制执行
-    blurb: 让这些规矩由程序执行，而不是靠自觉 —— 没想清楚不许写代码，没写测试不许写实现。
-  - name: 日常命令
-    blurb: 把建图、想清楚、动手做、查错、看图这五件事，各做成一条命令。
-
 ideas:
-  - id: I-001
-    step: 记录格式          # 这个想法属于哪一步
+  - id: I-107
+    name: 记录格式                # 顶层想法：没有 parent
+    what: 定下一个想法要回答哪八个问题，并写出读写这些想法的程序。
+    ...
+  - id: I-041
+    parent: I-107                 # 归在「记录格式」下面
     ...
 ```
 
-- **`steps` 是有顺序的**，顺序就是这个项目做事的先后。每一项两个键：`name` 是一个短名字
-  （页面上显示它，想法也用这个词来认领），`blurb` 是一句话。
-- **`step`** 写在每个想法上，填某一步的 `name`。填了一个不存在的名字，`check` 报错 ——
-  那是确定的笔误，而且会让页面上的数字凭空少算一个。
-- **两个字段都是可选的。** 一张还没写概览的图（比如刚建出来的）什么都不报：
-  规矩是给想用的人用的，不是拿来罚不用的人的。但**一旦写了 `steps`，就该让每个想法都认领
-  一步** —— 没认领的、步数超出范围的、一个想法都没有的空步，`check` 都会提醒。
+- **`parent` 是包含，不是先后。** 先后关系只有 `needs` 一种，两者互不代替：一个想法
+  可以 `needs` 别的顶层想法下面的某个想法，页面上会把它画成一条跨页的前置链接。
+- **每一层最多七个。** 顶层最多七个想法，任何一个想法直接下面最多七个子想法。多了就
+  再分一层，不要往下加。少于七个不凑数。
+- **`check` 的四条规则。** `parent` 指向不存在的编号是错误；`parent` 成环（含指向
+  自己）是错误 —— 两样都会让页面丢想法。顶层超过七个、某个想法的直接子想法超过七个，
+  是警告 —— 不好读，但不算错。没有 `parent` 的想法什么都不报：顶层本来就没有。
+- **页面。** 一个 HTML 文件，按地址里的 `#编号` 切页：首页只有顶层想法的依赖图和一行
+  一个的精简卡片；点进一个想法，页面顶部是它自己的八问，下面是它子想法的依赖图和精简
+  卡片；再点进去是下一层。每个想法的完整卡片只出现在它自己的页面上。依赖图只画同一页
+  的兄弟之间的 `needs`，跨页的前置在卡片里以链接出现。
 
-### 那几句话怎么写
+### 顶层想法的名称和「是什么」怎么写
 
-五条规矩。它们才是这一节真正的内容 —— 字段形状是次要的，话写不好的话，
-有这个字段和没有一样。
+四条规矩。顶层想法是打开网页的人读到的第一行字，也是把这张图发给别人看时对方读到的
+第一行字。
 
-1. **三到七步。** 超过七行的概览不是概览，是目录 —— 人一眼扫不完，也就不会去扫。
-   少于三步的项目不需要概览。
-2. **每一步一句动词开头的话，说清这一步做完之后这个项目多了什么能力。**
-   写「能做什么了」，不写「里面装了哪些东西」。
+1. **名称是一个短名字，`what` 是一句动词开头的话，说清这一步做完之后这个项目多了
+   什么能力。** 写「能做什么了」，不写「里面装了哪些东西」。
    - 对：「让人直接在网页上改这张图，改完自动写回项目文件。」
    - 错：「网页编辑相关的十个想法。」
-3. **不用任何缩写。**
-4. **不用任何需要读过这个仓库才懂的词。** 一个从没打开过这个项目的人，读完这几句
+2. **不用任何缩写。**
+3. **不用任何需要读过这个仓库才懂的词。** 一个从没打开过这个项目的人，读完顶层这几行
    就该知道它在做什么。项目内部的黑话、模块名、直接搬过来的外语词，都不算数。
-5. **给写图的人分类用的筐，不算一步。**
+4. **给写图的人分类用的筐，不算一个顶层想法。**
 
-### 第五条为什么要单独说 —— 一个真实的反例
+### 第四条为什么要单独说 —— 一个真实的反例
 
-本仓库自己的图里就有三个这样的筐：「已知缺陷」「终点」「阅读顺序」。
-照搬进概览会长成这样：
+本仓库自己的图里曾有三个这样的筐：「已知缺陷」「终点」「阅读顺序」。
+照搬成顶层想法会长成这样：
 
 ```
-第 5 步：已知缺陷（2 个想法，做完 2 个）
-第 6 步：终点（3 个想法，做完 0 个）
-第 7 步：阅读顺序（2 个想法，做完 1 个）
+已知缺陷（2 个子想法，做完 2 个）
+终点（3 个子想法，做完 0 个）
+阅读顺序（2 个子想法，做完 1 个）
 ```
 
 读的人会当场卡住：**「阅读顺序」是这个项目要做的一件事吗？**
 
-不是。它是写图的人给自己分的类。「已知缺陷」同样不是一步，它是个随时会冒出东西的筐；
-「终点」是「什么算做完」的定义，不是做的过程。三个都通不过第 2 条 ——
+不是。它是写图的人给自己分的类。「已知缺陷」同样不是，它是个随时会冒出东西的筐；
+「终点」是「什么算做完」的定义，不是做的过程。三个都通不过第 1 条 ——
 它们说不出「做完之后项目多了什么能力」。
 
-这三个筐里的想法，各自归到它们真正服务的那一步去：修引擎缺陷的归「记录格式」那一步，
-修强制层缺陷的归「强制执行」那一步，终点归到它收尾的那一步。
+这三个筐里的想法，各自归到它们真正服务的那个顶层想法下面去：修引擎缺陷的归
+「记录格式」，修强制层缺陷的归「强制执行」，终点归到它收尾的那一个。
+
+**来历。** 这一节的前身是「分步概览」（`steps` / `step`，I-082/I-085/I-087，
+2026-09-03 落地）：一个顶层的步骤列表加每个想法上的一个标签，只有一层，页面上也没画。
+2026-09-05 按用户要求改成可以逐层点开的树，`steps` / `step` 两个字段删除，原来的
+五个步骤变成五个顶层想法（I-107 到 I-111）。
 
 ## The change file
 
@@ -452,7 +407,9 @@ state by agent name.
 
 One node type instead of four levels, because you asked "所有的想法都会变成一个个
 模块" — modules, not a taxonomy. One edge type, because "A 是 B 的前置" is the
-only relation you named. Eight fields, because those are the eight questions you
+only relation you named; `parent` (2026-09-05) is not a second relation — it says
+where an idea is filed so the page can be read one layer at a time, and puts
+nothing between A and B that `needs` does not. Eight fields, because those are the eight questions you
 listed, in your order. Anything the format does not hold is something you did
 not ask for, and adding it later costs one YAML key.
 
@@ -510,6 +467,8 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **裁决** — `needs`。
 - **理由** — 两边已用；更短；和「前置」的中文语义直接对应。反向边
   （谁依赖我）三边都是派生的、不落盘 —— 保持一致。
+- **补充（2026-09-05）** — `parent` 不是边。它是包含关系（这个想法归在哪个想法
+  下面），只决定页面上从哪一层点进去看到它；先后关系仍然只有 `needs` 一种。
 
 ## D4 状态集合
 
@@ -551,13 +510,21 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   关卡（intent / decomposition / plan / red-waiver / manual-check），每个
   关卡一次性随机口令（`APPROVE CC-XXXXXXXX`）、待批文件与回执文件、
   内容快照绑定。
-- **裁决** — 两个常规关卡：`decomposition` 绑定三问、节点名称和边；`plan`
-  绑定完整八问、路径和验证。另保留只在需要时出现的 `red-waiver` 与
-  `manual-check`。每次请求产生一次性 challenge，由真实 `UserPromptSubmit`
-  消费；内容改变或 challenge 用过即失效。
-- **理由** — 一次全图批准太晚，不能证明人看过拆分；五次常规批准又太重。
-  两次正好对应 workflow 已经存在的两个真实停点，并保留 Codex 对意外先绿和
-  人工验收的证据。批准是内容绑定的 review receipt，不编码进四个工作状态。
+- **裁决（2026-09-05 修订）** — 一道常规关卡 `plan`，按想法绑内容：摘要盖住这个
+  想法自己的 `name`、`parent`、`needs` 和八问，其中 `code` 只到 `file` 和 `symbol`
+  （不含 `lines`），`verify` 不含 `signed_off`。`status`、`log`、别的想法，都不在
+  摘要里。一条口令可以点名几个想法，人回一句就都批了；回执里每个想法各存一份摘要，
+  各自有效、各自失效，没有继承。另保留只在需要时出现的 `red-waiver` 与
+  `manual-check`。每次请求产生一次性 challenge，由真实 `UserPromptSubmit` 消费；
+  口令用过一次即失效，被批的内容改了即失效；不按时间失效，不按会话失效。
+- **理由** — 原来的 `decomposition` 关卡绑整张图的名称、边和前三问，任何一个想法
+  新建、改名、改前三问都让它作废，四天里重批了六次，人不知道自己在批什么。`lines`
+  是 ccbuild 实现完写回的，`signed_off` 是签字口令写回的，两样进摘要的结果是
+  「实现完就把刚批的计划作废」。批准的意思是「这个目标和这份方案我看过了」，内容
+  不变就一直有效 —— 这才是人对「批准」两个字的理解。批准仍是内容绑定的 review
+  receipt，不编码进四个工作状态。
+- **落地** — 回执格式 v2：`{ v: 2, gate, snapshots: { "I-101": "…" } }`。v1 回执
+  （`node_ids` + 一份 `snapshot`）不再被读，2026-09-05 随归档搬走。
 
 ## D8 测试先行的强制方式
 
@@ -711,8 +678,8 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 
 - **现状** — Claude 的 `set` 不检查八问、前置或批准；Cursor 检查 expected、
   how、verify、code.file、前置完成；Codex 还要求有效 plan approval。
-- **裁决** — `todo → doing` 必须八问计划字段齐全、decomposition 与 plan 批准
-  当前有效、所有 `needs` 已 done、路径与其它 doing 想法不冲突。
+- **裁决** — `todo → doing` 必须八问计划字段齐全、该想法的 plan 批准当前有效、
+  所有 `needs` 已 done、路径与其它 doing 想法不冲突。
 - **理由** — 这些条件都是机器可判定的现有事实；只在提示词里提醒会让图的
   拓扑序和审批在真正写代码时失效。
 
@@ -763,11 +730,11 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   悄悄跳过去落到后面几道里碰运气 —— 图里正摆着一条要人去看的东西，闷着不说等于
   把它藏起来。
   **（二）这个想法的 plan 关卡必须有当前有效的人工批准**
-  （`validApproval(projectDir, graph, "plan", [id])`，D7）。plan 的快照盖住
+  （`validApproval(projectDir, graph, "plan", id)`，D7）。plan 的快照盖住
   `verify`，所以改一个字批准就作废 —— 这条自毁正是这道闸敢原样放行一条命令的全部
   依据。**没批准不等于拒绝**：命令掉进下面三道，按一条普通命令判，该放的照样放；
   真被下面某一道拦下时，说给人听的理由会换成「拦住它的不是命令本身，是这个想法的
-  方案还没有当前有效的人工批准」，并把 `request-approval --gate plan --node <编号>`
+  方案还没有当前有效的人工批准」，并把 `request-approval --node <编号>`
   写出来，原本挡住它的那条规则收在括号里 —— 报一个正则的名字，只会把人支去重写一条
   图里已经写好的命令（D7/D28）。
   **第二道：受认可的调用 —— 引擎 CLI，以及本仓库自己的安装/打包入口。**

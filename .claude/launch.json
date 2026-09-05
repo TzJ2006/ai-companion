@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "graph",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["companion/dist/companion.mjs", "serve", "--no-open", "--port", "8787"],
+      "port": 8787
+    }
+  ]
+}

@@ -186,13 +186,13 @@ ideas:
   // ── 批准消费：三家的人类消息都走同一个 applyApproval ─────────────────────
 
   it("a challenge answer consumes through cursor's beforeSubmitPrompt and claude's UserPromptSubmit alike", () => {
-    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "decomposition");
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-001"]);
     const viaCursor = normalizeCursor({ hook_event_name: "beforeSubmitPrompt", prompt: `批准 ${challenge}`, cwd: dir });
     const outcome = handlePrompt(viaCursor, dir);
     expect(outcome?.ok).toBe(true);
     expect(existsSync(join(paths(dir).runtime, "approvals", `${challenge}.json`))).toBe(true);
 
-    const again = requestApproval(dir, load(graphPath(dir)).graph, "decomposition");
+    const again = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-001"]);
     const viaClaude = normalizeClaude({ hook_event_name: "UserPromptSubmit", prompt: `APPROVE ${again.challenge}`, cwd: dir, session_id: "s", turn_id: "t" });
     expect(handlePrompt(viaClaude, dir)?.ok).toBe(true);
   });

@@ -31,7 +31,7 @@ node .companion/companion.mjs set I-0XX doing
 
 进不去 doing 时，拒绝理由会说清缺什么：计划字段没答完 → 回 ccthink；
 前置没完成 → 先做前置；文件和别的进行中想法重叠 → 等它完成。
-计划还没被人批过的，写实现时守卫会拦 —— 先补一道 plan 批准。
+计划还没被人批过的，写实现时守卫会拦 —— 先补一道批准（`request-approval --node I-0XX`）。
 写之前可以自检：`node .companion/companion.mjs allow src/那个文件`。
 
 ## 第 2 步 — 测试先行，看着它失败

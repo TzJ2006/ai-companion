@@ -13,7 +13,7 @@ import {
 
 // I-090 — Codex 版批准机制进入共同基座：一次性口令绑定内容摘要，只有整条消息
 // 就是「批准 CC-XXXXXXXX」的真实回复才消费得掉；回执由程序保管在 ideas/.runtime/。
-// 裁决依据：D7（两道常规关卡）、D26（一次性 challenge + 内容摘要 + 元数据）、
+// 裁决依据：D7（一道常规关卡，按想法绑内容）、D26（一次性 challenge + 内容摘要 + 元数据）、
 // D27（人工验证只走 manual-check challenge）。
 describe("companion approval machinery (I-090)", () => {
   let dir: string;
@@ -63,37 +63,46 @@ ideas:
   });
   afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-  // ── 请求：一次性口令 + 内容摘要，落进 .runtime/pending/ ──────────────────
+  // ── 请求：一次性口令 + 每个想法一份内容摘要，落进 .runtime/pending/ ────────
 
-  it("requestApproval mints a CC-XXXXXXXX challenge bound to a content digest", () => {
-    const r = requestApproval(dir, loadGraph(), "decomposition");
+  it("requestApproval mints a CC-XXXXXXXX challenge bound to each named idea's digest", () => {
+    const r = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     expect(r.challenge).toMatch(/^CC-[A-F0-9]{8}$/);
     const pending = JSON.parse(readFileSync(join(paths(dir).runtime, "pending", `${r.challenge}.json`), "utf8"));
-    expect(pending.gate).toBe("decomposition");
-    expect(pending.snapshot).toBe(approvalSnapshot(loadGraph(), "decomposition"));
+    expect(pending.v).toBe(2);
+    expect(pending.gate).toBe("plan");
+    expect(pending.snapshots).toEqual({ "I-002": approvalSnapshot(loadGraph(), "I-002") });
   });
 
-  it("the two regular gates digest different things and live independently", () => {
+  // D7：一条口令可以点名几个想法，人回一句就都批了 —— 但每个想法各自绑各自的内容，
+  // 改了其中一个，只有它失效。
+  it("one reply approves several ideas, and each one lives and dies on its own content", () => {
     const g = loadGraph();
-    expect(approvalSnapshot(g, "decomposition")).not.toBe(approvalSnapshot(g, "plan", ["I-002"]));
-    requestApproval(dir, g, "decomposition");
-    // 批了拆分，计划关卡不因此变有效
-    const d = requestApproval(dir, g, "decomposition");
-    applyApproval(dir, `批准 ${d.challenge}`, meta);
-    expect(validApproval(dir, g, "decomposition")).toBe(true);
-    expect(validApproval(dir, g, "plan", ["I-002"])).toBe(false);
+    const { challenge } = requestApproval(dir, g, "plan", ["I-001", "I-002"]);
+    expect(applyApproval(dir, `批准 ${challenge}`, meta)?.ok).toBe(true);
+    expect(validApproval(dir, g, "plan", "I-001")).toBe(true);
+    expect(validApproval(dir, g, "plan", "I-002")).toBe(true);
+
+    const drifted = loadGraph();
+    drifted.ideas.find((i) => i.id === "I-001")!.how = "改了实现思路";
+    expect(validApproval(dir, drifted, "plan", "I-001")).toBe(false);
+    expect(validApproval(dir, drifted, "plan", "I-002")).toBe(true);
+  });
+
+  it("a gate must name at least one idea", () => {
+    expect(() => requestApproval(dir, loadGraph(), "plan", [])).toThrow(/点名/);
   });
 
   // ── 消费：只有整条消息就是口令回复才算数 ─────────────────────────────────
 
   it("a token wrapped in prose consumes nothing", () => {
-    const { challenge } = requestApproval(dir, loadGraph(), "decomposition");
+    const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     expect(applyApproval(dir, `我觉得可以，批准 ${challenge} 吧`, meta)).toBeNull();
     expect(existsSync(join(paths(dir).runtime, "pending", `${challenge}.json`))).toBe(true);
   });
 
   it("approve consumes once: receipt written with provenance, replay fails", () => {
-    const { challenge } = requestApproval(dir, loadGraph(), "decomposition");
+    const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     const first = applyApproval(dir, `批准 ${challenge}`, meta);
     expect(first?.ok).toBe(true);
 
@@ -109,11 +118,22 @@ ideas:
   });
 
   it("REJECT writes a rejected receipt and grants nothing", () => {
-    const { challenge } = requestApproval(dir, loadGraph(), "decomposition");
+    const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     const r = applyApproval(dir, `REJECT ${challenge}`, meta);
     expect(r?.ok).toBe(true);
     expect(r?.decision).toBe("rejected");
-    expect(validApproval(dir, loadGraph(), "decomposition")).toBe(false);
+    expect(validApproval(dir, loadGraph(), "plan", "I-002")).toBe(false);
+  });
+
+  // 旧版回执（v1：node_ids + 一份 snapshot）没有按想法的摘要，什么都证明不了。
+  it("a v1 receipt on disk is not a valid approval", () => {
+    const dirPath = join(paths(dir).runtime, "approvals");
+    mkdirSync(dirPath, { recursive: true });
+    writeFileSync(join(dirPath, "CC-OLD00001.json"), JSON.stringify({
+      v: 1, challenge: "CC-OLD00001", gate: "plan", node_ids: ["I-002"],
+      snapshot: approvalSnapshot(loadGraph(), "I-002"), decision: "approved",
+    }));
+    expect(validApproval(dir, loadGraph(), "plan", "I-002")).toBe(false);
   });
 
   // ── 内容漂移：改一个字，口令作废、批准失效 ───────────────────────────────
@@ -130,11 +150,11 @@ ideas:
   it("validApproval re-derives on every use — drift after approval invalidates it", () => {
     const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     expect(applyApproval(dir, `APPROVE ${challenge}`, meta)?.ok).toBe(true);
-    expect(validApproval(dir, loadGraph(), "plan", ["I-002"])).toBe(true);
+    expect(validApproval(dir, loadGraph(), "plan", "I-002")).toBe(true);
 
     const drifted = loadGraph();
     drifted.ideas.find((i) => i.id === "I-002")!.how = "改了实现思路";
-    expect(validApproval(dir, drifted, "plan", ["I-002"])).toBe(false);
+    expect(validApproval(dir, drifted, "plan", "I-002")).toBe(false);
   });
 
   // ── 人工验收走同一条挑战链（D27） ────────────────────────────────────────
@@ -155,14 +175,17 @@ ideas:
 
   // ── CLI 接线 ─────────────────────────────────────────────────────────────
 
-  it("cli request-approval prints the challenge and how to answer it", { timeout: 60_000 }, () => {
-    const r = spawnSync("npx", ["tsx", ENGINE, "request-approval", "--gate", "decomposition",
+  it("cli request-approval defaults to the plan gate, takes several --node ids, and says how to answer", { timeout: 60_000 }, () => {
+    const r = spawnSync("npx", ["tsx", ENGINE, "request-approval", "--node", "I-001", "I-002",
       "--project", dir, "--date", "2026-08-31"],
       { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/CC-[A-F0-9]{8}/);
     expect(r.stdout).toMatch(/批准/);
-    expect(readdirSync(join(paths(dir).runtime, "pending")).length).toBeGreaterThan(0);
+    const [name] = readdirSync(join(paths(dir).runtime, "pending"));
+    const pending = JSON.parse(readFileSync(join(paths(dir).runtime, "pending", name), "utf8"));
+    expect(pending.gate).toBe("plan");
+    expect(Object.keys(pending.snapshots).sort()).toEqual(["I-001", "I-002"]);
   });
 
   // ── I-102：被批的内容要送到人眼前，而且必须就是被哈希的那一份 ─────────────
@@ -173,33 +196,41 @@ ideas:
   // 且印出来的和被哈希的是同一份 —— 后者靠正反两面的断言一起守，只看正面的话，
   // 一个「劫持 show 的输出」的省事实现照样能过。
 
-  const textOf = (gate: "decomposition" | "plan", ids?: string[]) =>
-    approvalLines(approvalProjection(loadGraph(), gate, ids)).join("\n");
+  const textOf = (ids: string[]) =>
+    approvalLines(approvalProjection(loadGraph(), ids)).join("\n");
 
   it("approvalSnapshot is the digest OF approvalProjection — one source, not two", () => {
     const g = loadGraph();
     // 拆开之后摘要不能变口径：投影一变，摘要跟着变；投影没变，摘要不变。
-    expect(approvalSnapshot(g, "plan", ["I-002"])).toBe(approvalSnapshot(loadGraph(), "plan", ["I-002"]));
+    expect(approvalSnapshot(g, "I-002")).toBe(approvalSnapshot(loadGraph(), "I-002"));
     const drifted = loadGraph();
     drifted.ideas.find((i) => i.id === "I-002")!.how = "改了实现思路";
-    expect(approvalProjection(drifted, "plan", ["I-002"])).not.toEqual(approvalProjection(g, "plan", ["I-002"]));
-    expect(approvalSnapshot(drifted, "plan", ["I-002"])).not.toBe(approvalSnapshot(g, "plan", ["I-002"]));
+    expect(approvalProjection(drifted, ["I-002"])).not.toEqual(approvalProjection(g, ["I-002"]));
+    expect(approvalSnapshot(drifted, "I-002")).not.toBe(approvalSnapshot(g, "I-002"));
   });
 
-  it("plan projection carries all eight answers; decomposition carries only the first three", () => {
-    const plan = approvalProjection(loadGraph(), "plan", ["I-002"])[0] as Record<string, unknown>;
-    for (const k of ["what", "why", "expected", "how", "why_this_way", "future", "code", "verify"]) {
+  // D7：摘要绑的是审的内容 —— 父想法、前置和八问；code 只到 symbol，verify 不含
+  // signed_off。行号是实现完写回的，签字是口令写回的，两样都不该作废刚批的计划。
+  it("the projection binds parent and the eight answers, but not code.lines or signed_off", () => {
+    const plan = approvalProjection(loadGraph(), ["I-002"])[0] as Record<string, unknown>;
+    for (const k of ["parent", "needs", "what", "why", "expected", "how", "why_this_way", "future", "code", "verify"]) {
       expect(plan).toHaveProperty(k);
     }
-    const decomp = approvalProjection(loadGraph(), "decomposition") as Record<string, unknown>[];
-    expect(decomp).toHaveLength(2);
-    for (const k of ["what", "why", "expected", "needs", "name"]) expect(decomp[0]).toHaveProperty(k);
-    for (const k of ["how", "why_this_way", "code", "verify"]) expect(decomp[0]).not.toHaveProperty(k);
+    const before = approvalSnapshot(loadGraph(), "I-002");
+    const g = loadGraph();
+    const idea = g.ideas.find((i) => i.id === "I-002")!;
+    idea.code![0].lines = "10-20";
+    idea.verify!.signed_off = "张三 2026-09-05";
+    idea.status = "doing";
+    idea.log = [{ date: "2026-09-05", note: "开工" }];
+    expect(approvalSnapshot(g, "I-002")).toBe(before);
+    idea.parent = "I-001";
+    expect(approvalSnapshot(g, "I-002")).not.toBe(before);
   });
 
   // 正面：被哈希的每一段散文都要出现在人看到的文字里。
   it("every projected string reaches the page a human reads", () => {
-    const projected = approvalProjection(loadGraph(), "plan", ["I-002"]) as Record<string, unknown>[];
+    const projected = approvalProjection(loadGraph(), ["I-002"]) as Record<string, unknown>[];
     const text = approvalLines(projected).join("\n");
     for (const entry of projected) {
       for (const value of Object.values(entry)) {
@@ -211,19 +242,10 @@ ideas:
 
   // 反面：没被哈希的东西一个字都不许印 —— 否则人以为自己批的比实际批的多。
   it("prints nothing that the digest does not cover", () => {
-    const text = textOf("plan", ["I-002"]);
+    const text = textOf(["I-002"]);
     expect(text).not.toContain("[todo]");                // status 不在投影里
     expect(text).not.toContain("log");                   // 修改记录不在投影里
     expect(text).not.toContain("W1");                    // 没点名的想法不该出现
-  });
-
-  it("decomposition shows every idea's name and first three answers, and stops there", () => {
-    const text = textOf("decomposition");
-    for (const s of ["I-001", "I-002", "要人亲眼验收的想法", "自动验证的想法", "W1", "Y1", "E1", "W2"]) {
-      expect(text).toContain(s);
-    }
-    expect(text).not.toContain("H2");                    // how 不在拆分的投影里
-    expect(text).not.toContain("T2");                    // why_this_way 同上
   });
 
   // 第 7 问今天在两个显示面上都是残的：show 只打 command 或 manual，网页卡片缺
@@ -233,7 +255,7 @@ ideas:
       .toMatch(/tests\/mid\.test\.ts/);
     expect(verifyText({ command: "c", test_files: ["t.ts"], pass: "exit 0" })).toContain("exit 0");
     expect(verifyText({ manual: "打开页面亲眼看一遍", signed_off: "张三 2026-09-05" })).toContain("张三 2026-09-05");
-    const text = textOf("plan", ["I-002"]);
+    const text = textOf(["I-002"]);
     expect(text).toContain("tests/mid.test.ts");
     expect(text).toContain("exit 0");
   });
@@ -247,11 +269,10 @@ ideas:
     expect(lines).toContain("tests/mid.test.ts");
     expect(lines).not.toContain("todo");
     expect(questionLines({ what: "只有一问", }).join("\n")).toContain("只有一问");
-    expect(questionLines(idea, 3).join("\n")).not.toContain("H2");   // 只要前三问
   });
 
   it("cli request-approval prints the reviewed content above the challenge", { timeout: 60_000 }, () => {
-    const r = spawnSync("npx", ["tsx", ENGINE, "request-approval", "--gate", "plan", "--node", "I-002",
+    const r = spawnSync("npx", ["tsx", ENGINE, "request-approval", "--node", "I-002",
       "--project", dir, "--date", "2026-08-31"],
       { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
     expect(r.status).toBe(0);

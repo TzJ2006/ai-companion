@@ -103,46 +103,6 @@ describe("companion shared skills (I-095)", () => {
   });
 });
 
-// H25 — claude-companion/FORMAT.md 曾是一份被同时手改的孪生规范，三处和共同基座
-// 相反：人手写 signed_off（D27 说签字只能来自一次性 challenge）、验证不写显式测试
-// 路径（D2 说要写）、裸名被占就加 agent 后缀（D10 说图归项目，只有一份）。
-// 它当初不能删，是因为七个仓库里已安装的五个命令文件按名字指着它。2026-09-02 切换
-// 到共同基座时那些命令文件也一起归档了，六个外部仓库现在装的是技能 —— 这个前提
-// 已经不成立，所以它跟着整个旧实现搬进了 archive/，根目录下不许再有第二份（I-100）。
-// 指路牌的内容照旧盯着：搬了地方，不等于可以重新长成一份规范。
-describe("the frozen twin spec (H25)", () => {
-  const REPO = resolve(fileURLToPath(import.meta.url), "../../..");
-  const twin = () => readFileSync(join(REPO, "archive", "claude-companion", "FORMAT.md"), "utf8");
-
-  it("lives in archive/ with the rest of the retired implementation, and nowhere else", () => {
-    expect(existsSync(join(REPO, "archive", "claude-companion", "FORMAT.md"))).toBe(true);
-    expect(existsSync(join(REPO, "claude-companion", "FORMAT.md")), "根目录下不许再有一份").toBe(false);
-  });
-
-  it("is a pointer to the single authority, not a second spec", () => {
-    const text = twin();
-    expect(text).toMatch(/companion\/FORMAT\.md/);            // 送到正本去
-    expect(text).toMatch(/冻结/);                              // 明说自己不再是规范
-    expect(text.split("\n").length).toBeLessThan(40);          // 指路牌，不是规格书
-    expect(text, "不许再自带一份节点格式").not.toMatch(/^## A node$/m);
-    expect(text, "不许再自带一份八个问题").not.toMatch(/^## The eight questions$/m);
-  });
-
-  it("names the three contradictions and resolves each in favour of the shared spec", () => {
-    const text = twin();
-    expect(text).toMatch(/D27[\s\S]*?signed_off|signed_off[\s\S]*?D27/);  // 签字
-    expect(text).toMatch(/D2\b[\s\S]*?test_files|test_files[\s\S]*?D2\b/); // 显式测试路径
-    expect(text).toMatch(/D10/);                                          // 图归项目
-    expect(text, "后缀归属规则必须已经消失").not.toMatch(/graph\.claude\.yaml\s*$/m);
-  });
-
-  it("the shared spec records that the twin is frozen", () => {
-    const spec = readFileSync(resolve(REPO, "companion", "FORMAT.md"), "utf8");
-    expect(spec).toMatch(/claude-companion\/FORMAT\.md/);
-    expect(spec).toMatch(/冻结/);
-  });
-});
-
 // H27 — 规范说的必须是现在的代码，不是将来想要的代码。一条裁决写着「已经这样了」
 // 而代码里没有，正是这次审计查出来的失效方式：下一个 agent 会当它是事实，然后
 // 照着一个不存在的保证做事。所以这里的每一条断言都拿规范去比源码，而不是比另一
