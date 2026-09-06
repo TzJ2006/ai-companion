@@ -1039,7 +1039,8 @@ const scriptPath = (file: string) => String.raw`("(?:[^"\r\n]*[\\/])?${file}"|'(
 /** WHERE the engine is. A sanctioned engine call names one of these files and no
  *  other — the bundle the installer places in a managed repository, and, in this
  *  development checkout, the engine sources it is built from plus the
- *  pre-unification engines it still ships (D26/D28/D34).
+ *  pre-unification engine paths kept from before the base was unified
+ *  (D26/D28/D34).
  *
  *  This list is the fix for the hole the name-matching above left wide open: the
  *  path boundary settled the SPELLING of the file name and said nothing at all
@@ -1055,14 +1056,16 @@ const ENGINE_PATHS = [
   "companion/dist/companion.mjs",                       // the same bundle, freshly built, in this checkout
   "companion/ideas.ts",
   "companion/cli.ts",
-  // The pre-unification engines this repository still ships, added on exactly
-  // the terms the installers below were: `claude-companion/ideas.ts` is the
-  // command this repository's own CLAUDE.md documents AND the engine this
-  // checkout actually runs until the migration lands, so refusing it as
-  // right-name-wrong-place told the human the documented command was a decoy
-  // (D26/D28/D34). They are ordinary project files at fixed paths, judged by
-  // identity like every other entry — a same-named file anywhere else is still
-  // not an engine.
+  // The pre-unification engine paths, added on exactly the terms the installers
+  // below were: while they existed, `claude-companion/ideas.ts` was the command
+  // this repository's own CLAUDE.md documented AND the engine this checkout ran,
+  // so refusing it as right-name-wrong-place told the human the documented
+  // command was a decoy (D26/D28/D34). They are ordinary project files at fixed
+  // paths, judged by identity like every other entry — a same-named file
+  // anywhere else is still not an engine. The migration has since landed: both
+  // directories are gone from this repository, CLAUDE.md documents neither
+  // command, and this checkout runs `.companion/companion.mjs` — so the two
+  // entries below match no file here and stay only for an older checkout.
   //
   // Codex's engine is deliberately NOT here: it is `codex-companion/scripts/
   // companion.py`, a Python script COMPANION_CLI launches no runtime for, with
@@ -1076,11 +1079,13 @@ const ENGINE_PATHS = [
 
 /** The install and build entry points this repository owns, on the same terms.
  *  All THREE implementations' installers are here, not just the shared base's:
- *  `claude-companion/install.ts` is what this repository's own CLAUDE.md still
- *  documents as the way to install, and the interpreter wall was refusing it —
- *  a wall that blocks the documented command teaches the human that the
- *  documentation is wrong (D21/D28). Codex is installed as a plugin and owns no
- *  install script, so it has no entry to add. */
+ *  `claude-companion/install.ts` was what this repository's own CLAUDE.md
+ *  documented as the way to install when this entry landed, and the interpreter
+ *  wall was refusing it — a wall that blocks the documented command teaches the
+ *  human that the documentation is wrong (D21/D28). That directory is gone and
+ *  CLAUDE.md documents no install command any more; the last two entries stay
+ *  only for an older checkout that still has them. Codex is installed as a
+ *  plugin and owns no install script, so it has no entry to add. */
 const INSTALL_PATHS = [
   "companion/install.ts",
   "companion/build.mjs",
@@ -1157,7 +1162,7 @@ const ENGINE_MENTION = new RegExp(ENGINE_FILE, "i");
 const ENGINE_INVOCATION = new RegExp(
   String.raw`^[\s(]*${LAUNCHER}(${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)*)?["']?(\S*[\\/])?${ENGINE_FILE}`, "i");
 
-/** Second, writing the engine by a verb MUTATING_SHELL has none of its own for.
+/** Second, writing the engine by a verb MUTATING_HEAD has none of its own for.
  *  `find <engine file> -delete` is a mutation wearing a search — and that is now
  *  the only one of these this line still adds: `truncate`, `dd`, `shred`,
  *  `patch` and `Clear-Content` were hoisted into MUTATING_HEAD, because nothing
@@ -1185,8 +1190,8 @@ const COMMAND_SEPARATOR = /[;&|\r\n]+/;
  *  the shape D26 exists to stop. Command substitution hides an entire command
  *  inside an argument, where no split can see it, so a line carrying one is
  *  judged whole and refused — the same call the engine allowlist makes above.
- *  Mutations this screen lets pass are still met by MUTATING_SHELL and
- *  INTERPRETER further down, under their own reasons: a redirect
+ *  Mutations this screen lets pass are still met by mutatingShell (MUTATING_HEAD
+ *  and REDIRECT) and INTERPRETER further down, under their own reasons: a redirect
  *  (`cat guard.ts > ideas.ts`) says so as a redirect, not as an engine call. */
 function engineScreen(command: string): string | null {
   if (!ENGINE_MENTION.test(command)) return null;
@@ -1297,7 +1302,7 @@ function screenShell(command: string, projectDir: string): Verdict {
           : { allow: false, reason: misplacedScript(engine[2], ENGINE_PATHS) };
       }
       // The installers and the build keep the exemption they always had — from
-      // INTERPRETER only, never from MUTATING_SHELL.
+      // INTERPRETER only, never from MUTATING_HEAD.
       const script = SANCTIONED_SCRIPT.exec(head);
       if (script && mutatingShell(head) === null) {
         return atSanctionedPath(projectDir, script[2], INSTALL_PATHS)

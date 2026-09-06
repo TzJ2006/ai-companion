@@ -6,8 +6,10 @@ import { decide, type NormalizedEvent } from "../../companion/guard.js";
 
 // 第五轮：守卫拦得对，但话说错了 —— 三处「拒绝理由本身不成立」。
 //
-// (1) 被认可的引擎入口只列了共同基座那几个，于是本仓库 CLAUDE.md 至今在教、这个检出
-//     至今在跑的那一份（claude-companion/ideas.ts）被当成「名字对、位置不对」拒掉。
+// (1) 被认可的引擎入口只列了共同基座那几个，于是当时本仓库 CLAUDE.md 在教、这个检出
+//     也在跑的那一份（claude-companion/ideas.ts）被当成「名字对、位置不对」拒掉。
+//     （2026-09-05 起 claude-companion/ 已删除，CLAUDE.md 也不再提它；ENGINE_PATHS
+//     保留这两条旧入口，下面的用例锁的就是这份保留。）
 //     它不是磁盘上随便一个同名文件，它是项目自己的文件 —— 和三家安装器同样的处理。
 // (2) 图还没建起来的仓库里，每一次写前都被说成「守卫自身出错」，给出的出路是把守卫
 //     整个关掉（AIDEV_GUARD=off）。底下那句本来就说对了 —— 先 init 或 migrate ——
@@ -60,10 +62,10 @@ ideas:
   afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
   // ── (1) 项目自己的旧引擎入口 ────────────────────────────────────────────
-  it("(1) the engine this repository documents and still runs is an engine", () => {
+  it("(1) the engine this repository documented and ran before the migration is an engine", () => {
     const here = dir.replaceAll("\\", "/");
     allows([
-      "npx tsx claude-companion/ideas.ts check",           // CLAUDE.md 里逐字写着这一条
+      "npx tsx claude-companion/ideas.ts check",           // 当时 CLAUDE.md 里逐字写着这一条
       "npx tsx claude-companion/ideas.ts next",
       "npx tsx claude-companion/ideas.ts show I-014",
       "npx tsx claude-companion/ideas.ts render",

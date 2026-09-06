@@ -13,11 +13,15 @@ agent。2026-08-29 起，概念性调整只改这一份，三边实现跟随本�
 **代码搬完了，本文件写下的事情还没有全部落地 —— 这份清单要和下面的裁决表对得上，
 所以逐条列出，不写「只剩一件」：**
 
-1. 本检出当前没有装守卫。2026-09-05 按用户要求，本仓库和这台机器上其它仓库里的
-   全部安装 —— 三份接线、两处技能副本、单文件产物 —— 都已卸载并归档到
-   `archive/retired-20260905/`。装回去是一个显式动作
-   （`npx tsx companion/install.ts <目标仓库>`），不会自动发生。所以本文件描述的
-   守卫行为在这个检出里今天一条都不生效 —— 不是因为守卫弱，而是因为没有守卫。
+1. **本条从前写错了：本检出装着守卫，而且在跑。** 2026-09-05 曾按用户要求把本仓库和
+   这台机器上其它仓库里的全部安装卸载归档，当天又装了回来 —— 三份接线
+   （`.claude/settings.json` 的五个 hook 事件、`.cursor/hooks.json`、
+   `.codex/hooks.json`）、两处技能副本（`.claude/skills/`、`.agents/skills/` 各五个）、
+   单文件产物 `.companion/companion.mjs` 和它旁边的 `FORMAT.md`，今天都在位。所以
+   本文件描述的守卫行为在这个检出里今天是生效的 —— 它真的拦命令。装和卸都是显式
+   动作（`npx tsx companion/install.ts <目标仓库>`），不会自动发生。`archive/` 现在
+   是个空目录，没有 `archive/retired-20260905/` 这个去向。这一条不是一处未落地的
+   缺口，留在第 1 位只是不打乱下面的编号。
 2. Cursor 收不到读文件事件（接线缺 `beforeReadFile`）—— 见 D22。
 3. 旧命令一个别名都没建 —— 见 D28。
 4. `verify.test_files` 的受限通配符没做，今天只做精确比对 —— 见 D31。
@@ -25,10 +29,12 @@ agent。2026-08-29 起，概念性调整只改这一份，三边实现跟随本�
 6. `check` 还不校验 `verify.command` 是不是单条命令（守卫和 `run-check` 两扇门都
    在执行前拦，图却照收）—— 见 D21。
 
-`claude-companion/FORMAT.md` 曾是一份被同时手改的孪生规范，已经**冻结**成一块
-指路牌：它那三条和本文件相反的规则 —— 人手写 `signed_off`、验证不写显式测试
-路径、裸名被占就按 agent 加后缀各存一份图 —— 一律以本文件的 D27、D2、D10 为准。
-不删掉那个文件，是因为已经装进别的仓库的五个命令文件按名字指着它。
+`claude-companion/FORMAT.md` 曾是一份被同时手改的孪生规范，一度冻结成一块指路牌，
+2026-09-05 随 `claude-companion/` 整个目录一起**删除**，只留在 git 历史里：它那三条
+和本文件相反的规则 —— 人手写 `signed_off`、验证不写显式测试路径、裸名被占就按
+agent 加后缀各存一份图 —— 一律以本文件的 D27、D2、D10 为准。今天没有任何技能或
+命令文件按名字指着它：技能只说「读引擎旁边的 FORMAT.md」，也就是
+`.companion/FORMAT.md`；别的仓库里若还留着旧命令文件，那条路径现在指空了。
 
 One canonical file holds project intent: `ideas/graph.yaml`. Runtime evidence,
 approval receipts, scan progress, logs, and rendered HTML are generated beside
@@ -301,12 +307,15 @@ ideas:
   改动前后的签字栏）。
 - **网页改不出 `done`，也改不到生命周期字段。** `status` 里 `to: done` 整体拒绝：
   完成要有当前有效的 GREEN 证据，而证据在磁盘上，纯函数的写回读不到它（D20）。
-  `set` 只认名称和六段散文（`name` `what` `why` `expected` `how` `why_this_way`
-  `future`）—— `status`、`verify`、`code`、`log` 是生命周期，只走命令行（D24）。
+  `set` 只认名称、六段散文和 `parent`（`name` `what` `why` `expected` `how`
+  `why_this_way` `future` `parent` —— `parent` 是编号不是散文，按一行原样写）——
+  `status`、`verify`、`code`、`log` 是生命周期，只走命令行（D24）。
   一个例外方向：改了已完成想法的行为字段（`what` `expected` `how` `why_this_way`
   `verify`），那个想法自动退回 `blocked`，测试先行和人工批准对它重新生效。
-- **临时号会出现在四个位置**：`set` 和 `status` 的 `id`、`link` 和 `unlink` 的
-  `from` / `to`。写回发放真编号时这四处要一起替换，漏一处就等于剩下一个没人认领的
+- **临时号会出现在五个位置**：`set` 和 `status` 的 `id`、`link` 和 `unlink` 的
+  `from` / `to`，以及 `parent` 的值 —— `set` 一个想法的 `parent` 为 `tmp:N`，或新建想法
+  的 `fields.parent`（I-129，2026-09-06：从前只换前四处，「新建一层、把几个想法归进去」
+  一次写回就做不到）。写回发放真编号时这五处要一起替换，漏一处就等于剩下一个没人认领的
   临时号，整份文件作废。
 - **`ops` 里的引用有先后**：`add` 一定排在引用那个临时号的 `link` 前面。
   但它**不是人的操作流水** —— 同一个字段改两次只留最后一条，位置也随之挪到队尾；
@@ -332,7 +341,8 @@ ideas:
 
 最后一条边界，必须写明：**这个文件不是可信输入**。写回校验的是格式、指纹和图的
 完整性，不是「改动来自人」—— 那道保证由批准机制提供（D7），而批准只认人亲手发的消息。
-守卫挂在编辑工具上，看不见 Bash，所以一个 agent 完全可以自己写一份改动文件再跑写回；
+守卫同时挂在编辑工具和 Bash 上（D21），但改动文件不在受保护文件之列、`apply` 又是
+放行的引擎子命令，所以一个 agent 完全可以自己写一份改动文件再跑写回；
 挡住这条路是批准机制的事，不是这个格式的事。
 
 ## Generated files
@@ -613,8 +623,9 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **插件根目录定在哪（2026-09-02 补裁，已落地）** — 目标仓库根下的
   `.companion/`，引擎是 `.companion/companion.mjs`，规范文件跟着引擎装在
   `.companion/FORMAT.md`（技能正文说的「读引擎旁边的 FORMAT.md」就是它）。
-  这个相对路径在 `manifests.ts` 里写成一个常量 `ENGINE_RELATIVE`，安装器、
-  三份接线和五条技能正文都读它，别处不许再写一遍。理由有两条：`.claude/` 里放
+  这个相对路径在 `manifests.ts` 里写成一个常量 `ENGINE_RELATIVE`，引擎、守卫、
+  安装器和三份接线都读它；五条技能正文是 Markdown，读不了常量，写的是字面量，由
+  `test_base_skills` 把那个字面量钉在常量上。理由有两条：`.claude/` 里放
   一个 Cursor 和 Codex 也要跑的文件，在只用其中一家的仓库里就是一个没人认领的
   目录；更要紧的是接线指错路径的后果不对称 —— Cursor 那边 failClosed（整个仓库
   被拒），Codex 那边 node 退出 1 被当成「失败但不阻断」（每一次写都无人看管地
@@ -718,7 +729,7 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **理由** — 只拦编辑工具却放行 `>`、脚本和包管理器，不是路径范围控制。
   规则是 guardrail 而非沙箱，但不能保留最显眼的旁路。
 - **落地情况（2026-09-02，照 `guard.ts` 现在的代码逐句重读过）** — 已落地，
-  `ruleShell` 一共四道，按一条命令遇到它们的顺序。**这道闸门在本条写下之后被重写过，
+  `ruleShell` 一共五道，按一条命令遇到它们的顺序。**这道闸门在本条写下之后被重写过，
   本条却没跟着改**，所以下面每一句都重新对着代码核了一遍；核不上的地方直接写「本条
   从前写错了」，不留着一份既不描述代码、也不描述裁决的散文。
   **第一道：当前 `doing` 想法自己声明的 `verify.command`。逐字相同只是入场券，
@@ -755,7 +766,7 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   里丢一个 `companion.mjs` 再跑它）当场拒绝，而且明说是位置不对，不是让人对着一句
   「命令被拒」反复重打（D26/D28）。受认可的安装/打包入口一共**四个**，本条从前只记了
   前两个：`companion/install.ts`、`companion/build.mjs`、`claude-companion/install.ts`、
-  `cursor-companion/install.ts` —— 它们只从第四道的解释器墙里豁免，写文件招数照拦。
+  `cursor-companion/install.ts` —— 它们只从第五道的解释器墙里豁免，写文件招数照拦。
   **第三道：点名了引擎文件（`ENGINE_MENTION`）、却不是上面那种调用的命令。**
   **这道闸的问法已经倒过来，本条从前记的那份「只读动词清单」（`cat`、`grep`、
   `git diff/show/log` …）作废** —— 代码把那份枚举本身称作 bug：它漏掉的拼法
@@ -765,29 +776,46 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   被谁列过名，一律算在看，不拦**。不算看的只有两类：
   **（一）`ENGINE_INVOCATION`** —— 引擎站在程序的位置上（命令头，或前面只隔着
   launcher / 解释器和它们的旗标）。这正是 D26 立得住的那个形状，第二道是唯一一扇门。
-  **（二）`ENGINE_WRITE` —— 本条从前完全没写的一类拒绝**：用写文件招数里没有的动词
-  写引擎 —— `find <引擎文件> -delete/-exec`、`truncate`、`dd`、`shred`、`patch`、
-  `Clear-Content`。只在点名引擎的时候问，而且每个动词都锚在命令头上：抬进第四道会把
+  **（二）`ENGINE_WRITE` —— 本条从前完全没写的一类拒绝**：这一道自己点名的写引擎
+  动词 —— `find <引擎文件> -delete/-exec`、`truncate`、`dd`、`shred`、`patch`、
+  `Clear-Content`。**本条从前写的「这些都是写文件招数里没有的动词、只在点名引擎的
+  时候问」已经不成立**：后五个已经抬进写文件招数那张表（`MUTATING_HEAD`），点不点名
+  引擎都拦（`truncate -s 0 notes.md` 一样被拒）；它们还留在这里，只是让先跑的这一道
+  说自己的话 ——「你在改引擎」比「这个词写文件」更贴。这一行今天还多加的只剩 `find`，
+  而它正是不能抬进去的那个：每个动词都锚在命令头上，抬进去会把
   `find . -name '*.ts' -exec grep -l x {} +` 这种搜索一起拒掉，而
   `rg patch companion/guard.ts` 是在 grep 一个词。
   这道闸**逐段问**，不整行问：前面一个只读动词只替自己担保，不替挂在它后面的东西
   担保 —— `cat notes.md; ./companion/dist/companion.mjs guard` 还是 D26 要拦的那个
   形状。只有出现命令替换（`$(` 或反引号）时整行一起判 —— 替换把一整条命令藏在参数
   里，切不开 —— **而且这一行只要点名了引擎，就直接按「调用」拒**，不再问它站在哪个
-  位置上。这道闸判成「只是在看」的，第四道照样接着问。
+  位置上。这道闸判成「只是在看」的，第五道照样接着问。
   **`guard` 和 hook 入口故意不在子命令白名单里，因此从 shell 里够不着** —— 手工跑一次
   hook 入口，等于自己造一个事件、给自己签一次批准。**D26 说批准是行为护栏而不是
   密码学证明，能成立的前提就是这一条**：那句「手工调用 guard 可以模拟事件」是
   Claude 旧实现的现状，不是共同基座的现状。
-  **第四道：`MUTATING_SHELL`，然后 `INTERPRETER`，命中就拒绝。**
+  **第四道：受保护的账本证据（`protectedTargetRefusal`）—— 按写到哪拦，不按命令头上
+  那个词拦。** 批准回执 `ideas/.approved`、两份扫描清单、生成的网页、想法图、
+  `ideas/.runtime/` 下的运行期证据，以及迁移用的旧图，只能由 CLI 和 hook 写（D24）。
+  命令头不在只读动词表（`LOOKING_HEAD`）上时，它的参数逐个问一遍；重定向目标不管
+  命令头是谁都问 —— `cat x > ideas/.approved` 前面在读、后面在写。落在这几份上就
+  拒绝，动词是什么一概不问。**它必须独立于下面那张写文件招数表存在**，理由正是上面
+  「理由」那句「规则是 guardrail 而非沙箱」的反面兜底：动词表漏一个拼法（`busybox
+  cp`、谁都没列过的那个），就等于让 agent 自己写批准回执、自己给自己签批准
+  （D23/D26）。第二道那段尾随管道的惰性段（`inertStage`）也拿它判。
+  **第五道：写文件招数（`mutatingShell`，动词表 `MUTATING_HEAD`），然后 `INTERPRETER`，命中就拒绝。**
   写文件招数这一族是：`rm` / `mv` / `cp` / `tee` / `touch` 那一家（各自锚在命令开头或
   一个分隔符后面）、`sed -i` 与 `perl -i`、写盘的 git 子命令（`apply` `checkout`
   `clean` `commit` `merge` `mv` `reset` `restore` `revert`，并且认得夹在中间的
   `git -C <目录>` 这类全局旗标）、包管理器的 `install` / `remove` / `update`、
   PowerShell 的 `Set-Content` / `Out-File` / `New-Item` …、下载器（`curl` / `wget` /
-  `iwr` …），以及 `>` / `>>` 重定向。**今天这一族按整行问**
-  （`MUTATING_SHELL.test(command)`），不像第三道那样逐段 —— 只有第二道的管道分段用它
-  判惰性段。解释器墙拦的是「把程序交给一个运行时」这个动作本身，不是某几种拼法：
+  `iwr` …），以及 `>` / `>>` 重定向。**今天这一族按命令头逐段问**（`mutatingShell`
+  先用 `shellCommands` 把整行切出每一个程序名站的位置 —— 分隔符、命令替换，以及
+  `sudo` / `xargs` 这类 hand-off 词后面 —— 再拿 `MUTATING_HEAD` 逐个问头），和第三道
+  一样逐段，而且切得更细：**参数里出现过的词不算写**，`rg -n touch
+  companion/guard.ts`、`rg "Set-Content|Out-File" guard.ts`、`git diff
+  rename-plan.md` 都照常放行。整行问的只剩兜底的 `REDIRECT` —— 重定向落地的是文件，
+  头上站谁都一样。第二道的管道分段也调它判惰性段。解释器墙拦的是「把程序交给一个运行时」这个动作本身，不是某几种拼法：
   代码旗标（`-c` / `--eval` / `-enc` …）、按扩展名认出来的脚本、命令头上带任何操作数的
   解释器（`bash setup`、`deno run patch.ts`）、heredoc 与输入重定向，以及管道右边的
   `… | bash`。它拦不住哪些，代码里也照直写了：变量或包装脚本后面的解释器、不在名单上
@@ -812,7 +840,7 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   绕道引擎就能跑起来。两扇门，同一个问题，各问各的。
   **`check` 仍然不看 `verify.command` 长什么形状**：一条串起来的验证命令写进图是
   收得下的，只在两扇门任何一扇要跑它的时候才被拦。想让它在写进图的当场就报错，
-  是另一件还没做的事（见开头的未落地清单第 7 条）。
+  是另一件还没做的事（见开头的未落地清单第 6 条）。
   **那份重复已经去掉了（2026-09-02 照代码复核）**：`guard.ts` 里再没有自己的
   `CHAINED_COMMAND`，那道闸调的是引擎导出的 `chainedCommandRefusal`（谓词
   `isChainedCommand` 在它里面），判断和拒绝语都只剩一个出处，两扇门一份定义。
@@ -832,14 +860,18 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **理由** — 官方兼容只保证事件能触发，不保证原始工具参数长得一样。先归一化
   才能让后面的规则真正只有一份。
 - **落地情况（2026-09-02）** — 已落地，归一化后的形状是
-  `{event, tool, paths[], operations[], command, prompt, cwd, edit, patchText,
+  `{event, tool, paths[], operations[], command, urls[], prompt, cwd, edit, patchText,
   unknownTarget, stop_hook_active, session_id, turn_id}`。后加的两个字段各有出处：
   `patchText` 是补丁类工具的原文（`apply_patch` 这种工具带不出「改完长什么样」，
   逐行读补丁是守卫唯一能看见的后像，见 D24）；`stop_hook_active` 是「这次 stop
   本身就是 stop 钩子引起的」，没有它，Stop 规则会把自己无限重放一遍
   （Cursor 那边由 `loop_count > 0` 映射成同一个意思）。
-  `event` 一共八类：`pre-write`、`post-write`、`read`、`shell`、`prompt`、
-  `session`、`stop`、`other` —— 这八个名字是全集，别在别处发明第九个。三段纯映射
+  `event` 一共九类：`pre-write`、`post-write`、`read`、`shell`、`prompt`、
+  `session`、`stop`、`fetch`、`other` —— 这九个名字是全集，别在别处发明第十个。
+  `fetch` 是最后进来的一类（R8/I-104）：调用里点名的网址，或是在当前那一页里跑
+  脚本的工具，都归一化成它，随它进形状的是 `urls[]`；判它的 `ruleFetch` 拒掉整个
+  回环地址族 —— serve 起的那一页上人做的动作是这套工具里唯一还算数的人工授权，
+  agent 够得着那一页，那个授权就等于零。别把它当成越界代码删掉。三段纯映射
   各自处理：Claude 的 `file_path`、Cursor 的五种路径拼法（`path` / `filePath` /
   `uri` / `notebook_path` …）、Codex `apply_patch` 里的整份补丁（`Add/Update/
   Delete File:` 三种头，外加 `Move to:` 改名 —— 改名按目的地上的一次新增单独判，
@@ -937,7 +969,7 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **现状** — Claude 有 init/check/next/show/set/render/scan；Cursor 另有 paths、
   new、allow、log；Codex 另有 approval、run-check、status 和 lifecycle 命令。
 - **裁决** — 基座提供 `paths init migrate new check status next show set allow scan
-  render apply serve request-approval run-check`，另外再加一条 `log`（把修改记录
+  render apply serve request-approval run-check coord`，另外再加一条 `log`（把修改记录
   读出来）；旧命令只做迁移期别名，
   不各留一套实现。`apply` 读改动文件把编辑写回图，`serve` 起本地服务把同一个信封
   接进同一个 `apply`；**会发编号的只有 `new` 和 `apply`，两者都必须从 `next_id`
@@ -947,11 +979,12 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
   共同保证；`apply` / `serve` 是「改图即改项目」那条链在基座里的落点，没有它们
   「网页和写回之间的唯一接口」就没有消费者。其余命令覆盖完整 workflow，
   继续增加同义词没有价值。
-- **落地情况（2026-09-02）** — 上面裁决里的每一条都已落地，**连同 `log` 一共
-  十七条**：`paths init migrate scan new check status next show log set allow
-  render apply serve request-approval run-check`。`log` 把想法自带的那份只追加
+- **落地情况（更新于 2026-09-06）** — 上面裁决里的每一条都已落地，**连同 `log` 一共
+  十八条**：`paths init migrate scan new check status next show log set allow
+  render apply serve request-approval run-check coord`。`coord` 提供会话注册、消息、阅读确认和短锁恢复；
+  文件认领和宿主写前约束尚待后续想法实现。`log` 把想法自带的那份只追加
   修改记录读出来（`log I-014`、不带编号走全图、`--n` 只看最后几条），已经有测试
-  压着。这十七条的唯一出处是 `ideas.ts` 里的 `SUBCOMMANDS` 表，**用法文字由它
+  压着。这十八条的唯一出处是 `ideas.ts` 里的 `SUBCOMMANDS` 表，**用法文字由它
   生成，不再手抄** —— 手抄的那一版早就漂了，一条专门用来说明「有哪些命令」的
   消息，自己漏掉了 `migrate`、`run-check` 和 `request-approval` 三条。
 - **还没落地** — 「旧命令只做迁移期别名」仍然没有：一个别名都没建，旧命令直接
@@ -1024,14 +1057,17 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **理由** — `/debug` 依赖精确引用；只验证文件存在会让过期行号继续被当成事实。
 - **落地情况（2026-09-02）：行号校验已落地。** `check` 里的 `badLineRange()`
   解析 `start-end`，要求 start 至少是 1、end 不小于 start、end 不超过那个文件
-  **现在**有多少行（末尾那个换行是上一行的结尾，不另起一个空行）；写不成
-  `start-end` 的（比如 `12`、`12–40`）当场就是不合格。它只在 done 的想法、
+  **现在**有多少行（末尾那个换行是上一行的结尾，不另起一个空行）。`lines` 是按逗号
+  分开的若干段，每段写成 `start-end` 或一个裸行号（`12` 就是 `12-12`）—— 一个想法的
+  代码本来就可能落在几段互不相连的地方，活账本里 `1714-1727,1819,1874` 就是合法的；
+  哪一段这两种形状都写不成（比如 `12–40`、`1-2,`）当场就是不合格。它只在 done 的想法、
   且这条 `code` 真的写了 `lines`、且文件读得出来时问 —— 文件不存在另有一条错误
   管，读不出来就不猜。done 而一个 `lines` 都没写，仍是一条警告。
   **严格程度已经分成两档了（2026-09-02 照代码复核）**：`badLineRange()` 返回的是
   `impossible` 还是 `stale`，`check` 照这个分流。
-  **`impossible` 是错误** —— 写不成 `start-end`（`12`、`12–40`、「大概第三行」）、
-  start 小于 1、end 小于 start。任何文件改动都变不出这种范围：它在被标 done 的
+  **`impossible` 是错误** —— 有哪一段既写不成 `start-end` 也写不成裸行号
+  （`12–40`、`1-2,`、「大概第三行」）、start 小于 1、end 小于 start。任何文件改动都
+  变不出这种范围：它在被标 done 的
   那一刻就已经是假的，是对「这活干完了」的谎报。
   **`stale` 是警告** —— 范围本身读得通、当初也对得上，只是文件被别处正当的改动
   改短了，end 超出了现在的行数。这是完成品上的记录过期，不是图不成立；而 R5 会把
@@ -1083,23 +1119,23 @@ Claude 事件和响应映射成 Cursor 事件，但需要用户开关和账户�
 - **现状** — 两份引擎从同一分钟起就是两份：`claude-companion/ideas.ts` 最后一次
   功能修复落在 2026-09-01 14:43:59，共同基座那次提交落在 14:44:19 —— 中间隔
   **二十秒**。也就是说「先在旧的上改，回头再同步过去」这件事，从基座存在的第一天
-  起就没有发生过一次。旧目录同时还在跑：本仓库的 `.claude/settings.json` 里四个
-  hook 调的仍然是 `claude-companion/guard.ts`，所以它现在删不得。
+  起就没有发生过一次。旧目录当时还在跑：本仓库的 `.claude/settings.json` 里四个
+  hook 调的还是 `claude-companion/guard.ts`，所以它那时删不得。今天不是这样了 ——
+  五个 hook 事件调的都是 `.companion/companion.mjs guard --platform=claude`，
+  `claude-companion/` 整个目录在磁盘上和索引里都已经没有。
 - **裁决** — `claude-companion/` 冻结。除了热修（hotfix），任何改动都不落进这个
   目录；一次热修当天必须同步进 `companion/` 里对应的那份文件，两边一起改、一起
   跑测试，不留「等有空再同步」。新功能、新裁决、新测试一律只进 `companion/`。
   `claude-companion/FORMAT.md` 已经先一步冻结成一块指路牌（见本文件开头）。
-  解冻只有一种方式，就是它消失：把本仓库自己的四条 hook 换到
-  `.companion/companion.mjs`，三边验收通过之后，整个目录删掉。
-  **但这件事今天没有任何想法认领** —— 图里 I-073 是 Cursor 接入、I-074 是 Codex
-  接入，本文件从前把换线记成 I-074，是记错了。所以「解冻」现在没有排期，也没有
-  谁在往那个方向推；要动它，先由人建一个想法认领这次换线。
+  解冻只有一种方式，就是它消失 —— **这件事已经做完了**：本仓库自己的 hook 全部换到
+  `.companion/companion.mjs`（五个事件），整个目录也已删除。本条自此只剩存档价值。
+  （从前这里写着「今天没有任何想法认领」，并把换线记成 I-074 —— 图里 I-073 是
+  Cursor 接入、I-074 是 Codex 接入，那是记错了。）
 - **理由** — 两份跑得起来的引擎意味着两份行为，而守卫的每一条规则的输出都是
   「拒绝」：两份规则不一致时，人看到的要么是一次讲不出道理的拒绝，要么是更糟的
   ——一次本该拦住的放行。二十秒的分叉已经把话说完了：双份维护不是一个会被执行的
-  承诺，写下来也不会。留着目录是因为现网还指着它，禁止在上面继续开发是因为
-  每多改一次，将来那次换线（今天没有任何想法认领它，见上面的裁决）要比对的东西
-  就多一份。
+  承诺，写下来也不会。当时留着目录是因为现网还指着它，禁止在上面继续开发是因为
+  每多改一次，那次换线要比对的东西就多一份。换线已经做完，目录也已删除。
 
 ## 裁决之外：被弃用但值得记住的想法
 

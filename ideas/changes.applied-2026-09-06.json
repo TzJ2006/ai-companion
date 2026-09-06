@@ -1,0 +1,78 @@
+{
+  "v": 1,
+  "project": "D:/GitHub/ai-companion",
+  "baseDigest": "f59da0285dfa",
+  "ops": [
+    { "op": "set", "id": "I-041", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-042", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-044", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-046", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-055", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-077", "field": "parent", "old": "I-107", "new": "I-119" },
+    { "op": "set", "id": "I-078", "field": "parent", "old": "I-107", "new": "I-119" },
+
+    { "op": "set", "id": "I-043", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-045", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-060", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-061", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-076", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-082", "field": "parent", "old": "I-107", "new": "I-120" },
+    { "op": "set", "id": "I-085", "field": "parent", "old": "I-107", "new": "I-120" },
+
+    { "op": "set", "id": "I-047", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-056", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-089", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-091", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-093", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-104", "field": "parent", "old": "I-108", "new": "I-121" },
+    { "op": "set", "id": "I-106", "field": "parent", "old": "I-108", "new": "I-121" },
+
+    { "op": "set", "id": "I-048", "field": "parent", "old": "I-108", "new": "I-122" },
+    { "op": "set", "id": "I-066", "field": "parent", "old": "I-108", "new": "I-122" },
+    { "op": "set", "id": "I-090", "field": "parent", "old": "I-108", "new": "I-122" },
+    { "op": "set", "id": "I-105", "field": "parent", "old": "I-108", "new": "I-122" },
+
+    { "op": "set", "id": "I-062", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-063", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-064", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-065", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-068", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-079", "field": "parent", "old": "I-110", "new": "I-123" },
+    { "op": "set", "id": "I-080", "field": "parent", "old": "I-110", "new": "I-123" },
+
+    { "op": "set", "id": "I-081", "field": "parent", "old": "I-110", "new": "I-124" },
+    { "op": "set", "id": "I-083", "field": "parent", "old": "I-110", "new": "I-124" },
+    { "op": "set", "id": "I-084", "field": "parent", "old": "I-110", "new": "I-124" },
+    { "op": "set", "id": "I-086", "field": "parent", "old": "I-110", "new": "I-124" },
+    { "op": "set", "id": "I-103", "field": "parent", "old": "I-110", "new": "I-124" },
+    { "op": "set", "id": "I-117", "field": "parent", "old": "I-110", "new": "I-124" },
+
+    { "op": "set", "id": "I-069", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-070", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-071", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-072", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-088", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-092", "field": "parent", "old": "I-111", "new": "I-125" },
+    { "op": "set", "id": "I-101", "field": "parent", "old": "I-111", "new": "I-125" },
+
+    { "op": "set", "id": "I-050", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-051", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-052", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-057", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-096", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-097", "field": "parent", "old": "I-111", "new": "I-126" },
+    { "op": "set", "id": "I-098", "field": "parent", "old": "I-111", "new": "I-126" },
+
+    { "op": "set", "id": "I-053", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-054", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-059", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-073", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-074", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-075", "field": "parent", "old": "I-111", "new": "I-127" },
+    { "op": "set", "id": "I-094", "field": "parent", "old": "I-111", "new": "I-127" },
+
+    { "op": "set", "id": "I-099", "field": "parent", "old": "I-111", "new": "I-128" },
+    { "op": "set", "id": "I-100", "field": "parent", "old": "I-111", "new": "I-128" },
+    { "op": "set", "id": "I-118", "field": "parent", "old": "I-111", "new": "I-128" }
+  ]
+}

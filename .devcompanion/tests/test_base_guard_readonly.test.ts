@@ -160,7 +160,7 @@ ideas:
       "npx tsx companion/install.ts --uninstall D:/GitHub/some-repo",
       "node companion/build.mjs",
       `node ${dir.replaceAll("\\", "/")}/companion/build.mjs`,     // 绝对路径写法，指的还是项目自己那一份
-      "npx tsx claude-companion/install.ts D:/GitHub/some-repo",   // CLAUDE.md 至今这样教
+      "npx tsx claude-companion/install.ts D:/GitHub/some-repo",   // 当时 CLAUDE.md 这样教
       "npx tsx cursor-companion/install.ts D:/GitHub/some-repo",
     ]) {
       const v = decide(shell(command), dir);
