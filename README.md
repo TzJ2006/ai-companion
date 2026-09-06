@@ -1,13 +1,13 @@
 # ai-companion
 
-AI Companion source repository. On 2026-09-05, all discovered local Companion installations, hooks, installed skills, and legacy commands were retired at the owner's request. This checkout is not running its own guard.
+AI Companion source repository. On 2026-09-05, all discovered local Companion installations, hooks, installed skills, and legacy commands were retired at the owner's request; later the same day the base was installed here again. This checkout is running its own guard: `.companion/companion.mjs`, wired into five hook events in `.claude/settings.json` and into `.cursor/hooks.json` and `.codex/hooks.json`, with the five skills installed under `.claude/skills/` and `.agents/skills/`. It really refuses commands in this repository.
 
 ## Current source
 
 - `companion/` holds the latest shared engine, renderer, guard, installer, and skill sources for further development. Skill files here are source files, not installed skills.
 - `.devcompanion/tests/` holds the current test suite; run `npm test`.
 - `ideas/graph.yaml` and `ideas/log.md` retain the current project reasoning.
-- `archive/` holds retired implementations. `archive/retired-20260905/` additionally holds removed repository installations, original configuration files, retired worktrees, and historical graph, tracker, and ECL records. `archive/retired-20260905-after-pause/` holds the installation another session regenerated before it was paused. Nothing there is an active installation.
+- `archive/` is empty. The retired implementations that had been tracked survive only in git history, as the files commit 48e1f51 deleted (`git show 48e1f51^:archive/...`). `archive/retired-20260905/` and `archive/retired-20260905-after-pause/` were never in version control — `.gitignore` excludes `archive/` — and are gone. The live installation is `.companion/`, not anything under `archive/`.
 
 ## Changes landed on 2026-09-05
 

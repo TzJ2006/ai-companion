@@ -51,8 +51,9 @@ ideas:
     window.document.body.innerHTML = html.slice(html.indexOf("<body>") + 6, html.lastIndexOf("</body>"));
     return window.document;
   };
+  // I-117：一行是一个带 data-row 的折叠元素，「进入」链接在它的概要行里带 data-brief。
   const rows = (doc: ReturnType<typeof open>, page: string) =>
-    [...doc.querySelectorAll(`#page-${page} .children .brief`)].map((a) => a.getAttribute("data-brief"));
+    [...doc.querySelectorAll(`#page-${page} .children details[data-row]`)].map((d) => d.getAttribute("data-row"));
 
   const html = render(graphOf(yaml), yaml);
   const doc = open(html);
@@ -67,7 +68,7 @@ ideas:
     expect(rows(doc, "I-010")).toEqual(["I-001", "I-002", "I-003"]);
     expect(rows(doc, "I-010")).toEqual(topoOrder(graphOf(yaml)).filter((i) => i.parent === "I-010").map((i) => i.id));
     expect(page.querySelector('[data-brief="I-001"]')!.getAttribute("href")).toBe("#I-001");
-    expect(page.querySelector('[data-brief="I-001"] .blurb')!.textContent).toBe("第一行");
+    expect(page.querySelector('[data-row="I-001"] .blurb')!.textContent).toBe("第一行");
   });
 
   it("every idea's full card appears exactly once, on its own page", () => {

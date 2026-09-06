@@ -183,3 +183,244 @@
 - 2026-09-05 21:43  Edit ideas/graph.yaml
 - 2026-09-05 21:43  Edit ideas/graph.yaml
 - 2026-09-05 21:43  Edit ideas/graph.yaml
+- 2026-09-06 01:15  Edit ideas/graph.yaml
+- 2026-09-06 01:31  Write .devcompanion/tests/test_render_header.test.ts
+- 2026-09-06 01:32  Edit companion/ideas.ts
+- 2026-09-06 01:32  Edit companion/ideas.ts
+- 2026-09-06 01:32  Edit companion/ideas.ts
+- 2026-09-06 01:32  Edit companion/ideas.ts
+- 2026-09-06 01:33  Edit companion/ideas.ts
+- 2026-09-06 01:33  Edit companion/ideas.ts
+- 2026-09-06 01:33  Edit ideas/graph.yaml
+- 2026-09-06 01:35  Edit ideas/graph.yaml
+- 2026-09-06 01:36  Edit ideas/graph.yaml
+- 2026-09-06 01:36  Edit ideas/graph.yaml
+- 2026-09-06 16:48  Edit ideas/graph.yaml
+- 2026-09-06 16:49  Edit ideas/graph.yaml
+- 2026-09-06 16:49  Edit ideas/graph.yaml
+
+- 2026-09-06  ccthink：用户确认同目录多会话协作目标；经 new 命令建立 I-112、I-113、I-114、I-115、I-116，只填前三问、树归属与依赖；I-059 扩展并行协作目标。顶层六项，新顶层四个子想法，等待人确认拆分；未改产品代码。
+- 2026-09-06 17:10  Edit ideas/graph.yaml
+
+
+## 2026-09-06 ccthink：同目录协作的实现计划（待批准）
+
+用户已确认目标和 I-112～I-116 的四块拆分。本轮只更新图与记录，没有编写产品代码或测试，没有重装 hook。已有 I-059 扩展到并行协作；其他会话本轮新增的节点保留原样。
+
+对齐：多个助手共用一个本机工作目录和一张图；能够交流进度与问题、互斥领取文件、保留并行图更新、明确交接异常退出的任务；目的是减少用户人工传话和处理覆盖。会话身份不等于模型名，也不等于每次 CLI 的 PID。
+
+### 调研：借用什么，省下什么，付出什么
+
+| 发现与来源 | 可复用能力与代价 | 本轮建议 |
+| --- | --- | --- |
+| [图引擎 atomicWrite](D:/GitHub/ai-companion/companion/ideas.ts:131)、[applyChanges](D:/GitHub/ai-companion/companion/ideas.ts:1789)、[redraw](D:/GitHub/ai-companion/companion/ideas.ts:3645) | 已有临时文件、Windows 重试、解析校验、指纹和渲染；还缺整个读改写过程的互斥 | 复用引擎，在入口加事务边界，不能只锁写盘 |
+| [fileClash](D:/GitHub/ai-companion/companion/ideas.ts:780)、[setStatus](D:/GitHub/ai-companion/companion/ideas.ts:1667) | 已检查想法间文件重叠；没有具体会话归属 | 保留规则，叠加会话认领 |
+| [追加记录](D:/GitHub/ai-companion/companion/ideas.ts:489)、[paths](D:/GitHub/ai-companion/companion/ideas.ts:51) | 已有 runtime 位置和从追加记录恢复状态的做法；群消息长度与动作复杂度更高 | 消息与认领用一份受短锁保护的 JSONL，不另存一份可能不同步的认领表 |
+| [统一守卫](D:/GitHub/ai-companion/companion/guard.ts:40)、[写入判定](D:/GitHub/ai-companion/companion/guard.ts:208)、[接线](D:/GitHub/ai-companion/companion/manifests.ts:81) | 能复用事件解析、判定与平台编码；现在多数写入分支丢弃会话身份 | 补齐身份与消息投递；逐平台验证，不从合成输入推断实机有效 |
+| [Node 文件系统文档](https://nodejs.org/docs/latest-v20.x/api/fs.html) | 原生创建目录、文件写入与 fsync；不提供助手会话语义，网络文件系统有额外限制 | 本机本地目录，mkdir 短锁，有界等待、无自动过期 |
+| [proper-lockfile](https://github.com/moxystudio/node-proper-lockfile) | 现成 mkdir 锁、重试、mtime 心跳、stale 回收；心跳与长同步操作、显式交接要求存在不匹配 | 借 mkdir 机制；首版不引库，不按时间抢占 |
+| [SQLite 隔离](https://www.sqlite.org/isolation.html)、[Node SQLite](https://nodejs.org/api/sqlite.html) | 数据库自带串行写事务，能省状态一致性代码；内置 Node API 从 22.5 加入，项目分发仍是 Node 20 | 保留备选，不为首版升级运行时或加入原生插件；记录重放慢到影响工作时再考虑 |
+| [现有 serve](D:/GitHub/ai-companion/companion/ideas.ts:3478) | 可扩展为单写服务；所有助手需依赖服务启动、发现和可用性 | 首版保留无常驻服务的命令方式 |
+| [Claude hooks](https://code.claude.com/docs/en/hooks)、[Cursor hooks](https://cursor.com/docs/hooks)、[Codex hooks](https://learn.chatgpt.com/docs/hooks) | 可取得宿主标识、写前事件与上下文输出；各家字段不同，子助手身份必须另查 | Claude session_id/agent_id，Cursor conversation_id；Codex 子助手继承父 session_id，未证明写入身份时明确降为合作式而非受保护路径 |
+
+### 最小操作流程（设计接口，尚未实现）
+
+- coord enable：显式启用当前项目的协作约束，不自动安装宿主 hook。
+- coord join：获得会话身份；自动接入时从宿主稳定身份映射。
+- coord inbox / ack：分页读消息，确认交付；读取本身不清未读。
+- coord claim：一次领取本次工作的全部文件，任何一个冲突就整批拒绝并指出持有者。
+- coord say：发布进度、问题、回复；消息只作为数据。
+- edit：提交字段、预期旧值和新值；长输入走标准输入，不要求为每个助手创建改动文件。
+- coord release：确认全部在途写入结束后释放自己的 claimId，并附交接摘要。
+- coord takeover：先停止旧助手及写入命令，再按预期旧 claimId 显式接管，带原因。普通回合 Stop 不等于任务完成。
+
+磁盘结构：ideas/graph.yaml 继续是唯一意图；ideas/.runtime/coord/events.jsonl 记录会话、消息、阅读确认与认领，当前状态从它恢复；write.lock 是短时互斥标记，正常退出释放，异常遗留显式恢复。HTML 仍可生成，但图更新与独立渲染遵守同一短锁。原本 ideas/log.md 保留项目决策与审查过程，不用来装日常群聊。
+
+### 每个想法怎样实现与验证
+
+- I-113：新增一个普通 coordination.ts 模块，互斥追加并恢复事件；消息带顺序号与请求编号，成功写入后才返回，重试去重。设计 test_coord_messages.test.ts：真实并行子进程、长中文消息、独立游标、重试、暂停持锁者、杀进程、损坏尾部与中段；验证成功消息不丢、活锁不被超时偷走、崩溃恢复有明确操作。
+- I-114：在同一事件流维护整批文件认领；规范路径、claimId、显式释放和接管。设计 test_coord_claims.test.ts：同时领取同一路径恰好一个成功，不同文件都成功，批量领取不半成功，路径别名和旧 claimId 无法绕过。现有 fileClash 仍负责想法层面的冲突。
+- I-116：复用短锁包住读图、校验、保存与渲染，审计 init/migrate/new/set/apply/HTTP/人工签字/render 全部入口；新增局部 edit，旧信封继续整图指纹拒绝。设计 test_graph_concurrency.test.ts：并行发号、不同节点更新、同字段旧值冲突、跨入口竞争、旧渲染后结束及 YAML 已保存而渲染失败的准确反馈。
+- I-115：补齐会话身份、所有权判断、群消息投递、技能步骤与接线；明确 shell 与外部进程边界。设计 test_coord_guard.test.ts：真实格式输入走完整 normalize→decide→encode，缺身份或非持有者拒绝，MCP/多文件/重命名与 shell 旁路不漏检，消息用正确协议且未交付不 ack；宿主是否真正触发另做实机验收。
+- I-112：用构建产物在无 node_modules 的临时目录跑三个真实并发进程，组合消息、认领、图更新和交接；设计 test_coord_end_to_end.test.ts，不能用顺序调用代替并发，也不能把这项测试说成三个产品的真实接入。
+- I-059：人工在可丢弃仓库验收三家真实宿主、同型号双会话及子助手，记录版本、身份输入、实际拒绝与可见消息；未证明的宿主路径不能标完成。
+
+每个自动验证命令及显式 test_files、计划文件和函数符号都已写入相应节点的 code/verify。自动测试均只是设计，没有新建或运行它们；实现后按 ccbuild 留真实红绿证据，最后跑现有全套 npm test。
+
+### 按依赖安排的周计划
+
+| 从实际开工算 | 顺序与产出 | 估计依据 |
+| --- | --- | --- |
+| 第 1 周 | I-113：短锁、身份、事件和消息 | 估计；先完成并发与崩溃恢复再建上层 |
+| 第 2 周 | I-114 文件认领，再做 I-116 图事务 | 估计；共用 coordination.ts/ideas.ts 的改动串行交接 |
+| 第 3 周 | I-115：宿主身份、写前检查、消息投递、技能与接线 | 不确定性高；取决于宿主版本、子助手载荷与 shell 覆盖 |
+| 第 4 周 | I-112 端到端，I-059 三家实机验收 | 不确定性高；需要真实宿主和明确安装的临时仓库 |
+
+I-116 因复用短锁新增对 I-113 的依赖；树的四块拆分不变。当前 I-082 等已有 doing 想法涉及 ideas.ts，实际开工前必须协调其工作，不静默抢文件或改别人状态。
+
+### 边界与风险
+
+普通文件认领和 hook 无法限制同一系统用户启动的任意进程，也无法撤销已经放行的写入；交接前必须停止并确认在途操作结束。不自动回收“看起来很久没动”的长期认领。短锁异常恢复也要求停止相关写入，PID 只供诊断，不能仅凭 PID 或时间证明所有权。
+
+消息按工作节点交付，不承诺唤醒闲置助手；日志每次重放是线性开销，升级时机由真实延迟决定。没有做聊天页面、分布式协调或跨机器共享盘。源码分工不自动隔离 Git 索引、分支切换与公共构建输出；这些共享动作需要另行排开。
+
+图和生成网页不是跨文件数据库事务：图保存后网页失败会明确提示重新 render，不把已提交修改说成完全失败。运行记录仅保护协作状态，本次不承诺所有历史 runtime 证据与日志跨文件同时提交。
+
+方案待用户批准。请求覆盖 I-112、I-113、I-114、I-115、I-116 和扩展后的 I-059；本次研究不代表安装或执行产品代码。
+- 2026-09-06 17:15  Edit ideas/graph.yaml
+- 2026-09-06 17:15  Edit ideas/graph.yaml
+
+- 2026-09-06 ccthink：已生成计划口令 CC-4856D4A5，覆盖 I-112、I-113、I-114、I-115、I-116、I-059；等待用户按第 6 步批准。图校验 0 错误；产品代码与测试尚未编写。
+- 2026-09-06 17:19  Write .devcompanion/tests/test_render_expand.test.ts
+- 2026-09-06 17:19  Edit .devcompanion/tests/test_render_order.test.ts
+- 2026-09-06 17:19  Edit .devcompanion/tests/test_render_expand.test.ts
+- 2026-09-06 17:19  Edit .devcompanion/tests/test_render_order.test.ts
+- 2026-09-06 17:21  Edit companion/ideas.ts
+- 2026-09-06 17:21  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:22  Edit companion/ideas.ts
+- 2026-09-06 17:23  Edit companion/ideas.ts
+- 2026-09-06 17:24  Edit ideas/graph.yaml
+- 2026-09-06 17:25  Edit ideas/graph.yaml
+
+- 2026-09-06 ccbuild：用户实际回复「批准 CC-4856D4A5」，经 applyApproval 校验内容并消费口令，记录六个想法的 plan 批准；开始检查前沿和文件占用。
+- 2026-09-06 17:35  Edit ideas/graph.yaml
+- 2026-09-06 17:35  Edit ideas/graph.yaml
+
+- 2026-09-06 ccbuild：I-113 完成。新增 coordination.ts 和消息测试，CLI 增加 coord join/say/inbox/ack/status/recover。Windows 尾部修复与请求编号类型问题已修正；D28/原计数断言同步 18 条。专项 6 绿、全套 548 绿、类型检查通过；未安装 hook。
+- 2026-09-06 18:09  Write .devcompanion/tests/test_docs_truth.test.ts
+- 2026-09-06 18:10  Edit README.md
+- 2026-09-06 18:10  Edit README.md
+- 2026-09-06 18:10  Edit CLAUDE.md
+- 2026-09-06 18:10  Edit CLAUDE.md
+- 2026-09-06 18:10  Edit CLAUDE.md
+- 2026-09-06 18:10  Edit companion/guard.ts
+- 2026-09-06 18:10  Edit companion/guard.ts
+- 2026-09-06 18:10  Edit companion/guard.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_message_truth.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_message_truth.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_message_truth.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_engine_identity.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_engine_identity.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_guard_readonly.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_contract.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_contract.test.ts
+- 2026-09-06 18:10  Edit .devcompanion/tests/test_base_approval.test.ts
+- 2026-09-06 18:12  Edit companion/ideas.ts
+- 2026-09-06 18:12  Edit companion/FORMAT.md
+- 2026-09-06 18:12  Edit companion/FORMAT.md
+- 2026-09-06 18:12  Edit companion/FORMAT.md
+- 2026-09-06 18:12  Edit companion/FORMAT.md
+- 2026-09-06 18:12  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:13  Edit companion/FORMAT.md
+- 2026-09-06 18:15  Edit .devcompanion/tests/test_docs_truth.test.ts
+- 2026-09-06 18:16  Edit companion/guard.ts
+- 2026-09-06 18:16  Edit companion/guard.ts
+- 2026-09-06 18:16  Edit companion/guard.ts
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:16  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:17  Edit .companion/FORMAT.md
+- 2026-09-06 18:18  Edit .companion/FORMAT.md
+- 2026-09-06 18:18  Edit .companion/FORMAT.md
+- 2026-09-06 18:19  Edit .devcompanion/tests/test_docs_truth.test.ts
+- 2026-09-06 18:19  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-06 18:19  Edit .devcompanion/tests/test_base_skills.test.ts
+- 2026-09-06 18:20  Edit companion/FORMAT.md
+- 2026-09-06 18:20  Edit companion/FORMAT.md
+- 2026-09-06 18:20  Edit .companion/FORMAT.md
+- 2026-09-06 18:20  Edit .companion/FORMAT.md
+- 2026-09-06 18:20  Edit ideas/graph.yaml
+- 2026-09-06 18:33  Write ideas/changes.json
+- 2026-09-06 18:34  Edit ideas/changes.json
+- 2026-09-06 18:34  Write ideas/changes.json
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:35  Edit ideas/graph.yaml
+- 2026-09-06 18:36  Edit ideas/graph.yaml
+- 2026-09-06 18:36  Edit ideas/graph.yaml
+- 2026-09-06 18:37  Edit ideas/graph.yaml
+- 2026-09-06 18:37  Edit ideas/graph.yaml
+- 2026-09-06 18:37  Edit ideas/graph.yaml
+- 2026-09-06 18:40  Edit ideas/graph.yaml
+- 2026-09-06 18:40  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:42  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:43  Edit ideas/graph.yaml
+- 2026-09-06 18:44  Edit ideas/graph.yaml
+- 2026-09-06 18:44  Edit ideas/graph.yaml
+- 2026-09-06 18:46  Write .devcompanion/tests/test_apply_parent_tmp.test.ts
+- 2026-09-06 18:46  Edit companion/ideas.ts
+- 2026-09-06 18:46  Edit companion/FORMAT.md
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml
+- 2026-09-06 18:47  Edit ideas/graph.yaml

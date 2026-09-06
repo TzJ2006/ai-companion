@@ -248,8 +248,8 @@ ideas:
     expect(text).not.toContain("W1");                    // 没点名的想法不该出现
   });
 
-  // 第 7 问今天在两个显示面上都是残的：show 只打 command 或 manual，网页卡片缺
-  // test_files —— 而 test_files 正是被摘要绑住的东西，改它口令就作废。
+  // 第 7 问今天只在网页那个显示面上是残的：show 走 questionLines 已经印全五个字段，
+  // 网页卡片仍缺 test_files —— 而 test_files 正是被摘要绑住的东西，改它口令就作废。
   it("verifyText carries all five fields, test_files included", () => {
     expect(verifyText({ command: "npx vitest run tests/mid.test.ts", test_files: ["tests/mid.test.ts"], pass: "exit 0" }))
       .toMatch(/tests\/mid\.test\.ts/);

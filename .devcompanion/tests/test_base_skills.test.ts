@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ENGINE_RELATIVE } from "../../companion/manifests.js";
 
 // I-095 — 五条工作流写成三家都能加载的标准技能文件（agentskills.io 规范），
 // 正文只有一份，住在 companion/skills/。目录名就是命令名（cc 前缀，人已批准
@@ -58,7 +59,8 @@ describe("companion shared skills (I-095)", () => {
       // 平台专属安装目录也是平台专名：D14 的插件根目录是仓库根下的 .companion/，
       // D34 的产物是那里的单文件引擎，三家加载的是同一份正文。
       expect(body).not.toMatch(/\.(claude|cursor|codex)\//);
-      expect(body).toMatch(/node \.companion\/companion\.mjs/);    // 中性引擎调用
+      // 中性引擎调用 —— 路径从 manifests.ts 的常量推导，技能正文写的字面量由这里钉在常量上（D14）。
+      expect(body).toMatch(new RegExp("node " + ENGINE_RELATIVE.replace(/[.\/]/g, "\\$&")));
     });
 
     // H26 — 每条技能都要说清带参数和不带参数各是什么行为，否则「/ccfix I-014」
@@ -173,7 +175,7 @@ describe("the spec is true about the engine as it stands (H27)", () => {
     expect([...named].sort()).toEqual(offered);
 
     // 「落地情况」把同一串又列了一遍，两处必须逐字一致。
-    const landed = /一共\s*十七条\*\*：`([^`]+)`/.exec(row(28));
+    const landed = /一共\s*十八条\*\*：`([^`]+)`/.exec(row(28));
     expect(landed, "D28 的落地情况没有用反引号列出已落地的命令面").not.toBeNull();
     expect(landed![1].trim().split(/\s+/).sort()).toEqual(offered);
   });

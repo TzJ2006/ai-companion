@@ -14,8 +14,10 @@ import { decide, type NormalizedEvent } from "../../companion/guard.js";
 // 以及开发检出里的引擎源码（companion/dist/companion.mjs、companion/ideas.ts、
 // companion/cli.ts）。把候选路径对着项目根目录解析出来，只有「就是那一个文件」才放行。
 //
-// 同一处顺带补一个易用性缺口：被认可的脚本只列了共同基座的安装器和打包入口，本仓库
-// CLAUDE.md 至今教人用的那个旧安装器（claude-companion/install.ts）反倒被解释器墙拒掉。
+// 同一处顺带补一个易用性缺口：被认可的脚本只列了共同基座的安装器和打包入口，当时本仓库
+// CLAUDE.md 教人用的那个旧安装器（claude-companion/install.ts）反倒被解释器墙拒掉。
+// （2026-09-05 起 claude-companion/ 已删除，CLAUDE.md 不再提任何安装命令；白名单里这
+// 两条旧入口留着，下面的用例锁的是白名单的形状。）
 describe("companion guard engine identity, not spelling (B7)", () => {
   let dir: string;
   const dirs: string[] = [];
@@ -114,7 +116,7 @@ ideas:
       "npx tsx companion/install.ts --status",
       "npx tsx companion/install.ts D:/GitHub/some-repo",
       "node companion/build.mjs",
-      "npx tsx claude-companion/install.ts D:/GitHub/some-repo",   // CLAUDE.md 至今这样教
+      "npx tsx claude-companion/install.ts D:/GitHub/some-repo",   // 当时 CLAUDE.md 这样教
       "npx tsx claude-companion/install.ts --status",
       "npx tsx cursor-companion/install.ts D:/GitHub/some-repo",
       `npx tsx "${here}/claude-companion/install.ts" --update`,

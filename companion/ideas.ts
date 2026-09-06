@@ -22,6 +22,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { argv, exit, cwd, pid, platform, env } from "node:process";
 import { parseDocument, stringify, type Document } from "yaml";
 import { ENGINE_RELATIVE } from "./manifests.js";
+import { coordMain } from "./coordination.js";
 
 /**
  * How a person actually invokes this engine in a repository that installed it
@@ -1752,8 +1753,9 @@ const BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
  *  file must not be able to conjure a `done` idea with a forged signature. */
 const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
 
-/** What a `set` may reach: the name plus the six prose answers the browser puts
- *  in a text box. D24 — `status`, `verify` (and with it `signed_off`), `code`
+/** What a `set` may reach: the name, the six prose answers the browser puts in
+ *  a text box, and `parent` (an id, handled by the branch below, not prose).
+ *  D24 — `status`, `verify` (and with it `signed_off`), `code`
  *  and `log` are lifecycle, and lifecycle only moves through the CLI. Without
  *  this list a `set` on `status` is a `done` with no gate at all: it writes a
  *  folded scalar that reads back as a perfectly valid status. */
@@ -1827,16 +1829,25 @@ export function applyChanges(
     nextId += 1;
   }
   const resolve = (v: string | undefined) => (v && real.get(v)) || v;
+  // I-129: `parent` is an id too — the fifth place a temporary id can sit: as
+  // the value of a `set parent` and inside a new idea's own fields.
+  const addFields = (op: Record<string, unknown>) =>
+    op.op === "add" && op.fields && typeof op.fields === "object" ? op.fields as Record<string, unknown> : undefined;
   for (const op of ops) {
     for (const key of ["id", "tmp", "from", "to"]) {
       if (op[key] !== undefined) op[key] = resolve(op[key])!;
     }
+    if (op.op === "set" && op.field === "parent" && typeof op.new === "string") op.new = resolve(op.new)!;
+    const fields = addFields(op);
+    if (fields && typeof fields.parent === "string") fields.parent = resolve(fields.parent)!;
   }
-  const leftover = ops.find((o) => ["id", "tmp", "from", "to"].some((k) =>
-    typeof o[k] === "string" && o[k].startsWith("tmp:")));
+  const tmpIn = (o: Record<string, string>) =>
+    ["id", "tmp", "from", "to"].map((k) => o_(o, k)).find((v) => v)
+    ?? (o.op === "set" && o.field === "parent" ? o_(o, "new") : undefined)
+    ?? o_((addFields(o) ?? {}) as Record<string, string>, "parent");
+  const leftover = ops.find((o) => tmpIn(o));
   if (leftover) {
-    return { ok: false, reason: `改动里还剩没有发到编号的临时号（${leftover.op} 上的 ${
-      ["id", "tmp", "from", "to"].map((k) => o_(leftover, k)).find((v) => v)}），整体拒绝` };
+    return { ok: false, reason: `改动里还剩没有发到编号的临时号（${leftover.op} 上的 ${tmpIn(leftover)}），整体拒绝` };
   }
 
   const changed: string[] = [];
@@ -2466,13 +2477,35 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
     `<div>${esc(l.date)}${l.by ? " · " + esc(l.by) : ""} — ${esc(l.note)}</div>`).join("")}</details>` : ""}
 </section>`;
 
-  // One row per child on its parent's page: name, status, the first line of
-  // `what`, and the way in. The full card lives on the child's own page, so
-  // every id appears exactly once and editing, drafts and signing stay as they are.
-  const brief = (i: Idea) => `<a class="brief ${cls(i)}" href="#${esc(i.id)}" data-brief="${attr(i.id)}">
+  // One row per child on its parent's page (I-117): a collapsible whose summary
+  // is name, status, the first line of `what` and the way in, and whose body is
+  // a READ-ONLY digest of the eight answers. The editable card still lives on
+  // the child's own page and nowhere else: the body carries no `id`, no
+  // `data-idea` and no `section.idea`, so editing, drafts and signing — all of
+  // which find elements by id — never see a second copy.
+  const verifyPlain = (i: Idea) => {
+    const v = i.verify;
+    if (!v) return NONE;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` → ${esc(v.pass)}` : ""}`;
+    return `${esc(v.manual)}<br><span class="signoff">人工签字：${v.signed_off ? esc(v.signed_off) : "未签"}</span>`;
+  };
+  const briefDetail = (i: Idea) => `<div class="brief-detail"><dl>
+    <dt>父想法</dt><dd>${i.parent && map.has(i.parent) ? links([i.parent]) : NONE}</dd>${PROSE.slice(0, 5).map((q) =>
+    `<dt>${q.label}</dt><dd>${esc(i[q.key as keyof Idea]) || NONE}</dd>`).join("")}
+    <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
+    <dt>${askedAs(7)}</dt><dd>${verifyPlain(i)}</dd>
+    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>
+  </dl>
+  <p class="edges"><b>前置想法</b> ${links((i.needs ?? []).filter((n) => map.has(n)))}</p>
+  <p class="edges"><b>它是这些想法的前置</b> ${links(dependents(g, i.id))}</p>
+  ${i.log?.length ? `<div class="brief-log"><b>修改记录</b>${i.log.map((l) =>
+    `<div>${esc(l.date)}${l.by ? " · " + esc(l.by) : ""} — ${esc(l.note)}</div>`).join("")}</div>` : ""}
+  </div>`;
+  const brief = (i: Idea) => `<details class="brief-row ${cls(i)}" data-row="${attr(i.id)}"><summary class="brief">
     <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${
     ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<span class="blurb">${
-    esc(String(i.what ?? "").split("\n")[0].trim())}</span><span class="enter">进入 →</span></a>`;
+    esc(String(i.what ?? "").split("\n")[0].trim())}</span><a class="enter" href="#${esc(i.id)}" data-brief="${attr(i.id)}">进入 →</a></summary>
+${briefDetail(i)}</details>`;
 
   /** One page: the home page (`owner` null) or one idea's. Sections are all in
    *  the document, hidden; the script shows the one the hash names. */
@@ -2482,7 +2515,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
     const scope = descendants(id);
     return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
 ${owner ? card(owner) : ""}
-${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} · 点击任意节点进入它的页面</p>
+${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} · 点击图上的节点，定位到下面对应的那一行；点行本身展开，点「进入」才换页</p>
 ${worklist("待人工验证", scope.filter(awaitingSignature).map((i) => ({
   id: i.id, name: i.name, note: i.verify?.manual ?? "",
 })))}
@@ -2498,6 +2531,15 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
 </section>`;
   };
 
+  // The header's two lines follow whichever page is showing (I-086); the script
+  // repaints them, this renders the home page's state so a first paint — and a
+  // reader with no script — still sees the project rather than nothing.
+  // `overview: >` folds a blank line into ONE newline, so paragraphs split on
+  // `\n`. Splitting on a blank line finds one part in every real graph and the
+  // fold would silently never appear.
+  const paragraphs = (s: unknown) => String(s ?? "").split("\n").map((t) => t.trim()).filter(Boolean);
+  const overview = paragraphs(g.overview);
+
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(g.project ?? "idea graph")} — 想法图</title>
@@ -2508,6 +2550,9 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
     padding:28px 22px 80px; background:#0b0f14; color:#e6edf3; }
   h1 { margin:0 0 6px; font-size:22px; }
   .overview { color:#93a1b0; margin:0 0 18px; }
+  .overview-more { color:#7d8896; font-size:13px; margin:-10px 0 18px; }
+  .overview-more summary { cursor:pointer; }
+  .overview-more p { margin:6px 0 0; }
   .legend { font-size:13px; color:#7d8896; margin:0 0 4px; }
   .sw { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin:0 5px 0 12px; }
   .sw:first-child { margin-left:0; }
@@ -2611,14 +2656,32 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   .crumbs a.here { color:#e6edf3; font-weight:600; }
   .crumbs button { margin-left:auto; }
   .page[hidden] { display:none; }
-  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; margin:0 0 8px; text-decoration:none;
-    color:#e6edf3; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px; background:#0d1117; }
-  .brief:hover { border-color:#7dd3fc; }
-  .brief.done { border-left-color:#22c55e; } .brief.doing { border-left-color:#3b82f6; }
-  .brief.blocked { border-left-color:#f97316; } .brief.endpoint { border-left-color:#a855f7; }
+  /* I-117: a row is a collapsible. The frame sits on the details element, the
+     summary is the flex row, the body is the read-only digest. Collapsed by
+     default means OMITTING the open attribute entirely — the attribute is a
+     boolean, so any value at all, even a false-sounding one, renders it open.
+     (No backticks in this block: the whole style sheet lives inside a template
+     string; and this comment ships in the page, so it must not spell that
+     value out either — a test greps the output for it.) */
+  .brief-row { margin:0 0 8px; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
+    background:#0d1117; scroll-margin-top:14px; }
+  .brief-row:hover { border-color:#7dd3fc; }
+  .brief-row.done { border-left-color:#22c55e; } .brief-row.doing { border-left-color:#3b82f6; }
+  .brief-row.blocked { border-left-color:#f97316; } .brief-row.endpoint { border-left-color:#a855f7; }
+  .brief-row.flash { animation: flash 1.2s ease-out; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#e6edf3; cursor:pointer; list-style:none; }
+  .brief::-webkit-details-marker { display:none; }
+  .brief::before { content:"▸"; flex:none; color:#5c6773; font-size:12px; }
+  .brief-row[open] > .brief::before { content:"▾"; }
   .brief .bname { font-weight:600; flex:none; }
   .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; }
+  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; text-decoration:none; }
+  .brief .enter:hover { text-decoration:underline; }
+  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #1f2933; font-size:13px; color:#c3ced9; }
+  .brief-detail dl { margin-top:8px; }
+  .brief-log { margin:10px 0 0; font-size:12px; color:#7d8896; }
+  .brief-log b { color:#7d8896; font-weight:normal; margin-right:6px; }
+  .brief-log div { margin:4px 0 0 14px; }
 
   #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
@@ -2654,8 +2717,13 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   #sign-panel button:hover { border-color:#c084fc; }
   #sign-panel .warn { color:#fca5a5; font-size:12px; margin-top:6px; }
 </style></head><body>
-<h1>${esc(g.project ?? "idea graph")} — 想法图</h1>
-<p class="overview">${esc(g.overview)}</p>
+<h1 id="page-title">${esc(g.project ?? "idea graph")} — 想法图</h1>
+<p class="overview">${esc(overview[0] ?? "")}</p>${overview.length > 1 ? `
+<details class="overview-more"><summary>项目由来</summary>${
+  // Collapsed by default means OMITTING `open` — `open="false"` renders it open.
+  // Nothing to fold means no element at all: an expander that opens onto
+  // nothing reads as broken.
+  overview.slice(1).map((p) => `<p>${esc(p)}</p>`).join("")}</details>` : ""}
 <div id="restore" hidden>发现 <b><span id="restore-count">0</span></b> 处未提交的改动（上次关掉页面时没有提交）。
   逐条确认要不要恢复 —— 本地网页的存储不止这一页能写，所以这一步不会自动做：
   <div id="restore-list"></div></div>
@@ -2681,7 +2749,7 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   </div>
   <div class="viewport"><div class="canvas"><pre class="mermaid">${mermaid}</pre></div></div>
 </div>
-<p class="graph-hint">滚轮缩放（以光标为中心）· 拖拽平移 · 点击节点进入它的页面</p>
+<p class="graph-hint">滚轮缩放（以光标为中心）· 拖拽平移 · 点击节点定位到本页那一行</p>
 <div id="offline-note" hidden>图暂时不可用（离线，画图要联网取一个第三方库）—— 编辑与提交照常。</div>
 <div id="pages">
 ${
@@ -2746,7 +2814,7 @@ ${
     const card = document.getElementById(id);
     if (card) card.classList.toggle("dirty", touched(id));
     if (f === "name") {                            // the row on the parent's page follows the name
-      const row = document.querySelector('[data-brief="' + id + '"] .bname');
+      const row = document.querySelector('[data-row="' + id + '"] .bname');
       if (row) row.textContent = value;
     }
     if (typeof markIncomplete === "function") markIncomplete(id);
@@ -2917,9 +2985,31 @@ ${
     for (let cur = id; cur && !seen.has(cur); cur = effectiveField(cur, "parent")) { seen.add(cur); out.unshift(cur); }
     return out;
   }
+  // The one heading and the line under it say what THIS page is about (I-086).
+  // One h1 for the whole document, rewritten — not one per section: the header
+  // sits above the diagram, and a second h1 would leave every idea page
+  // announcing the same title. The tab's text moves with it (WCAG 2.4.2 asks a
+  // hash-router view to retitle), read from the same place so the two can't drift.
+  // first() is the blurb rule the child rows already use — one expression, not two.
+  // (No backticks in here: this script is literal text inside a template string.)
+  function showHeader(owner) {
+    const first = (s) => String(s ?? "").split("\\n")[0].trim();
+    const h1 = document.getElementById("page-title");
+    const lead = document.querySelector("p.overview");
+    const more = document.querySelector("details.overview-more");
+    const project = DATA.project || "idea graph";
+    if (h1) h1.textContent = owner ? nameOf(owner) : project + " — 想法图";
+    if (lead) lead.textContent = owner ? first(effectiveField(owner, "what")) : first(DATA.overview);
+    // The fold holds the project's own history; it belongs to the home page only.
+    if (more) more.hidden = !!owner;
+    try { document.title = owner ? nameOf(owner) + " — " + project : project + " — 想法图"; }
+    catch (e) { /* not every host has a document title to set */ }
+  }
+
   function showPage() {
     const owner = currentOwner();
     for (const p of document.querySelectorAll(".page")) p.hidden = p.id !== "page-" + (owner || "root");
+    showHeader(owner);
     const crumbs = document.getElementById("crumbs");
     crumbs.replaceChildren();
     const home = document.createElement("a");
@@ -2939,6 +3029,23 @@ ${
     try { window.scrollTo(0, 0); } catch (e) { /* not every host scrolls */ }
   }
   window.addEventListener("hashchange", showPage);
+
+  // I-117: a diagram node points at a ROW on this page, not at a page. Open it,
+  // bring it into view and flash it; the hash — and so the page — stays put.
+  // On window because the diagram module (which loads from a CDN and is not run
+  // by the tests) only calls it, while the tests call it directly. A row that is
+  // not on this page falls back to navigating, which is the old behaviour.
+  window.focusRow = (id) => {
+    const page = document.getElementById("page-" + (currentOwner() || "root"));
+    const row = page && page.querySelector('.children details[data-row="' + id + '"]');
+    if (!row) { location.hash = id; return false; }
+    row.setAttribute("open", "");
+    row.classList.remove("flash");
+    void row.offsetWidth;                          // restart the animation on a second click
+    row.classList.add("flash");
+    try { row.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* not every host scrolls */ }
+    return true;
+  };
 
   // The diagram module may never arrive (it loads from a CDN). Empty its source
   // out of the page right now: an undrawn block shows the raw flowchart text as
@@ -3220,13 +3327,22 @@ ${
     document.getElementById("pages").append(sec);
     const list = document.querySelector("#page-" + (owner || "root") + " .children");
     if (list) {
-      const row = document.createElement("a");
-      row.className = "brief todo"; row.href = "#" + tmp; row.setAttribute("data-brief", tmp);
+      // I-117: the same collapsible the renderer writes — a summary plus a
+      // read-only body. The body stays a one-line note until the eight answers
+      // are written and submitted; the page re-renders from the file after a
+      // write-back anyway.
+      const row = document.createElement("details");
+      row.className = "brief-row todo"; row.setAttribute("data-row", tmp);
+      const summary = document.createElement("summary");
+      summary.className = "brief";
       const bname = document.createElement("span");
       bname.className = "bname"; bname.textContent = "（新想法）";
-      const enter = document.createElement("span");
-      enter.className = "enter"; enter.textContent = "进入 →";
-      row.append(bname, enter);
+      const enter = document.createElement("a");
+      enter.className = "enter"; enter.href = "#" + tmp; enter.setAttribute("data-brief", tmp); enter.textContent = "进入 →";
+      summary.append(bname, enter);
+      const detail = document.createElement("div");
+      detail.className = "brief-detail"; detail.textContent = "八问还没填 —— 点「进入」到它自己那一页去写。";
+      row.append(summary, detail);
       list.append(row);
     }
     markIncomplete(tmp);
@@ -3347,9 +3463,10 @@ ${
     });
   });
 
-  // A node is a page: clicking it goes there. Every in-page link is a plain
-  // href="#id" for the same reason, so the hash handler above does the rest.
-  window.nodeClick = (id) => { location.hash = id; };
+  // I-117: a node is a ROW on this page. focusRow lives in the editing module
+  // (so the tests can reach it) and falls back to navigating when the row is
+  // not on this page. Every in-page link stays a plain href="#id".
+  window.nodeClick = (id) => { if (typeof window.focusRow === "function") window.focusRow(id); else location.hash = id; };
 
   /** Draw one source. mermaid stamps what it has processed, so replace the node. */
   async function draw(src) {
@@ -3565,6 +3682,7 @@ const KEEP_RUNNING = -1;
  * what exists.
  */
 export const SUBCOMMANDS: [name: string, args: string][] = [
+  ["coord", "join|say|inbox|ack|status|recover [选项]"],
   ["paths", ""],
   ["init", ""],
   ["migrate", "[--pick claude|cursor|codex] [--dry-run]"],
@@ -3634,6 +3752,10 @@ export function main(args: string[]): number {
     console.error(`--file ${rel(file)} 是另一份图；批准口令和红绿证据都记在项目图名下，写到别处会造出永远答不上的口令。`);
     console.error(`去掉 --file 重跑。只想看那份旧图：${READS_ANY_GRAPH.join(" / ")} 加 --file 照常可用；要把它的内容并进来：migrate。`);
     return 2;
+  }
+
+  if (command === "coord") {
+    return coordMain(paths(projectDir).runtime, args.slice(1));
   }
 
   // `scan` runs before a graph exists, so it must not require one.

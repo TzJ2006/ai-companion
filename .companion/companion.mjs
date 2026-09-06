@@ -1001,14 +1001,14 @@ var require_foldFlowLines = __commonJS({
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
     var FOLD_QUOTED = "quoted";
-    function foldFlowLines(text, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
+    function foldFlowLines(text2, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
       if (!lineWidth || lineWidth < 0)
-        return text;
+        return text2;
       if (lineWidth < minContentWidth)
         minContentWidth = 0;
       const endStep = Math.max(1 + minContentWidth, 1 + lineWidth - indent.length);
-      if (text.length <= endStep)
-        return text;
+      if (text2.length <= endStep)
+        return text2;
       const folds = [];
       const escapedFolds = {};
       let end = lineWidth - indent.length;
@@ -1025,14 +1025,14 @@ var require_foldFlowLines = __commonJS({
       let escStart = -1;
       let escEnd = -1;
       if (mode === FOLD_BLOCK) {
-        i = consumeMoreIndentedLines(text, i, indent.length);
+        i = consumeMoreIndentedLines(text2, i, indent.length);
         if (i !== -1)
           end = i + endStep;
       }
-      for (let ch; ch = text[i += 1]; ) {
+      for (let ch; ch = text2[i += 1]; ) {
         if (mode === FOLD_QUOTED && ch === "\\") {
           escStart = i;
-          switch (text[i + 1]) {
+          switch (text2[i + 1]) {
             case "x":
               i += 3;
               break;
@@ -1049,12 +1049,12 @@ var require_foldFlowLines = __commonJS({
         }
         if (ch === "\n") {
           if (mode === FOLD_BLOCK)
-            i = consumeMoreIndentedLines(text, i, indent.length);
+            i = consumeMoreIndentedLines(text2, i, indent.length);
           end = i + indent.length + endStep;
           split = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text[i + 1];
+            const next = text2[i + 1];
             if (next && next !== " " && next !== "\n" && next !== "	")
               split = i;
           }
@@ -1066,12 +1066,12 @@ var require_foldFlowLines = __commonJS({
             } else if (mode === FOLD_QUOTED) {
               while (prev === " " || prev === "	") {
                 prev = ch;
-                ch = text[i += 1];
+                ch = text2[i += 1];
                 overflow = true;
               }
               const j = i > escEnd + 1 ? i - 2 : escStart - 1;
               if (escapedFolds[j])
-                return text;
+                return text2;
               folds.push(j);
               escapedFolds[j] = true;
               end = j + endStep;
@@ -1086,39 +1086,39 @@ var require_foldFlowLines = __commonJS({
       if (overflow && onOverflow)
         onOverflow();
       if (folds.length === 0)
-        return text;
+        return text2;
       if (onFold)
         onFold();
-      let res = text.slice(0, folds[0]);
+      let res = text2.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
         const fold = folds[i2];
-        const end2 = folds[i2 + 1] || text.length;
+        const end2 = folds[i2 + 1] || text2.length;
         if (fold === 0)
           res = `
-${indent}${text.slice(0, end2)}`;
+${indent}${text2.slice(0, end2)}`;
         else {
           if (mode === FOLD_QUOTED && escapedFolds[fold])
-            res += `${text[fold]}\\`;
+            res += `${text2[fold]}\\`;
           res += `
-${indent}${text.slice(fold + 1, end2)}`;
+${indent}${text2.slice(fold + 1, end2)}`;
         }
       }
       return res;
     }
-    function consumeMoreIndentedLines(text, i, indent) {
+    function consumeMoreIndentedLines(text2, i, indent) {
       let end = i;
       let start = i + 1;
-      let ch = text[start];
+      let ch = text2[start];
       while (ch === " " || ch === "	") {
         if (i < start + indent) {
-          ch = text[++i];
+          ch = text2[++i];
         } else {
           do {
-            ch = text[++i];
+            ch = text2[++i];
           } while (ch && ch !== "\n");
           end = i;
           start = i + 1;
-          ch = text[start];
+          ch = text2[start];
         }
       }
       return end;
@@ -2702,12 +2702,12 @@ ${cn.comment}` : item.comment;
             } else
               throw new TypeError(`Expected [key, value] tuple: ${it}`);
           } else if (it && it instanceof Object) {
-            const keys = Object.keys(it);
-            if (keys.length === 1) {
-              key = keys[0];
+            const keys2 = Object.keys(it);
+            if (keys2.length === 1) {
+              key = keys2[0];
               value = it[key];
             } else {
-              throw new TypeError(`Expected tuple with one key, not ${keys.length} keys`);
+              throw new TypeError(`Expected tuple with one key, not ${keys2.length} keys`);
             }
           } else {
             key = it;
@@ -3253,8 +3253,8 @@ var require_tags = __commonJS({
         if (Array.isArray(customTags))
           tags = [];
         else {
-          const keys = Array.from(schemas.keys()).filter((key) => key !== "yaml11").map((key) => JSON.stringify(key)).join(", ");
-          throw new Error(`Unknown schema "${schemaName}"; use one of ${keys} or define customTags array`);
+          const keys2 = Array.from(schemas.keys()).filter((key) => key !== "yaml11").map((key) => JSON.stringify(key)).join(", ");
+          throw new Error(`Unknown schema "${schemaName}"; use one of ${keys2} or define customTags array`);
         }
       }
       if (Array.isArray(customTags)) {
@@ -3269,8 +3269,8 @@ var require_tags = __commonJS({
         const tagObj = typeof tag === "string" ? tagsByName[tag] : tag;
         if (!tagObj) {
           const tagName = JSON.stringify(tag);
-          const keys = Object.keys(tagsByName).map((key) => JSON.stringify(key)).join(", ");
-          throw new Error(`Unknown custom tag ${tagName}; use one of ${keys}`);
+          const keys2 = Object.keys(tagsByName).map((key) => JSON.stringify(key)).join(", ");
+          throw new Error(`Unknown custom tag ${tagName}; use one of ${keys2}`);
         }
         if (!tags2.includes(tagObj))
           tags2.push(tagObj);
@@ -3997,10 +3997,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep, value } = collItem;
+        const { start, key, sep: sep2, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep?.[0],
+          next: key ?? sep2?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4014,7 +4014,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep) {
+          if (!keyProps.anchor && !keyProps.tag && !sep2) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4038,7 +4038,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep ?? [], {
+        const valueProps = resolveProps.resolveProps(sep2 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4054,7 +4054,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep2, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4145,7 +4145,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep = "";
+        let sep2 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4159,13 +4159,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep + cb;
-              sep = "";
+                comment += sep2 + cb;
+              sep2 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep += source;
+                sep2 += source;
               hasSpace = true;
               break;
             default:
@@ -4208,18 +4208,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep, value } = collItem;
+        const { start, key, sep: sep2, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep?.[0],
+          next: key ?? sep2?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep && !value) {
+          if (!props.anchor && !props.tag && !sep2 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4273,8 +4273,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap && !sep && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep, null, props, onError);
+        if (!isMap && !sep2 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep2, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4286,7 +4286,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep ?? [], {
+          const valueProps = resolveProps.resolveProps(sep2 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4297,8 +4297,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap && !props.found && ctx.options.strict) {
-              if (sep)
-                for (const st of sep) {
+              if (sep2)
+                for (const st of sep2) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4315,7 +4315,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep2, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4495,7 +4495,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep = "";
+      let sep2 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4512,24 +4512,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep + indent.slice(trimIndent) + content;
-          sep = "\n";
+          value += sep2 + indent.slice(trimIndent) + content;
+          sep2 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep === " ")
-            sep = "\n";
-          else if (!prevMoreIndented && sep === "\n")
-            sep = "\n\n";
-          value += sep + indent.slice(trimIndent) + content;
-          sep = "\n";
+          if (sep2 === " ")
+            sep2 = "\n";
+          else if (!prevMoreIndented && sep2 === "\n")
+            sep2 = "\n\n";
+          value += sep2 + indent.slice(trimIndent) + content;
+          sep2 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep === "\n")
+          if (sep2 === "\n")
             value += "\n";
           else
-            sep = "\n";
+            sep2 = "\n";
         } else {
-          value += sep + content;
-          sep = " ";
+          value += sep2 + content;
+          sep2 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4711,25 +4711,25 @@ var require_resolve_flow_scalar = __commonJS({
       if (!match)
         return source;
       let res = match[1];
-      let sep = " ";
+      let sep2 = " ";
       let pos = first.lastIndex;
       line.lastIndex = pos;
       while (match = line.exec(source)) {
         if (match[1] === "") {
-          if (sep === "\n")
-            res += sep;
+          if (sep2 === "\n")
+            res += sep2;
           else
-            sep = "\n";
+            sep2 = "\n";
         } else {
-          res += sep + match[1];
-          sep = " ";
+          res += sep2 + match[1];
+          sep2 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep + (match?.[1] ?? "");
+      return res + sep2 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5539,14 +5539,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep, value }) {
+    function stringifyItem({ start, key, sep: sep2, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep)
-        for (const st of sep)
+      if (sep2)
+        for (const st of sep2)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6713,18 +6713,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep;
+          let sep2;
           if (scalar.end) {
-            sep = scalar.end;
-            sep.push(this.sourceToken);
+            sep2 = scalar.end;
+            sep2.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep = [this.sourceToken];
+            sep2 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep }]
+            items: [{ start, key: scalar, sep: sep2 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -6877,15 +6877,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep = it.sep;
-                  sep.push(this.sourceToken);
+                  const sep2 = it.sep;
+                  sep2.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep }]
+                    items: [{ start: start2, key, sep: sep2 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7079,13 +7079,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep = fc.end.splice(1, fc.end.length);
-            sep.push(this.sourceToken);
+            const sep2 = fc.end.splice(1, fc.end.length);
+            sep2.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep }]
+              items: [{ start, key: fc, sep: sep2 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -7365,8 +7365,8 @@ var require_dist = __commonJS({
 
 // companion/ideas.ts
 var import_yaml = __toESM(require_dist());
-import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, readdirSync, unlinkSync } from "node:fs";
-import { join, resolve, dirname, relative } from "node:path";
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, appendFileSync, renameSync, mkdirSync as mkdirSync2, existsSync, readdirSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { join as join2, resolve as resolve2, dirname as dirname2, relative as relative2 } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
@@ -7380,20 +7380,376 @@ var SHELL_TOOLS = anyCase(["Bash", "PowerShell", "pwsh", "shell", "local_shell"]
 var READ_TOOLS = anyCase(["Read", "read_file", "readfile"]);
 var CURSOR_WRITE_TOOLS = anyCase(["Write", "StrReplace", "Delete", "EditNotebook", "ApplyPatch", "search_replace"]);
 
+// companion/coordination.ts
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  openSync,
+  closeSync,
+  fsyncSync,
+  truncateSync,
+  unlinkSync,
+  rmdirSync,
+  lstatSync,
+  statSync,
+  realpathSync
+} from "node:fs";
+import { join, resolve, relative, dirname, basename, isAbsolute, sep } from "node:path";
+import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+var location = (runtime) => join(runtime, "coord");
+var lockPath = (runtime) => join(location(runtime), "write.lock");
+var journalPath = (runtime) => join(location(runtime), "events.jsonl");
+var waitCell = new Int32Array(new SharedArrayBuffer(4));
+function text(value, field, max) {
+  if (typeof value !== "string" || !value.trim() || Buffer.byteLength(value) > max) {
+    throw new Error(`${field} \u5FC5\u987B\u662F\u975E\u7A7A\u6587\u672C\uFF0C\u6700\u591A ${max} \u5B57\u8282`);
+  }
+  return value;
+}
+function identifier(value, field) {
+  const result = text(value, field, 256);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/.test(result)) throw new Error(`${field} \u683C\u5F0F\u4E0D\u6B63\u786E`);
+  return result;
+}
+function integer(value, field, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max) {
+    throw new Error(`${field} \u5FC5\u987B\u662F ${min} \u5230 ${max} \u4E4B\u95F4\u7684\u6574\u6570`);
+  }
+  return value;
+}
+function object(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("\u9700\u8981 JSON \u5BF9\u8C61");
+  return value;
+}
+function keys(value, allowed) {
+  for (const key of Object.keys(value)) if (!allowed.includes(key)) throw new Error(`\u4E0D\u8BA4\u8BC6\u7684\u5B57\u6BB5 ${key}`);
+}
+function normalizeRequest(value) {
+  const r = object(value);
+  if (r.type === "join") {
+    keys(r, ["type", "label", "session"]);
+    return {
+      type: "join",
+      label: text(r.label, "label", 512),
+      ...r.session === void 0 ? {} : { session: identifier(r.session, "session") }
+    };
+  }
+  if (r.type === "say") {
+    keys(r, ["type", "session", "text"]);
+    return { type: "say", session: identifier(r.session, "session"), text: text(r.text, "message", 8192) };
+  }
+  if (r.type === "ack") {
+    keys(r, ["type", "session", "upto"]);
+    return { type: "ack", session: identifier(r.session, "session"), upto: integer(r.upto, "\u5E8F\u53F7") };
+  }
+  if (r.type === "claim") {
+    keys(r, ["type", "session", "files", "task"]);
+    if (!Array.isArray(r.files) || r.files.length < 1 || r.files.length > 100) throw new Error("\u8BA4\u9886\u9700\u8981 1 \u5230 100 \u4E2A\u6587\u4EF6");
+    const files = [...new Set(r.files.map((f) => text(f, "file", 4096)))].sort();
+    if (files.some((f) => f.includes("\0") || f.includes("\\") || f.startsWith("/") || f.split("/").some((s) => !s || s === "." || s === ".."))) {
+      throw new Error("\u8BA4\u9886\u8BB0\u5F55\u5FC5\u987B\u4F7F\u7528\u89C4\u8303\u7684\u9879\u76EE\u76F8\u5BF9\u8DEF\u5F84");
+    }
+    return { type: "claim", session: identifier(r.session, "session"), files, task: text(r.task, "task", 8192) };
+  }
+  if (r.type === "release") {
+    keys(r, ["type", "session", "claimId", "summary"]);
+    return { type: "release", session: identifier(r.session, "session"), claimId: identifier(r.claimId, "claimId"), summary: text(r.summary, "summary", 8192) };
+  }
+  if (r.type === "takeover") {
+    keys(r, ["type", "session", "claimId", "reason", "stopped"]);
+    if (r.stopped !== true) throw new Error("\u5FC5\u987B\u5148\u505C\u6B62\u65E7\u52A9\u624B\u53CA\u5168\u90E8\u5728\u9014\u5199\u5165\uFF0C\u518D\u663E\u5F0F\u786E\u8BA4 stopped");
+    return { type: "takeover", session: identifier(r.session, "session"), claimId: identifier(r.claimId, "claimId"), reason: text(r.reason, "reason", 8192), stopped: true };
+  }
+  throw new Error(`\u4E0D\u8BA4\u8BC6\u7684\u534F\u8C03\u52A8\u4F5C ${String(r.type)}`);
+}
+function readOwner(runtime) {
+  try {
+    const o = JSON.parse(readFileSync(join(lockPath(runtime), "owner.json"), "utf8"));
+    identifier(o.token, "owner");
+    integer(o.pid, "pid", 1);
+    text(o.created, "created", 100);
+    return o;
+  } catch {
+    return null;
+  }
+}
+function withProjectLock(runtime, work, opts = {}) {
+  const timeout = integer(opts.timeoutMs ?? 3e3, "timeoutMs", 0, 3e4);
+  mkdirSync(location(runtime), { recursive: true });
+  const lock = lockPath(runtime);
+  const deadline = performance.now() + timeout;
+  for (; ; ) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      if (performance.now() >= deadline) {
+        const owner2 = readOwner(runtime);
+        throw new Error(`\u534F\u8C03\u5199\u5165\u88AB\u5360\u7528 (busy)\uFF1A${JSON.stringify(owner2 ?? { owner: "unreadable" })}\uFF1B\u7A0D\u540E\u91CD\u8BD5\u3002\u4E0D\u4F1A\u6309\u8D85\u65F6\u62A2\u9501\u3002`);
+      }
+      Atomics.wait(waitCell, 0, 0, Math.min(20, Math.max(1, deadline - performance.now())));
+    }
+  }
+  const owner = { token: randomUUID(), pid: process.pid, created: (/* @__PURE__ */ new Date()).toISOString() };
+  try {
+    writeFileSync(join(lock, "owner.json"), JSON.stringify(owner), { flag: "wx" });
+  } catch (error) {
+    throw new Error(`\u5DF2\u53D6\u5F97\u77ED\u9501\u4F46\u65E0\u6CD5\u8BB0\u5F55\u6301\u6709\u8005\uFF0C\u8BF7\u505C\u6B62\u534F\u8C03\u5199\u5165\u540E\u6062\u590D\uFF1A${String(error)}`);
+  }
+  try {
+    return work();
+  } finally {
+    if (readOwner(runtime)?.token !== owner.token) throw new Error("\u77ED\u9501\u6301\u6709\u8005\u5DF2\u6539\u53D8\uFF0C\u62D2\u7EDD\u91CA\u653E\u4ED6\u4EBA\u7684\u9501");
+    unlinkSync(join(lock, "owner.json"));
+    rmdirSync(lock);
+  }
+}
+function recoverLock(runtime, expectedOwner, reason, allStopped) {
+  if (!allStopped) throw new Error("\u5148\u505C\u6B62\u5168\u90E8\u534F\u8C03\u5199\u5165\u8FDB\u7A0B\uFF0C\u518D\u663E\u5F0F\u786E\u8BA4 stopped");
+  text(reason, "\u6062\u590D\u539F\u56E0", 8192);
+  const owner = readOwner(runtime);
+  if ((owner?.token ?? "unreadable") !== expectedOwner) throw new Error("\u77ED\u9501\u6301\u6709\u8005 owner \u5DF2\u6539\u53D8\uFF0C\u8BF7\u91CD\u65B0\u68C0\u67E5");
+  if (owner) {
+    try {
+      process.kill(owner.pid, 0);
+    } catch (error) {
+      if (error.code !== "ESRCH") throw new Error("\u65E0\u6CD5\u786E\u8BA4\u539F\u8FDB\u7A0B\u5DF2\u505C\u6B62\uFF0C\u62D2\u7EDD\u6062\u590D");
+      if (readOwner(runtime)?.token !== expectedOwner) throw new Error("\u77ED\u9501\u6301\u6709\u8005 owner \u5DF2\u6539\u53D8");
+      unlinkSync(join(lockPath(runtime), "owner.json"));
+      rmdirSync(lockPath(runtime));
+      return;
+    }
+    throw new Error("\u539F\u6301\u6709\u8005\u8FDB\u7A0B\u4ECD\u5B58\u6D3B (active)\uFF0C\u62D2\u7EDD\u6062\u590D");
+  }
+  try {
+    unlinkSync(join(lockPath(runtime), "owner.json"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  rmdirSync(lockPath(runtime));
+}
+function canonicalTarget(projectDir, file) {
+  text(file, "file", 4096);
+  if (file.includes("\0")) throw new Error("\u8DEF\u5F84\u4E0D\u80FD\u5305\u542B\u7A7A\u5B57\u7B26");
+  const root = realpathSync(projectDir);
+  let existing = resolve(root, file);
+  const missing = [];
+  for (; ; ) {
+    try {
+      lstatSync(existing);
+      break;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      const parent = dirname(existing);
+      if (parent === existing) throw new Error("\u627E\u4E0D\u5230\u8DEF\u5F84\u7684\u73B0\u6709\u7236\u76EE\u5F55");
+      missing.unshift(basename(existing));
+      existing = parent;
+    }
+  }
+  const actual = realpathSync(existing);
+  const stat = statSync(actual);
+  if (!missing.length && !stat.isFile() || missing.length && !stat.isDirectory()) throw new Error("\u53EA\u8BA4\u9886\u6587\u4EF6\uFF0C\u4E0D\u8BA4\u9886\u76EE\u5F55\u6216\u7279\u6B8A\u6587\u4EF6");
+  if (!missing.length && stat.nlink > 1) throw new Error("\u4E0D\u652F\u6301\u786C\u94FE\u63A5 hard link \u6587\u4EF6\u8BA4\u9886");
+  const rel = relative(root, resolve(actual, ...missing));
+  if (!rel || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`)) throw new Error("\u6587\u4EF6\u8D8A\u51FA\u9879\u76EE\u6839\u76EE\u5F55");
+  let key = rel.replaceAll("\\", "/");
+  if (process.platform === "win32") key = key.toLowerCase();
+  if (key === ".git" || key.startsWith(".git/") || key === "ideas/.runtime" || key.startsWith("ideas/.runtime/") || ["ideas/graph.yaml", "ideas/graph.html"].includes(key)) {
+    throw new Error("\u5185\u90E8\u72B6\u6001\u548C\u60F3\u6CD5\u56FE\u4E0D\u80FD\u957F\u671F\u8BA4\u9886\uFF0C\u8BF7\u4F7F\u7528\u5BF9\u5E94\u66F4\u65B0\u547D\u4EE4");
+  }
+  return key;
+}
+function applyEvent(state, event) {
+  const r = event.request;
+  if ((r.type === "claim" || r.type === "takeover") !== (event.claimId !== void 0)) throw new Error("\u8BA4\u9886\u7F16\u53F7 claimId \u4E0E\u52A8\u4F5C\u4E0D\u5339\u914D");
+  if (r.type === "join") {
+    if (r.session !== void 0 && r.session !== event.session) throw new Error("\u4F1A\u8BDD\u7ED1\u5B9A\u4E0D\u5339\u914D");
+    const label = state.sessions.get(event.session);
+    if (label !== void 0 && (r.session === void 0 || label !== r.label)) throw new Error("\u4F1A\u8BDD\u8EAB\u4EFD\u5DF2\u6CE8\u518C\uFF0C\u4E0D\u80FD\u91CD\u65B0\u7ED1\u5B9A");
+    state.sessions.set(event.session, r.label);
+  } else {
+    if (r.session !== event.session || !state.sessions.has(event.session)) throw new Error("\u4E0D\u8BA4\u8BC6\u7684\u4F1A\u8BDD session");
+    if (r.type === "ack") {
+      if (r.upto >= event.seq) throw new Error("\u786E\u8BA4\u5E8F\u53F7 sequence \u8D85\u8FC7\u73B0\u6709\u8BB0\u5F55");
+      state.cursors.set(event.session, Math.max(state.cursors.get(event.session) ?? 0, r.upto));
+    }
+    if (r.type === "claim") {
+      for (const claim of state.claims.values()) {
+        const shared = r.files.filter((f) => claim.files.includes(f));
+        if (shared.length) throw new Error(`\u6587\u4EF6\u88AB\u5360\u7528 (claimed)\uFF1A${shared.join(", ")}\uFF1B\u6301\u6709\u8005 ${claim.session}\uFF1B\u4EFB\u52A1 ${claim.task}\uFF1BclaimId ${claim.claimId}`);
+      }
+      if (state.claims.has(event.claimId)) throw new Error("\u8BA4\u9886\u7F16\u53F7 claimId \u5DF2\u4F7F\u7528");
+      state.claims.set(event.claimId, { claimId: event.claimId, session: event.session, files: r.files, task: r.task });
+    }
+    if (r.type === "release" || r.type === "takeover") {
+      const old = state.claims.get(r.claimId);
+      if (!old) throw new Error("\u8BA4\u9886 claim \u5DF2\u91CA\u653E\u6216\u88AB\u63A5\u7BA1\uFF0C\u8BF7\u8BFB\u53D6\u6700\u65B0\u72B6\u6001");
+      if (r.type === "release" && old.session !== event.session) throw new Error(`\u4E0D\u662F\u8BA4\u9886\u6301\u6709\u8005 owner\uFF1A${old.session}`);
+      if (r.type === "takeover" && (event.claimId === r.claimId || state.claims.has(event.claimId))) throw new Error("\u65B0\u7684\u8BA4\u9886\u7F16\u53F7 claimId \u5DF2\u4F7F\u7528");
+      state.claims.delete(r.claimId);
+      if (r.type === "takeover") state.claims.set(event.claimId, { ...old, claimId: event.claimId, session: event.session });
+    }
+  }
+}
+function replay(runtime) {
+  let bytes;
+  try {
+    bytes = readFileSync(journalPath(runtime));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    bytes = Buffer.alloc(0);
+  }
+  const validBytes = bytes.lastIndexOf(10) + 1;
+  const complete = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(0, validBytes));
+  const state = { sessions: /* @__PURE__ */ new Map(), cursors: /* @__PURE__ */ new Map(), claims: /* @__PURE__ */ new Map() };
+  const events = [];
+  const requestIds = /* @__PURE__ */ new Set();
+  for (const line of complete ? complete.slice(0, -1).split("\n") : []) {
+    if (Buffer.byteLength(line) + 1 > 65536) throw new Error("\u534F\u8C03\u8BB0\u5F55\u8D85\u8FC7 64 KiB");
+    const raw = object(JSON.parse(line));
+    keys(raw, ["v", "seq", "requestId", "session", "request", "claimId"]);
+    if (raw.v !== 1) throw new Error("\u4E0D\u8BA4\u8BC6\u7684\u534F\u8C03\u8BB0\u5F55\u7248\u672C");
+    if (raw.seq !== events.length + 1) throw new Error("\u534F\u8C03\u8BB0\u5F55\u5E8F\u53F7 sequence \u635F\u574F");
+    const event = {
+      v: 1,
+      seq: raw.seq,
+      requestId: identifier(raw.requestId, "requestId"),
+      session: identifier(raw.session, "session"),
+      request: normalizeRequest(raw.request),
+      ...raw.claimId === void 0 ? {} : { claimId: identifier(raw.claimId, "claimId") }
+    };
+    if (requestIds.has(event.requestId)) throw new Error("\u91CD\u590D\u7684\u8BF7\u6C42\u7F16\u53F7 requestId");
+    applyEvent(state, event);
+    requestIds.add(event.requestId);
+    events.push(event);
+  }
+  return { events, state, validBytes, totalBytes: bytes.length };
+}
+function appendEvent(runtime, value, requestId = randomUUID()) {
+  let request = normalizeRequest(value);
+  identifier(requestId, "requestId");
+  return withProjectLock(runtime, () => {
+    if (request.type === "claim") request = { ...request, files: [...new Set(request.files.map((f) => canonicalTarget(resolve(runtime, "../.."), f)))].sort() };
+    const { events, state, validBytes, totalBytes } = replay(runtime);
+    const prior = events.find((e) => e.requestId === requestId);
+    if (prior) {
+      if (!isDeepStrictEqual(prior.request, request)) throw new Error("\u8BF7\u6C42 requestId \u5DF2\u7528\u8FC7\uFF0C\u4F46\u5185\u5BB9\u4E0D\u540C");
+      return prior;
+    }
+    const event = {
+      v: 1,
+      seq: events.length + 1,
+      requestId,
+      session: request.session ?? `session:${randomUUID()}`,
+      request,
+      ...["claim", "takeover"].includes(request.type) ? { claimId: randomUUID() } : {}
+    };
+    applyEvent(state, event);
+    const bytes = Buffer.from(JSON.stringify(event) + "\n");
+    if (bytes.length > 65536) throw new Error("\u534F\u8C03\u8BB0\u5F55\u8D85\u8FC7 64 KiB");
+    if (totalBytes !== validBytes) truncateSync(journalPath(runtime), validBytes);
+    const fd = openSync(journalPath(runtime), "a");
+    try {
+      writeFileSync(fd, bytes);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    return event;
+  });
+}
+function joinSession(runtime, label, requestId = randomUUID(), session) {
+  return appendEvent(runtime, { type: "join", label, ...session === void 0 ? {} : { session } }, requestId);
+}
+function readInbox(runtime, session, opts = {}) {
+  identifier(session, "session");
+  const limit = integer(opts.limit ?? 20, "limit", 1, 100);
+  return withProjectLock(runtime, () => {
+    const { events, state } = replay(runtime);
+    if (!state.sessions.has(session)) throw new Error("\u4E0D\u8BA4\u8BC6\u7684\u4F1A\u8BDD session");
+    const cursor = state.cursors.get(session) ?? 0;
+    const pending = events.filter((e) => e.seq > cursor && e.request.type !== "ack");
+    const page = pending.slice(0, limit);
+    const hasMore = pending.length > page.length;
+    return { events: page, lastSeq: hasMore ? page[page.length - 1].seq : events.length, hasMore };
+  });
+}
+function acknowledge(runtime, session, upto, requestId = randomUUID()) {
+  return appendEvent(runtime, { type: "ack", session, upto }, requestId);
+}
+function claimFiles(runtime, projectDir, session, files, task, requestId = randomUUID()) {
+  if (realpathSync(projectDir) !== realpathSync(resolve(runtime, "../.."))) throw new Error("runtime \u4E0D\u5C5E\u4E8E\u8FD9\u4E2A\u9879\u76EE");
+  if (!Array.isArray(files)) throw new Error("files \u5FC5\u987B\u662F\u6587\u4EF6\u5217\u8868");
+  return appendEvent(runtime, { type: "claim", session, files: files.map((f) => canonicalTarget(projectDir, f)), task }, requestId);
+}
+function releaseClaim(runtime, session, claimId, summary, requestId = randomUUID()) {
+  return appendEvent(runtime, { type: "release", session, claimId, summary }, requestId);
+}
+function takeoverClaim(runtime, session, claimId, reason, allStopped, requestId = randomUUID()) {
+  return appendEvent(runtime, { type: "takeover", session, claimId, reason, stopped: allStopped }, requestId);
+}
+function coordMain(runtime, args2) {
+  const actions = {
+    join: ["label", "session", "request"],
+    say: ["session", "text", "request"],
+    inbox: ["session", "limit"],
+    ack: ["session", "upto", "request"],
+    status: [],
+    recover: ["owner", "reason", "stopped"],
+    claim: ["session", "files-json", "task", "request"],
+    release: ["session", "claim", "summary", "request"],
+    takeover: ["session", "claim", "reason", "stopped", "request"]
+  };
+  const action = args2[0];
+  if (!Object.hasOwn(actions, action)) throw new Error("usage: coord join|say|inbox|ack|status|recover|claim|release|takeover [--label \u6587\u672C] [--session ID] [--request ID] [--text \u6587\u672C] [--upto \u5E8F\u53F7] [--files-json JSON] [--task \u6587\u672C] [--claim ID] [--summary \u6587\u672C] [--reason \u6587\u672C] [--stopped]");
+  const options = /* @__PURE__ */ Object.create(null);
+  for (let i = 1; i < args2.length; i++) {
+    const key = args2[i].startsWith("--") ? args2[i].slice(2) : "";
+    if (!key || ![...actions[action], "project"].includes(key) || Object.hasOwn(options, key)) throw new Error(`\u4E0D\u8BA4\u8BC6\u6216\u91CD\u590D\u7684\u9009\u9879 ${args2[i]}`);
+    if (key === "stopped") {
+      options[key] = "true";
+      continue;
+    }
+    if (args2[i + 1] === void 0) throw new Error(`\u9009\u9879 --${key} \u7F3A\u5C11\u503C`);
+    options[key] = args2[++i];
+  }
+  let result;
+  if (action === "join") result = joinSession(runtime, options.label, options.request, options.session);
+  if (action === "say") result = appendEvent(runtime, { type: "say", session: options.session, text: options.text }, options.request);
+  if (action === "inbox") result = readInbox(runtime, options.session, { limit: options.limit === void 0 ? void 0 : Number(options.limit) });
+  if (action === "ack") result = acknowledge(runtime, options.session, Number(options.upto), options.request);
+  if (action === "status") result = withProjectLock(runtime, () => {
+    const { events, state } = replay(runtime);
+    return { lastSeq: events.length, sessions: [...state.sessions].map(([session, label]) => ({ session, label, acknowledged: state.cursors.get(session) ?? 0 })), claims: [...state.claims.values()] };
+  });
+  if (action === "recover") {
+    recoverLock(runtime, options.owner, options.reason, options.stopped === "true");
+    result = { recovered: true, owner: options.owner, reason: options.reason };
+  }
+  if (action === "claim") result = claimFiles(runtime, resolve(runtime, "../.."), options.session, JSON.parse(options["files-json"]), options.task, options.request);
+  if (action === "release") result = releaseClaim(runtime, options.session, options.claim, options.summary, options.request);
+  if (action === "takeover") result = takeoverClaim(runtime, options.session, options.claim, options.reason, options.stopped === "true", options.request);
+  console.log(JSON.stringify(result));
+  return 0;
+}
+
 // companion/ideas.ts
 var ENGINE_CMD = `node ${ENGINE_RELATIVE}`;
 var STATUSES = ["todo", "doing", "done", "blocked"];
-var IDEAS_DIR = (projectDir) => join(resolve(projectDir), "ideas");
+var IDEAS_DIR = (projectDir) => join2(resolve2(projectDir), "ideas");
 function paths(projectDir) {
   const ideas = IDEAS_DIR(projectDir);
   return {
-    graph: join(ideas, "graph.yaml"),
-    html: join(ideas, "graph.html"),
-    log: join(ideas, "log.md"),
-    worklist: join(ideas, ".scan-todo"),
-    done: join(ideas, ".scan-done"),
-    approved: join(ideas, ".approved"),
-    runtime: join(ideas, ".runtime")
+    graph: join2(ideas, "graph.yaml"),
+    html: join2(ideas, "graph.html"),
+    log: join2(ideas, "log.md"),
+    worklist: join2(ideas, ".scan-todo"),
+    done: join2(ideas, ".scan-done"),
+    approved: join2(ideas, ".approved"),
+    runtime: join2(ideas, ".runtime")
   };
 }
 var graphPath = (projectDir) => paths(projectDir).graph;
@@ -7406,7 +7762,7 @@ function load(file) {
   if (!existsSync(file)) {
     throw new Error(`no idea graph at ${file} \u2014 run \`${ENGINE_CMD} init\` first`);
   }
-  const doc = (0, import_yaml.parseDocument)(readFileSync(file, "utf8"));
+  const doc = (0, import_yaml.parseDocument)(readFileSync2(file, "utf8"));
   if (doc.errors.length > 0) throw new Error(`invalid YAML in ${file}: ${doc.errors[0].message}`);
   const graph = doc.toJSON();
   if (!graph || !Array.isArray(graph.ideas)) throw new Error(`${file} has no \`ideas:\` list`);
@@ -7415,9 +7771,9 @@ function load(file) {
 function pauseSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
-function atomicWrite(file, text) {
+function atomicWrite(file, text2) {
   const tmp = `${file}.${pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-  writeFileSync(tmp, text);
+  writeFileSync2(tmp, text2);
   for (let attempt = 0; ; attempt++) {
     try {
       renameSync(tmp, file);
@@ -7521,9 +7877,9 @@ var SKIP_RULES = [
   [/(^|\/)ideas\//i, "\u8D26\u672C\u76EE\u5F55\uFF0C\u7531\u5F15\u64CE\u81EA\u5DF1\u751F\u6210\u548C\u7EF4\u62A4"]
 ];
 function scanIgnores(projectDir) {
-  const file = join(projectDir, "ideas", ".scanignore");
+  const file = join2(projectDir, "ideas", ".scanignore");
   if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+  return readFileSync2(file, "utf8").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
 }
 function allProjectFiles(projectDir) {
   try {
@@ -7558,9 +7914,9 @@ function walk(dir, root) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith(".") && entry.name !== ".claude") continue;
     if (IGNORE_DIRS.has(entry.name)) continue;
-    const full = join(dir, entry.name);
+    const full = join2(dir, entry.name);
     if (entry.isDirectory()) out.push(...walk(full, root));
-    else out.push(relative(root, full).replaceAll("\\", "/"));
+    else out.push(relative2(root, full).replaceAll("\\", "/"));
   }
   return out;
 }
@@ -7568,13 +7924,13 @@ var doneFile = (projectDir) => paths(projectDir).done;
 function readChecklist(projectDir) {
   const file = worklistFile(projectDir);
   if (!existsSync(file)) return [];
-  return readFileSync(file, "utf8").split("\n").map((l) => l.trim()).filter(Boolean);
+  return readFileSync2(file, "utf8").split("\n").map((l) => l.trim()).filter(Boolean);
 }
 function readStruck(projectDir) {
   const file = doneFile(projectDir);
   const map = /* @__PURE__ */ new Map();
   if (!existsSync(file)) return map;
-  for (const line of readFileSync(file, "utf8").split("\n")) {
+  for (const line of readFileSync2(file, "utf8").split("\n")) {
     const t = line.trim();
     if (!t) continue;
     const tab = t.indexOf("	");
@@ -7585,7 +7941,7 @@ function readStruck(projectDir) {
 }
 function contentHash(projectDir, rel) {
   try {
-    return sha256(readFileSync(join(resolve(projectDir), rel), "utf8"));
+    return sha256(readFileSync2(join2(resolve2(projectDir), rel), "utf8"));
   } catch {
     return "unreadable";
   }
@@ -7613,19 +7969,19 @@ function reconcileWorklist(projectDir, all) {
   const added = all.filter((f) => !known.has(f.toLowerCase()));
   const removed = checklist.filter((f) => !live.has(f.toLowerCase()));
   if (added.length === 0 && removed.length === 0) return { added, removed };
-  mkdirSync(dirname(worklistFile(projectDir)), { recursive: true });
+  mkdirSync2(dirname2(worklistFile(projectDir)), { recursive: true });
   atomicWrite(worklistFile(projectDir), all.join("\n") + (all.length > 0 ? "\n" : ""));
   return { added, removed };
 }
 function writeWorklist(projectDir, files) {
-  mkdirSync(dirname(worklistFile(projectDir)), { recursive: true });
+  mkdirSync2(dirname2(worklistFile(projectDir)), { recursive: true });
   atomicWrite(worklistFile(projectDir), files.join("\n") + (files.length > 0 ? "\n" : ""));
   atomicWrite(doneFile(projectDir), "");
 }
 function strike(projectDir, filePath) {
   const checklist = readChecklist(projectDir);
   if (checklist.length === 0) return -1;
-  const target = relative(projectDir, resolve(filePath)).replaceAll("\\", "/");
+  const target = relative2(projectDir, resolve2(filePath)).replaceAll("\\", "/");
   const key = target.toLowerCase();
   if (!checklist.some((f) => f.toLowerCase() === key)) return -1;
   const struck = readStruck(projectDir);
@@ -7642,9 +7998,9 @@ function badPlanPath(path) {
   if (posix.split("/").includes("..")) return "\u4E0D\u80FD\u542B `..`\uFF08\u7236\u76EE\u5F55\uFF09\u6BB5 \u2014\u2014 \u90A3\u6307\u5411\u9879\u76EE\u4E4B\u5916";
   return null;
 }
-function lineCount(text) {
-  if (text.length === 0) return 0;
-  return text.replace(/\r?\n$/, "").split("\n").length;
+function lineCount(text2) {
+  if (text2.length === 0) return 0;
+  return text2.replace(/\r?\n$/, "").split("\n").length;
 }
 function badLineRange(fullPath, lines) {
   const impossible = (why) => ({ kind: "impossible", why });
@@ -7653,7 +8009,7 @@ function badLineRange(fullPath, lines) {
   if (segments.length === 0) return impossible(shape);
   let count;
   try {
-    count = lineCount(readFileSync(fullPath, "utf8"));
+    count = lineCount(readFileSync2(fullPath, "utf8"));
   } catch {
     count = null;
   }
@@ -7718,7 +8074,7 @@ function check(g, projectDir, file) {
         errors.push(`${at}: \`code\` \u8DEF\u5F84 ${ref.file} ${strayed}\uFF08D31\uFF09`);
         continue;
       }
-      const full = resolve(projectDir, ref.file);
+      const full = resolve2(projectDir, ref.file);
       if (status === "done" && !existsSync(full)) {
         errors.push(`${at}: code file not found \u2014 ${ref.file}`);
         continue;
@@ -7842,7 +8198,7 @@ function addIdea(doc, graph, name, needs, date) {
   writeNextId(doc, n + 1);
   return id;
 }
-var sha256 = (text) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex");
+var sha256 = (text2) => createHash("sha256").update(text2.replaceAll("\r\n", "\n")).digest("hex");
 function approvalProjection(graph, nodeIds) {
   const map = byId(graph);
   return nodeIds.map((id) => {
@@ -7880,8 +8236,8 @@ ${block}`);
   }
   return out;
 }
-var pendingDir = (projectDir) => join(paths(projectDir).runtime, "pending");
-var approvalsDir = (projectDir) => join(paths(projectDir).runtime, "approvals");
+var pendingDir = (projectDir) => join2(paths(projectDir).runtime, "pending");
+var approvalsDir = (projectDir) => join2(paths(projectDir).runtime, "approvals");
 function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
   if (!nodeIds.length) throw new Error(`${gate} \u5173\u5361\u5FC5\u987B\u70B9\u540D\u60F3\u6CD5\uFF08nodeIds\uFF09`);
   if (gate === "manual-check") {
@@ -7893,8 +8249,8 @@ function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
   }
   const snapshots = Object.fromEntries(nodeIds.map((id) => [id, approvalSnapshot(graph, id)]));
   const challenge = `CC-${randomBytes(4).toString("hex").toUpperCase()}`;
-  const file = join(pendingDir(projectDir), `${challenge}.json`);
-  mkdirSync(pendingDir(projectDir), { recursive: true });
+  const file = join2(pendingDir(projectDir), `${challenge}.json`);
+  mkdirSync2(pendingDir(projectDir), { recursive: true });
   atomicWrite(file, JSON.stringify({
     v: 2,
     challenge,
@@ -7911,9 +8267,9 @@ function applyApproval(projectDir, prompt, meta) {
   if (!m) return null;
   const decision = /^(批准|同意|APPROVE)$/i.test(m[1]) ? "approved" : "rejected";
   const challenge = m[2].toUpperCase();
-  const file = join(pendingDir(projectDir), `${challenge}.json`);
+  const file = join2(pendingDir(projectDir), `${challenge}.json`);
   if (!existsSync(file)) return { ok: false, reason: `\u53E3\u4EE4 ${challenge} \u4E0D\u5B58\u5728\u6216\u5DF2\u7528\u8FC7 \u2014\u2014 \u91CD\u65B0 request-approval` };
-  const pending = JSON.parse(readFileSync(file, "utf8"));
+  const pending = JSON.parse(readFileSync2(file, "utf8"));
   const { graph } = load(graphPath(projectDir));
   const ids = Object.keys(pending.snapshots ?? {});
   const drifted = ids.some((id) => {
@@ -7929,8 +8285,8 @@ function applyApproval(projectDir, prompt, meta) {
     rmFileQuietly(file);
     return { ok: false, reason: "\u88AB\u6279\u7684\u5185\u5BB9\u5728\u8BF7\u6C42\u4E4B\u540E\u88AB\u6539\u8FC7\u4E86\uFF0C\u53E3\u4EE4\u4F5C\u5E9F \u2014\u2014 \u91CD\u65B0 request-approval" };
   }
-  mkdirSync(approvalsDir(projectDir), { recursive: true });
-  atomicWrite(join(approvalsDir(projectDir), `${challenge}.json`), JSON.stringify({
+  mkdirSync2(approvalsDir(projectDir), { recursive: true });
+  atomicWrite(join2(approvalsDir(projectDir), `${challenge}.json`), JSON.stringify({
     ...pending,
     decision,
     responded_at: meta.date,
@@ -7955,7 +8311,7 @@ function applyApproval(projectDir, prompt, meta) {
 }
 function rmFileQuietly(file) {
   try {
-    unlinkSync(file);
+    unlinkSync2(file);
   } catch {
   }
 }
@@ -7970,37 +8326,37 @@ function validApproval(projectDir, graph, gate, nodeId) {
   }
   for (const name of readdirSync(dirPath)) {
     try {
-      const r = JSON.parse(readFileSync(join(dirPath, name), "utf8"));
+      const r = JSON.parse(readFileSync2(join2(dirPath, name), "utf8"));
       if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
     } catch {
     }
   }
   return false;
 }
-var evidenceFile = (projectDir, id) => join(paths(projectDir).runtime, `${id}.json`);
+var evidenceFile = (projectDir, id) => join2(paths(projectDir).runtime, `${id}.json`);
 function readEvidence(projectDir, id) {
   const file = evidenceFile(projectDir, id);
   if (!existsSync(file)) return {};
   try {
-    return JSON.parse(readFileSync(file, "utf8"));
+    return JSON.parse(readFileSync2(file, "utf8"));
   } catch {
     return {};
   }
 }
 function writeEvidence(projectDir, id, evidence) {
-  mkdirSync(paths(projectDir).runtime, { recursive: true });
+  mkdirSync2(paths(projectDir).runtime, { recursive: true });
   atomicWrite(evidenceFile(projectDir, id), JSON.stringify(evidence, null, 2));
 }
 function hashTests(projectDir, idea) {
   const out = {};
   for (const rel of idea.verify?.test_files ?? []) {
-    const full = join(resolve(projectDir), rel);
-    out[rel] = existsSync(full) ? sha256(readFileSync(full, "utf8")) : "missing";
+    const full = join2(resolve2(projectDir), rel);
+    out[rel] = existsSync(full) ? sha256(readFileSync2(full, "utf8")) : "missing";
   }
   return out;
 }
 function presentTests(projectDir, idea) {
-  return (idea.verify?.test_files ?? []).filter((rel) => existsSync(join(resolve(projectDir), rel)));
+  return (idea.verify?.test_files ?? []).filter((rel) => existsSync(join2(resolve2(projectDir), rel)));
 }
 var sameHashes = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
 var NOT_FOUND_EXITS = platform === "win32" ? [9009, 127] : [127];
@@ -8010,12 +8366,12 @@ function missingExecutable(projectDir, command) {
   const token = (command.trim().match(/^"([^"]+)"|^'([^']+)'|^(\S+)/) ?? []).slice(1).find(Boolean);
   if (!token) return void 0;
   if (/[\\/]/.test(token)) {
-    return existsSync(resolve(projectDir, token)) ? void 0 : `\u627E\u4E0D\u5230\u53EF\u6267\u884C\u6587\u4EF6 ${token}`;
+    return existsSync(resolve2(projectDir, token)) ? void 0 : `\u627E\u4E0D\u5230\u53EF\u6267\u884C\u6587\u4EF6 ${token}`;
   }
   const exts = platform === "win32" ? ["", ...(env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";")] : [""];
   for (const dir of (env.PATH ?? "").split(platform === "win32" ? ";" : ":")) {
     if (!dir) continue;
-    for (const ext of exts) if (ext !== void 0 && existsSync(join(dir, token + ext))) return void 0;
+    for (const ext of exts) if (ext !== void 0 && existsSync(join2(dir, token + ext))) return void 0;
   }
   return `\u547D\u4EE4\u6CA1\u627E\u5230\uFF1A${token} \u4E0D\u5728 PATH \u4E0A`;
 }
@@ -8036,8 +8392,8 @@ function infraOf(run) {
   return void 0;
 }
 function recordChange(projectDir, graph, filePath) {
-  const root = resolve(projectDir).replaceAll("\\", "/");
-  const rel = resolve(projectDir, filePath).replaceAll("\\", "/").replace(new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/`, platform === "win32" ? "i" : ""), "");
+  const root = resolve2(projectDir).replaceAll("\\", "/");
+  const rel = resolve2(projectDir, filePath).replaceAll("\\", "/").replace(new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/`, platform === "win32" ? "i" : ""), "");
   for (const idea of graph.ideas) {
     if (!(idea.code ?? []).some((c) => c.file && sameFile(c.file, rel))) continue;
     const evidence = readEvidence(projectDir, idea.id);
@@ -8085,8 +8441,8 @@ function greenCurrent(projectDir, graph, id) {
   return sameHashes(evidence.green.test_hashes, hashTests(projectDir, idea));
 }
 function decideProductWrite(projectDir, graph, filePath) {
-  const root = resolve(projectDir).replaceAll("\\", "/");
-  const full = resolve(projectDir, filePath).replaceAll("\\", "/");
+  const root = resolve2(projectDir).replaceAll("\\", "/");
+  const full = resolve2(projectDir, filePath).replaceAll("\\", "/");
   const inRoot = platform === "win32" ? full.toLowerCase().startsWith(root.toLowerCase() + "/") : full.startsWith(root + "/");
   const rel = inRoot ? full.slice(root.length + 1) : full;
   const p = paths(projectDir);
@@ -8159,7 +8515,7 @@ function runCheck(projectDir, graph, id, phase, opts = {}) {
   const missing = missingExecutable(projectDir, command);
   const run = missing ? null : spawnSync(command, {
     shell: true,
-    cwd: resolve(projectDir),
+    cwd: resolve2(projectDir),
     encoding: "utf8",
     timeout: opts.timeoutMs ?? 12e4
   });
@@ -8194,7 +8550,7 @@ function legacyStamp(graph) {
 }
 function legacyStampOf(file) {
   try {
-    return legacyStamp((0, import_yaml.parseDocument)(readFileSync(file, "utf8")).toJSON());
+    return legacyStamp((0, import_yaml.parseDocument)(readFileSync2(file, "utf8")).toJSON());
   } catch {
     return null;
   }
@@ -8210,11 +8566,11 @@ function findLegacySources(projectDir) {
     if (stamp) out.push({ kind: stamp.kind, path: plain, instruction: legacyAtCanonical(stamp) });
   }
   for (const kind of ["claude", "cursor"]) {
-    const p = join(IDEAS_DIR(projectDir), `graph.${kind}.yaml`);
+    const p = join2(IDEAS_DIR(projectDir), `graph.${kind}.yaml`);
     if (existsSync(p)) out.push({ kind, path: p });
   }
   for (const name of [".codex-companion", ".codex-companion.codex"]) {
-    const p = join(resolve(projectDir), name, "nodes");
+    const p = join2(resolve2(projectDir), name, "nodes");
     if (existsSync(p)) {
       out.push({ kind: "codex", path: p });
       break;
@@ -8234,7 +8590,7 @@ var CODEX_STATUS = {
 };
 function convertCodex(nodesDir, projectName, date) {
   const report = [];
-  const nodes = readdirSync(nodesDir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync(join(nodesDir, f), "utf8"))).sort((a, b) => `${a.created_at ?? ""}\0${a.id}`.localeCompare(`${b.created_at ?? ""}\0${b.id}`));
+  const nodes = readdirSync(nodesDir).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(readFileSync2(join2(nodesDir, f), "utf8"))).sort((a, b) => `${a.created_at ?? ""}\0${a.id}`.localeCompare(`${b.created_at ?? ""}\0${b.id}`));
   const idMap = new Map(nodes.map((n, i) => [n.id, formatId(i + 1)]));
   for (const [slug, id] of idMap) report.push(`- \u7F16\u53F7\u6620\u5C04\uFF1A${slug} \u2192 ${id}\uFF08D5\uFF1Aslug \u6362\u6210\u987A\u5E8F\u7F16\u53F7\uFF0C\u540D\u5B57\u8FDB name\uFF09`);
   const ideas = nodes.map((n) => {
@@ -8283,9 +8639,9 @@ function convertCodex(nodesDir, projectName, date) {
   const graph = { version: 1, project: projectName, next_id: ideas.length + 1, endpoints: [], ideas };
   return { text: (0, import_yaml.stringify)(graph), graph, report };
 }
-function convertLegacyYaml(text, kind, date) {
+function convertLegacyYaml(text2, kind, date) {
   const report = [];
-  const doc = (0, import_yaml.parseDocument)(text);
+  const doc = (0, import_yaml.parseDocument)(text2);
   if (doc.has("agent")) {
     report.push(`- \u53BB\u6389 agent: ${String(doc.get("agent"))} \u952E\uFF08D10\uFF1A\u56FE\u5F52\u9879\u76EE\uFF0C\u4E0D\u5F52 agent\uFF09`);
     doc.delete("agent");
@@ -8308,7 +8664,7 @@ function convertLegacyYaml(text, kind, date) {
 function legacyLines(sources) {
   return sources.map((s) => {
     try {
-      const count = s.kind === "codex" ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length : ((0, import_yaml.parseDocument)(readFileSync(s.path, "utf8")).toJSON()?.ideas ?? []).length;
+      const count = s.kind === "codex" ? readdirSync(s.path).filter((f) => f.endsWith(".json")).length : ((0, import_yaml.parseDocument)(readFileSync2(s.path, "utf8")).toJSON()?.ideas ?? []).length;
       return `  ${s.kind}: ${count} \u4E2A\u60F3\u6CD5\uFF08${s.path}\uFF09`;
     } catch {
       return `  ${s.kind}: \u8BFB\u4E0D\u51FA\u6765\uFF08${s.path}\uFF09`;
@@ -8327,7 +8683,7 @@ function migrate(projectDir, opts) {
   if (existsSync(plain)) {
     let count;
     try {
-      const doc = (0, import_yaml.parseDocument)(readFileSync(plain, "utf8"));
+      const doc = (0, import_yaml.parseDocument)(readFileSync2(plain, "utf8"));
       if (doc.errors.length > 0) throw doc.errors[0];
       count = (doc.toJSON()?.ideas ?? []).length;
     } catch {
@@ -8355,8 +8711,8 @@ ${legacyLines(sources).join("\n")}`
   }
   const chosen = sources.length === 1 ? sources[0] : sources.find((s) => s.kind === opts.pick);
   if (!chosen) return { ok: false, reason: `--pick ${opts.pick} \u6CA1\u6709\u5BF9\u5E94\u7684\u65E7\u56FE` };
-  const projectName = resolve(projectDir).split(/[\\/]/).pop() ?? "project";
-  const converted = chosen.kind === "codex" ? convertCodex(chosen.path, projectName, opts.date) : convertLegacyYaml(readFileSync(chosen.path, "utf8"), chosen.kind, opts.date);
+  const projectName = resolve2(projectDir).split(/[\\/]/).pop() ?? "project";
+  const converted = chosen.kind === "codex" ? convertCodex(chosen.path, projectName, opts.date) : convertLegacyYaml(readFileSync2(chosen.path, "utf8"), chosen.kind, opts.date);
   const { errors } = check(converted.graph, projectDir);
   const real = errors.filter((e) => !/code file not found/.test(e));
   if (real.length > 0) {
@@ -8365,10 +8721,10 @@ ${real.map((e) => `  - ${e}`).join("\n")}`, report: converted.report };
   }
   if (seedNote) converted.report.push(seedNote);
   if (opts.dryRun) return { ok: true, report: converted.report };
-  mkdirSync(IDEAS_DIR(projectDir), { recursive: true });
+  mkdirSync2(IDEAS_DIR(projectDir), { recursive: true });
   atomicWrite(plain, converted.text);
   atomicWrite(
-    join(IDEAS_DIR(projectDir), "migrate-report.md"),
+    join2(IDEAS_DIR(projectDir), "migrate-report.md"),
     `# \u8FC1\u79FB\u62A5\u544A\uFF08${opts.date}\uFF0C\u6765\u6E90\uFF1A${chosen.kind}\uFF09
 
 \u6CA1\u80FD\u65E0\u635F\u8F6C\u6362\u7684\u5185\u5BB9\uFF0C\u9010\u6761\u5217\u5728\u8FD9\u91CC\uFF1A
@@ -8467,15 +8823,20 @@ function applyChanges(source, envelope, today, projectDir) {
     real.set(op.tmp, formatId(nextId));
     nextId += 1;
   }
-  const resolve3 = (v) => v && real.get(v) || v;
+  const resolve4 = (v) => v && real.get(v) || v;
+  const addFields = (op) => op.op === "add" && op.fields && typeof op.fields === "object" ? op.fields : void 0;
   for (const op of ops) {
     for (const key of ["id", "tmp", "from", "to"]) {
-      if (op[key] !== void 0) op[key] = resolve3(op[key]);
+      if (op[key] !== void 0) op[key] = resolve4(op[key]);
     }
+    if (op.op === "set" && op.field === "parent" && typeof op.new === "string") op.new = resolve4(op.new);
+    const fields = addFields(op);
+    if (fields && typeof fields.parent === "string") fields.parent = resolve4(fields.parent);
   }
-  const leftover = ops.find((o) => ["id", "tmp", "from", "to"].some((k) => typeof o[k] === "string" && o[k].startsWith("tmp:")));
+  const tmpIn = (o) => ["id", "tmp", "from", "to"].map((k) => o_(o, k)).find((v) => v) ?? (o.op === "set" && o.field === "parent" ? o_(o, "new") : void 0) ?? o_(addFields(o) ?? {}, "parent");
+  const leftover = ops.find((o) => tmpIn(o));
   if (leftover) {
-    return { ok: false, reason: `\u6539\u52A8\u91CC\u8FD8\u5269\u6CA1\u6709\u53D1\u5230\u7F16\u53F7\u7684\u4E34\u65F6\u53F7\uFF08${leftover.op} \u4E0A\u7684 ${["id", "tmp", "from", "to"].map((k) => o_(leftover, k)).find((v) => v)}\uFF09\uFF0C\u6574\u4F53\u62D2\u7EDD` };
+    return { ok: false, reason: `\u6539\u52A8\u91CC\u8FD8\u5269\u6CA1\u6709\u53D1\u5230\u7F16\u53F7\u7684\u4E34\u65F6\u53F7\uFF08${leftover.op} \u4E0A\u7684 ${tmpIn(leftover)}\uFF09\uFF0C\u6574\u4F53\u62D2\u7EDD` };
   }
   const changed = [];
   const indexOf = (id) => doc.toJSON().ideas.findIndex((i) => i.id === id);
@@ -8620,7 +8981,7 @@ function requestSignatures(projectDir, graph, requests, date) {
 var o_ = (op, key) => typeof op[key] === "string" && op[key].startsWith("tmp:") ? op[key] : void 0;
 var esc = (s = "") => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 var attr = (s = "") => esc(s).replace(/"/g, "&quot;");
-var fingerprint = (text) => createHash("sha256").update(text.replaceAll("\r\n", "\n")).digest("hex").slice(0, 12);
+var fingerprint = (text2) => createHash("sha256").update(text2.replaceAll("\r\n", "\n")).digest("hex").slice(0, 12);
 var NONE = "<span class='none'>\u2014</span>";
 var QUESTIONS = [
   { n: 1, key: "what", prose: true, label: "\u662F\u4EC0\u4E48" },
@@ -8852,15 +9213,32 @@ function render(g, source = "", projectDir = "", token = "") {
   <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
   ${i.log?.length ? `<details class="log"><summary>\u4FEE\u6539\u8BB0\u5F55 (${i.log.length})</summary>${i.log.map((l) => `<div>${esc(l.date)}${l.by ? " \xB7 " + esc(l.by) : ""} \u2014 ${esc(l.note)}</div>`).join("")}</details>` : ""}
 </section>`;
-  const brief = (i) => `<a class="brief ${cls(i)}" href="#${esc(i.id)}" data-brief="${attr(i.id)}">
-    <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<span class="blurb">${esc(String(i.what ?? "").split("\n")[0].trim())}</span><span class="enter">\u8FDB\u5165 \u2192</span></a>`;
+  const verifyPlain = (i) => {
+    const v = i.verify;
+    if (!v) return NONE;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}`;
+    return `${esc(v.manual)}<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${v.signed_off ? esc(v.signed_off) : "\u672A\u7B7E"}</span>`;
+  };
+  const briefDetail = (i) => `<div class="brief-detail"><dl>
+    <dt>\u7236\u60F3\u6CD5</dt><dd>${i.parent && map.has(i.parent) ? links([i.parent]) : NONE}</dd>${PROSE.slice(0, 5).map((q) => `<dt>${q.label}</dt><dd>${esc(i[q.key]) || NONE}</dd>`).join("")}
+    <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
+    <dt>${askedAs(7)}</dt><dd>${verifyPlain(i)}</dd>
+    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>
+  </dl>
+  <p class="edges"><b>\u524D\u7F6E\u60F3\u6CD5</b> ${links((i.needs ?? []).filter((n) => map.has(n)))}</p>
+  <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
+  ${i.log?.length ? `<div class="brief-log"><b>\u4FEE\u6539\u8BB0\u5F55</b>${i.log.map((l) => `<div>${esc(l.date)}${l.by ? " \xB7 " + esc(l.by) : ""} \u2014 ${esc(l.note)}</div>`).join("")}</div>` : ""}
+  </div>`;
+  const brief = (i) => `<details class="brief-row ${cls(i)}" data-row="${attr(i.id)}"><summary class="brief">
+    <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<span class="blurb">${esc(String(i.what ?? "").split("\n")[0].trim())}</span><a class="enter" href="#${esc(i.id)}" data-brief="${attr(i.id)}">\u8FDB\u5165 \u2192</a></summary>
+${briefDetail(i)}</details>`;
   const page = (owner) => {
     const id = owner ? owner.id : "";
     const kids = kidsOf(id);
     const scope = descendants(id);
     return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
 ${owner ? card(owner) : ""}
-${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} \xB7 \u70B9\u51FB\u4EFB\u610F\u8282\u70B9\u8FDB\u5165\u5B83\u7684\u9875\u9762</p>
+${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} \xB7 \u70B9\u51FB\u56FE\u4E0A\u7684\u8282\u70B9\uFF0C\u5B9A\u4F4D\u5230\u4E0B\u9762\u5BF9\u5E94\u7684\u90A3\u4E00\u884C\uFF1B\u70B9\u884C\u672C\u8EAB\u5C55\u5F00\uFF0C\u70B9\u300C\u8FDB\u5165\u300D\u624D\u6362\u9875</p>
 ${worklist("\u5F85\u4EBA\u5DE5\u9A8C\u8BC1", scope.filter(awaitingSignature).map((i) => ({
       id: i.id,
       name: i.name,
@@ -8874,6 +9252,8 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
 <div class="children">${kids.map(brief).join("\n")}</div>
 </section>`;
   };
+  const paragraphs = (s) => String(s ?? "").split("\n").map((t) => t.trim()).filter(Boolean);
+  const overview = paragraphs(g.overview);
   return `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</title>
@@ -8884,6 +9264,9 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
     padding:28px 22px 80px; background:#0b0f14; color:#e6edf3; }
   h1 { margin:0 0 6px; font-size:22px; }
   .overview { color:#93a1b0; margin:0 0 18px; }
+  .overview-more { color:#7d8896; font-size:13px; margin:-10px 0 18px; }
+  .overview-more summary { cursor:pointer; }
+  .overview-more p { margin:6px 0 0; }
   .legend { font-size:13px; color:#7d8896; margin:0 0 4px; }
   .sw { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin:0 5px 0 12px; }
   .sw:first-child { margin-left:0; }
@@ -8987,14 +9370,32 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   .crumbs a.here { color:#e6edf3; font-weight:600; }
   .crumbs button { margin-left:auto; }
   .page[hidden] { display:none; }
-  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; margin:0 0 8px; text-decoration:none;
-    color:#e6edf3; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px; background:#0d1117; }
-  .brief:hover { border-color:#7dd3fc; }
-  .brief.done { border-left-color:#22c55e; } .brief.doing { border-left-color:#3b82f6; }
-  .brief.blocked { border-left-color:#f97316; } .brief.endpoint { border-left-color:#a855f7; }
+  /* I-117: a row is a collapsible. The frame sits on the details element, the
+     summary is the flex row, the body is the read-only digest. Collapsed by
+     default means OMITTING the open attribute entirely \u2014 the attribute is a
+     boolean, so any value at all, even a false-sounding one, renders it open.
+     (No backticks in this block: the whole style sheet lives inside a template
+     string; and this comment ships in the page, so it must not spell that
+     value out either \u2014 a test greps the output for it.) */
+  .brief-row { margin:0 0 8px; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
+    background:#0d1117; scroll-margin-top:14px; }
+  .brief-row:hover { border-color:#7dd3fc; }
+  .brief-row.done { border-left-color:#22c55e; } .brief-row.doing { border-left-color:#3b82f6; }
+  .brief-row.blocked { border-left-color:#f97316; } .brief-row.endpoint { border-left-color:#a855f7; }
+  .brief-row.flash { animation: flash 1.2s ease-out; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#e6edf3; cursor:pointer; list-style:none; }
+  .brief::-webkit-details-marker { display:none; }
+  .brief::before { content:"\u25B8"; flex:none; color:#5c6773; font-size:12px; }
+  .brief-row[open] > .brief::before { content:"\u25BE"; }
   .brief .bname { font-weight:600; flex:none; }
   .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; }
+  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; text-decoration:none; }
+  .brief .enter:hover { text-decoration:underline; }
+  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #1f2933; font-size:13px; color:#c3ced9; }
+  .brief-detail dl { margin-top:8px; }
+  .brief-log { margin:10px 0 0; font-size:12px; color:#7d8896; }
+  .brief-log b { color:#7d8896; font-weight:normal; margin-right:6px; }
+  .brief-log div { margin:4px 0 0 14px; }
 
   #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
@@ -9030,8 +9431,12 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   #sign-panel button:hover { border-color:#c084fc; }
   #sign-panel .warn { color:#fca5a5; font-size:12px; margin-top:6px; }
 </style></head><body>
-<h1>${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</h1>
-<p class="overview">${esc(g.overview)}</p>
+<h1 id="page-title">${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</h1>
+<p class="overview">${esc(overview[0] ?? "")}</p>${overview.length > 1 ? `
+<details class="overview-more"><summary>\u9879\u76EE\u7531\u6765</summary>${// Collapsed by default means OMITTING `open` — `open="false"` renders it open.
+  // Nothing to fold means no element at all: an expander that opens onto
+  // nothing reads as broken.
+  overview.slice(1).map((p) => `<p>${esc(p)}</p>`).join("")}</details>` : ""}
 <div id="restore" hidden>\u53D1\u73B0 <b><span id="restore-count">0</span></b> \u5904\u672A\u63D0\u4EA4\u7684\u6539\u52A8\uFF08\u4E0A\u6B21\u5173\u6389\u9875\u9762\u65F6\u6CA1\u6709\u63D0\u4EA4\uFF09\u3002
   \u9010\u6761\u786E\u8BA4\u8981\u4E0D\u8981\u6062\u590D \u2014\u2014 \u672C\u5730\u7F51\u9875\u7684\u5B58\u50A8\u4E0D\u6B62\u8FD9\u4E00\u9875\u80FD\u5199\uFF0C\u6240\u4EE5\u8FD9\u4E00\u6B65\u4E0D\u4F1A\u81EA\u52A8\u505A\uFF1A
   <div id="restore-list"></div></div>
@@ -9057,7 +9462,7 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   </div>
   <div class="viewport"><div class="canvas"><pre class="mermaid">${mermaid}</pre></div></div>
 </div>
-<p class="graph-hint">\u6EDA\u8F6E\u7F29\u653E\uFF08\u4EE5\u5149\u6807\u4E3A\u4E2D\u5FC3\uFF09\xB7 \u62D6\u62FD\u5E73\u79FB \xB7 \u70B9\u51FB\u8282\u70B9\u8FDB\u5165\u5B83\u7684\u9875\u9762</p>
+<p class="graph-hint">\u6EDA\u8F6E\u7F29\u653E\uFF08\u4EE5\u5149\u6807\u4E3A\u4E2D\u5FC3\uFF09\xB7 \u62D6\u62FD\u5E73\u79FB \xB7 \u70B9\u51FB\u8282\u70B9\u5B9A\u4F4D\u5230\u672C\u9875\u90A3\u4E00\u884C</p>
 <div id="offline-note" hidden>\u56FE\u6682\u65F6\u4E0D\u53EF\u7528\uFF08\u79BB\u7EBF\uFF0C\u753B\u56FE\u8981\u8054\u7F51\u53D6\u4E00\u4E2A\u7B2C\u4E09\u65B9\u5E93\uFF09\u2014\u2014 \u7F16\u8F91\u4E0E\u63D0\u4EA4\u7167\u5E38\u3002</div>
 <div id="pages">
 ${// One section per page, every idea's card exactly once (on its own page).
@@ -9120,7 +9525,7 @@ ${// One section per page, every idea's card exactly once (on its own page).
     const card = document.getElementById(id);
     if (card) card.classList.toggle("dirty", touched(id));
     if (f === "name") {                            // the row on the parent's page follows the name
-      const row = document.querySelector('[data-brief="' + id + '"] .bname');
+      const row = document.querySelector('[data-row="' + id + '"] .bname');
       if (row) row.textContent = value;
     }
     if (typeof markIncomplete === "function") markIncomplete(id);
@@ -9291,9 +9696,31 @@ ${// One section per page, every idea's card exactly once (on its own page).
     for (let cur = id; cur && !seen.has(cur); cur = effectiveField(cur, "parent")) { seen.add(cur); out.unshift(cur); }
     return out;
   }
+  // The one heading and the line under it say what THIS page is about (I-086).
+  // One h1 for the whole document, rewritten \u2014 not one per section: the header
+  // sits above the diagram, and a second h1 would leave every idea page
+  // announcing the same title. The tab's text moves with it (WCAG 2.4.2 asks a
+  // hash-router view to retitle), read from the same place so the two can't drift.
+  // first() is the blurb rule the child rows already use \u2014 one expression, not two.
+  // (No backticks in here: this script is literal text inside a template string.)
+  function showHeader(owner) {
+    const first = (s) => String(s ?? "").split("\\n")[0].trim();
+    const h1 = document.getElementById("page-title");
+    const lead = document.querySelector("p.overview");
+    const more = document.querySelector("details.overview-more");
+    const project = DATA.project || "idea graph";
+    if (h1) h1.textContent = owner ? nameOf(owner) : project + " \u2014 \u60F3\u6CD5\u56FE";
+    if (lead) lead.textContent = owner ? first(effectiveField(owner, "what")) : first(DATA.overview);
+    // The fold holds the project's own history; it belongs to the home page only.
+    if (more) more.hidden = !!owner;
+    try { document.title = owner ? nameOf(owner) + " \u2014 " + project : project + " \u2014 \u60F3\u6CD5\u56FE"; }
+    catch (e) { /* not every host has a document title to set */ }
+  }
+
   function showPage() {
     const owner = currentOwner();
     for (const p of document.querySelectorAll(".page")) p.hidden = p.id !== "page-" + (owner || "root");
+    showHeader(owner);
     const crumbs = document.getElementById("crumbs");
     crumbs.replaceChildren();
     const home = document.createElement("a");
@@ -9313,6 +9740,23 @@ ${// One section per page, every idea's card exactly once (on its own page).
     try { window.scrollTo(0, 0); } catch (e) { /* not every host scrolls */ }
   }
   window.addEventListener("hashchange", showPage);
+
+  // I-117: a diagram node points at a ROW on this page, not at a page. Open it,
+  // bring it into view and flash it; the hash \u2014 and so the page \u2014 stays put.
+  // On window because the diagram module (which loads from a CDN and is not run
+  // by the tests) only calls it, while the tests call it directly. A row that is
+  // not on this page falls back to navigating, which is the old behaviour.
+  window.focusRow = (id) => {
+    const page = document.getElementById("page-" + (currentOwner() || "root"));
+    const row = page && page.querySelector('.children details[data-row="' + id + '"]');
+    if (!row) { location.hash = id; return false; }
+    row.setAttribute("open", "");
+    row.classList.remove("flash");
+    void row.offsetWidth;                          // restart the animation on a second click
+    row.classList.add("flash");
+    try { row.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { /* not every host scrolls */ }
+    return true;
+  };
 
   // The diagram module may never arrive (it loads from a CDN). Empty its source
   // out of the page right now: an undrawn block shows the raw flowchart text as
@@ -9594,13 +10038,22 @@ ${// One section per page, every idea's card exactly once (on its own page).
     document.getElementById("pages").append(sec);
     const list = document.querySelector("#page-" + (owner || "root") + " .children");
     if (list) {
-      const row = document.createElement("a");
-      row.className = "brief todo"; row.href = "#" + tmp; row.setAttribute("data-brief", tmp);
+      // I-117: the same collapsible the renderer writes \u2014 a summary plus a
+      // read-only body. The body stays a one-line note until the eight answers
+      // are written and submitted; the page re-renders from the file after a
+      // write-back anyway.
+      const row = document.createElement("details");
+      row.className = "brief-row todo"; row.setAttribute("data-row", tmp);
+      const summary = document.createElement("summary");
+      summary.className = "brief";
       const bname = document.createElement("span");
       bname.className = "bname"; bname.textContent = "\uFF08\u65B0\u60F3\u6CD5\uFF09";
-      const enter = document.createElement("span");
-      enter.className = "enter"; enter.textContent = "\u8FDB\u5165 \u2192";
-      row.append(bname, enter);
+      const enter = document.createElement("a");
+      enter.className = "enter"; enter.href = "#" + tmp; enter.setAttribute("data-brief", tmp); enter.textContent = "\u8FDB\u5165 \u2192";
+      summary.append(bname, enter);
+      const detail = document.createElement("div");
+      detail.className = "brief-detail"; detail.textContent = "\u516B\u95EE\u8FD8\u6CA1\u586B \u2014\u2014 \u70B9\u300C\u8FDB\u5165\u300D\u5230\u5B83\u81EA\u5DF1\u90A3\u4E00\u9875\u53BB\u5199\u3002";
+      row.append(summary, detail);
       list.append(row);
     }
     markIncomplete(tmp);
@@ -9721,9 +10174,10 @@ ${// One section per page, every idea's card exactly once (on its own page).
     });
   });
 
-  // A node is a page: clicking it goes there. Every in-page link is a plain
-  // href="#id" for the same reason, so the hash handler above does the rest.
-  window.nodeClick = (id) => { location.hash = id; };
+  // I-117: a node is a ROW on this page. focusRow lives in the editing module
+  // (so the tests can reach it) and falls back to navigating when the row is
+  // not on this page. Every in-page link stays a plain href="#id".
+  window.nodeClick = (id) => { if (typeof window.focusRow === "function") window.focusRow(id); else location.hash = id; };
 
   /** Draw one source. mermaid stamps what it has processed, so replace the node. */
   async function draw(src) {
@@ -9792,9 +10246,9 @@ function listenFrom(server, from, tries = 20) {
 async function serve(projectDir, file, opts = {}) {
   const token = randomBytes(16).toString("hex");
   const send = (res, code, body) => {
-    const text = JSON.stringify(body);
+    const text2 = JSON.stringify(body);
     res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
-    res.end(text);
+    res.end(text2);
   };
   const server = createServer(async (req, res) => {
     try {
@@ -9804,10 +10258,10 @@ async function serve(projectDir, file, opts = {}) {
         return;
       }
       if (req.method === "GET" && path === "/") {
-        const text = readFileSync(file, "utf8");
-        const graph = (0, import_yaml.parseDocument)(text).toJSON();
+        const text2 = readFileSync2(file, "utf8");
+        const graph = (0, import_yaml.parseDocument)(text2).toJSON();
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-        res.end(render(graph, text, projectDir, token));
+        res.end(render(graph, text2, projectDir, token));
         return;
       }
       if (req.method === "POST" && path === "/changes") {
@@ -9816,7 +10270,7 @@ async function serve(projectDir, file, opts = {}) {
           send(res, 403, { ok: false, reason: "\u4EE4\u724C\u4E0D\u5BF9 \u2014\u2014 \u8FD9\u4E2A\u670D\u52A1\u53EA\u63A5\u53D7\u5B83\u81EA\u5DF1\u53D1\u51FA\u53BB\u7684\u90A3\u4E2A\u9875\u9762" });
           return;
         }
-        const source = readFileSync(file, "utf8");
+        const source = readFileSync2(file, "utf8");
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
         const result = applyChanges(source, body.envelope, today, projectDir);
         if (!result.ok) {
@@ -9888,6 +10342,7 @@ ideas: []
 `;
 var KEEP_RUNNING = -1;
 var SUBCOMMANDS = [
+  ["coord", "join|say|inbox|ack|status|recover [\u9009\u9879]"],
   ["paths", ""],
   ["init", ""],
   ["migrate", "[--pick claude|cursor|codex] [--dry-run]"],
@@ -9921,29 +10376,32 @@ function flag(args2, name) {
 }
 function redraw(file, projectDir) {
   const out = file.replace(/\.ya?ml$/, ".html");
-  const text = readFileSync(file, "utf8");
-  const graph = (0, import_yaml.parseDocument)(text).toJSON();
-  atomicWrite(out, render(graph, text, projectDir));
+  const text2 = readFileSync2(file, "utf8");
+  const graph = (0, import_yaml.parseDocument)(text2).toJSON();
+  atomicWrite(out, render(graph, text2, projectDir));
   return `wrote ${out} (${graph.ideas.length} ideas)`;
 }
 function main(args2) {
   const command = args2[0];
-  const projectDir = resolve(flag(args2, "project") ?? cwd());
-  const file = resolve(flag(args2, "file") ?? graphPath(projectDir));
+  const projectDir = resolve2(flag(args2, "project") ?? cwd());
+  const file = resolve2(flag(args2, "file") ?? graphPath(projectDir));
   const today = flag(args2, "date") ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const READS_ANY_GRAPH = ["check", "next", "show", "log", "status", "render", "allow", "paths", "scan"];
   if (!READS_ANY_GRAPH.includes(command) && !sameFile(file, graphPath(projectDir))) {
-    const rel = (p) => relative(projectDir, p).replaceAll("\\", "/") || p;
+    const rel = (p) => relative2(projectDir, p).replaceAll("\\", "/") || p;
     console.error(`\`${command}\` \u4F1A\u6539\u72B6\u6001\uFF0C\u53EA\u80FD\u4F5C\u7528\u5728\u9879\u76EE\u81EA\u5DF1\u7684\u56FE\u4E0A\uFF1A${rel(graphPath(projectDir))} \u2014\u2014 \u9879\u76EE\u7684\u56FE\u53EA\u6709\u4E00\u4EFD\uFF08D10\uFF09\u3002`);
     console.error(`--file ${rel(file)} \u662F\u53E6\u4E00\u4EFD\u56FE\uFF1B\u6279\u51C6\u53E3\u4EE4\u548C\u7EA2\u7EFF\u8BC1\u636E\u90FD\u8BB0\u5728\u9879\u76EE\u56FE\u540D\u4E0B\uFF0C\u5199\u5230\u522B\u5904\u4F1A\u9020\u51FA\u6C38\u8FDC\u7B54\u4E0D\u4E0A\u7684\u53E3\u4EE4\u3002`);
     console.error(`\u53BB\u6389 --file \u91CD\u8DD1\u3002\u53EA\u60F3\u770B\u90A3\u4EFD\u65E7\u56FE\uFF1A${READS_ANY_GRAPH.join(" / ")} \u52A0 --file \u7167\u5E38\u53EF\u7528\uFF1B\u8981\u628A\u5B83\u7684\u5185\u5BB9\u5E76\u8FDB\u6765\uFF1Amigrate\u3002`);
     return 2;
   }
+  if (command === "coord") {
+    return coordMain(paths(projectDir).runtime, args2.slice(1));
+  }
   if (command === "scan") {
     const all = listProjectFiles(projectDir);
     if (args2.includes("--reset") || !existsSync(worklistFile(projectDir))) {
       writeWorklist(projectDir, all);
-      console.log(`worklist: ${all.length} \u4E2A\u6587\u4EF6\u5F85\u8BFB \u2192 ${relative(projectDir, worklistFile(projectDir))}`);
+      console.log(`worklist: ${all.length} \u4E2A\u6587\u4EF6\u5F85\u8BFB \u2192 ${relative2(projectDir, worklistFile(projectDir))}`);
     } else if (!existsSync(doneFile(projectDir))) {
       const stillTodo = new Set(readChecklist(projectDir).map((f) => f.toLowerCase()));
       const already = all.filter((f) => !stillTodo.has(f.toLowerCase()));
@@ -9978,7 +10436,7 @@ function main(args2) {
       console.log(`already there: ${file}`);
       return 0;
     }
-    mkdirSync(dirname(file), { recursive: true });
+    mkdirSync2(dirname2(file), { recursive: true });
     atomicWrite(file, SEED.replace("PROJECT_NAME", projectDir.split(/[\\/]/).pop() ?? "project"));
     console.log(`created ${file}`);
     return 0;
@@ -9995,12 +10453,12 @@ function main(args2) {
       return 1;
     }
     if (result.written) console.log(`
-\u5199\u51FA ${relative(projectDir, result.written)}\uFF1B\u62A5\u544A\u5728 ideas/migrate-report.md`);
+\u5199\u51FA ${relative2(projectDir, result.written)}\uFF1B\u62A5\u544A\u5728 ideas/migrate-report.md`);
     return 0;
   }
   if (command === "paths") {
     for (const [name, value] of Object.entries(paths(projectDir))) {
-      console.log(`${name}	${relative(projectDir, value).replaceAll("\\", "/")}`);
+      console.log(`${name}	${relative2(projectDir, value).replaceAll("\\", "/")}`);
     }
     return 0;
   }
@@ -10175,7 +10633,7 @@ ${block}`);
         open: !args2.includes("--no-open")
       }).then((live) => {
         console.log(`\u60F3\u6CD5\u56FE\u5F00\u5728 ${live.url}`);
-        console.log(`\u5728\u7F51\u9875\u4E0A\u6539\u5B8C\u70B9\u63D0\u4EA4\uFF0C\u6539\u52A8\u76F4\u63A5\u5199\u56DE ${relative(projectDir, file)} \u2014\u2014 \u4E0D\u7528\u518D\u642C\u6587\u4EF6\u3002`);
+        console.log(`\u5728\u7F51\u9875\u4E0A\u6539\u5B8C\u70B9\u63D0\u4EA4\uFF0C\u6539\u52A8\u76F4\u63A5\u5199\u56DE ${relative2(projectDir, file)} \u2014\u2014 \u4E0D\u7528\u518D\u642C\u6587\u4EF6\u3002`);
         console.log(`\u6309 Ctrl-C \u7ED3\u675F\u3002`);
       }).catch((error) => {
         console.error(`\u8D77\u4E0D\u6765\uFF1A${error instanceof Error ? error.message : error}`);
@@ -10185,7 +10643,7 @@ ${block}`);
     }
     case "apply": {
       const given = args2[1] && !args2[1].startsWith("--") ? args2[1] : void 0;
-      const changeFile = resolve(given ?? join(IDEAS_DIR(projectDir), "changes.json"));
+      const changeFile = resolve2(given ?? join2(IDEAS_DIR(projectDir), "changes.json"));
       if (!existsSync(changeFile)) {
         console.error(`\u6CA1\u6709\u627E\u5230\u6539\u52A8\u6587\u4EF6\uFF1A${changeFile}
 \uFF08\u7F51\u9875\u63D0\u4EA4\u65F6\u5982\u679C\u6CA1\u6709\u672C\u5730\u670D\u52A1\uFF0C\u6587\u4EF6\u4F1A\u843D\u5728\u4E0B\u8F7D\u76EE\u5F55 \u2014\u2014 \u628A\u5B83\u79FB\u5230 ideas/ \u518D\u8DD1\u4E00\u6B21\uFF09`);
@@ -10193,12 +10651,12 @@ ${block}`);
       }
       let envelope;
       try {
-        envelope = JSON.parse(readFileSync(changeFile, "utf8"));
+        envelope = JSON.parse(readFileSync2(changeFile, "utf8"));
       } catch (error) {
         console.error(`\u6539\u52A8\u6587\u4EF6\u4E0D\u662F\u5408\u6CD5\u7684 JSON\uFF1A${error}`);
         return 1;
       }
-      const result = applyChanges(readFileSync(file, "utf8"), envelope, today, projectDir);
+      const result = applyChanges(readFileSync2(file, "utf8"), envelope, today, projectDir);
       if (!result.ok) {
         console.error(`\u62D2\u7EDD\u5199\u56DE\uFF1A${result.reason}
 
@@ -10208,7 +10666,7 @@ ${block}`);
       atomicWrite(file, result.text);
       for (const line of result.changed ?? []) console.log(`  ${line}`);
       console.log(`
-\u5199\u56DE ${result.changed?.length ?? 0} \u5904\u6539\u52A8 \u2192 ${relative(projectDir, file)}`);
+\u5199\u56DE ${result.changed?.length ?? 0} \u5904\u6539\u52A8 \u2192 ${relative2(projectDir, file)}`);
       const written = (0, import_yaml.parseDocument)(result.text).toJSON();
       for (const line of requestSignatures(projectDir, written, result.signRequests ?? [], today)) {
         console.log(`
@@ -10217,7 +10675,7 @@ ${line}`);
       const archived = changeFile.replace(/\.json$/, "") + `.applied-${today}.json`;
       try {
         renameSync(changeFile, archived);
-        console.log(`\u6539\u52A8\u6587\u4EF6\u5DF2\u5F52\u6863 \u2192 ${relative(projectDir, archived)}`);
+        console.log(`\u6539\u52A8\u6587\u4EF6\u5DF2\u5F52\u6863 \u2192 ${relative2(projectDir, archived)}`);
       } catch {
         console.log(`\uFF08\u6539\u52A8\u6587\u4EF6\u5F52\u6863\u5931\u8D25\uFF0C\u5B83\u8FD8\u5728 ${changeFile}\uFF09`);
       }
@@ -10243,26 +10701,26 @@ if (argv[1]?.endsWith("ideas.ts")) {
 
 // companion/guard.ts
 var import_yaml2 = __toESM(require_dist());
-import { readFileSync as readFileSync2, existsSync as existsSync2, appendFileSync as appendFileSync2, mkdirSync as mkdirSync2 } from "node:fs";
-import { join as join2, resolve as resolve2, dirname as dirname2 } from "node:path";
+import { readFileSync as readFileSync3, existsSync as existsSync2, appendFileSync as appendFileSync2, mkdirSync as mkdirSync3 } from "node:fs";
+import { join as join3, resolve as resolve3, dirname as dirname3 } from "node:path";
 import { platform as platform2 } from "node:process";
 var OK = { allow: true };
 var norm = (p) => p.replaceAll("\\", "/").replace(/\/+$/, "");
 var sameFile2 = (a, b) => platform2 === "win32" ? norm(a).toLowerCase() === norm(b).toLowerCase() : norm(a) === norm(b);
 function relTo(projectDir, filePath) {
-  const root = norm(resolve2(projectDir));
-  const full = norm(resolve2(projectDir, filePath));
+  const root = norm(resolve3(projectDir));
+  const full = norm(resolve3(projectDir, filePath));
   const hit = platform2 === "win32" ? full.toLowerCase().startsWith(root.toLowerCase() + "/") : full.startsWith(root + "/");
   return hit ? full.slice(root.length + 1) : full;
 }
 var ROOT_WALK_LIMIT = 64;
 function projectRoot(reported) {
-  const start = resolve2(reported);
+  const start = resolve3(reported);
   let dir = start;
   for (let depth = 0; depth < ROOT_WALK_LIMIT; depth++) {
     if (existsSync2(graphPath(dir))) return dir;
-    if (existsSync2(join2(dir, ".git"))) return dir;
-    const parent = dirname2(dir);
+    if (existsSync2(join3(dir, ".git"))) return dir;
+    const parent = dirname3(dir);
     if (parent === dir) break;
     dir = parent;
   }
@@ -10334,7 +10792,7 @@ function rulePreWrite(event, projectDir) {
   return OK;
 }
 function decideOnePath(event, graph, projectDir, target) {
-  if (sameFile2(resolve2(projectDir, target).replaceAll("\\", "/"), paths(projectDir).graph.replaceAll("\\", "/"))) {
+  if (sameFile2(resolve3(projectDir, target).replaceAll("\\", "/"), paths(projectDir).graph.replaceAll("\\", "/"))) {
     return ruleGraphEdit(event, projectDir);
   }
   const verdict = decideProductWrite(projectDir, graph, target);
@@ -10344,7 +10802,7 @@ var INITIAL_STATUS = "todo";
 function ruleGraphEdit(event, projectDir) {
   const file = graphPath(projectDir);
   if (!existsSync2(file)) return OK;
-  const current = readFileSync2(file, "utf8");
+  const current = readFileSync3(file, "utf8");
   const next = event.edit ? afterEdit(current, event.edit) : null;
   if (next === null) return ruleGraphPatch(event, projectDir, current);
   return compareGraphNodes(current, next);
@@ -10559,17 +11017,17 @@ function afterEdit(current, edit) {
   if (edit.old_string === void 0 || edit.new_string === void 0) return null;
   return edit.replace_all ? current.split(edit.old_string).join(edit.new_string) : current.replace(edit.old_string, edit.new_string);
 }
-function parsesAsGraph(text) {
+function parsesAsGraph(text2) {
   try {
-    (0, import_yaml2.parseDocument)(text).toJSON();
+    (0, import_yaml2.parseDocument)(text2).toJSON();
     return true;
   } catch {
     return false;
   }
 }
-function graphNodes(text) {
+function graphNodes(text2) {
   try {
-    const graph = (0, import_yaml2.parseDocument)(text).toJSON();
+    const graph = (0, import_yaml2.parseDocument)(text2).toJSON();
     return (graph?.ideas ?? []).map((idea) => ({
       id: idea?.id ?? null,
       status: idea?.status ?? INITIAL_STATUS,
@@ -10704,7 +11162,7 @@ function protectedTarget(projectDir, token) {
   const bare = token.replace(/^["']|["']$/g, "");
   if (bare === "") return null;
   const p = paths(projectDir);
-  const full = resolve2(projectDir, bare).replaceAll("\\", "/");
+  const full = resolve3(projectDir, bare).replaceAll("\\", "/");
   for (const [file, label] of [
     [p.approved, "\u6279\u51C6\u56DE\u6267"],
     [p.worklist, "\u626B\u63CF\u6E05\u5355"],
@@ -10768,14 +11226,16 @@ var ENGINE_PATHS = [
   // the same bundle, freshly built, in this checkout
   "companion/ideas.ts",
   "companion/cli.ts",
-  // The pre-unification engines this repository still ships, added on exactly
-  // the terms the installers below were: `claude-companion/ideas.ts` is the
-  // command this repository's own CLAUDE.md documents AND the engine this
-  // checkout actually runs until the migration lands, so refusing it as
-  // right-name-wrong-place told the human the documented command was a decoy
-  // (D26/D28/D34). They are ordinary project files at fixed paths, judged by
-  // identity like every other entry — a same-named file anywhere else is still
-  // not an engine.
+  // The pre-unification engine paths, added on exactly the terms the installers
+  // below were: while they existed, `claude-companion/ideas.ts` was the command
+  // this repository's own CLAUDE.md documented AND the engine this checkout ran,
+  // so refusing it as right-name-wrong-place told the human the documented
+  // command was a decoy (D26/D28/D34). They are ordinary project files at fixed
+  // paths, judged by identity like every other entry — a same-named file
+  // anywhere else is still not an engine. The migration has since landed: both
+  // directories are gone from this repository, CLAUDE.md documents neither
+  // command, and this checkout runs `.companion/companion.mjs` — so the two
+  // entries below match no file here and stay only for an older checkout.
   //
   // Codex's engine is deliberately NOT here: it is `codex-companion/scripts/
   // companion.py`, a Python script COMPANION_CLI launches no runtime for, with
@@ -10915,7 +11375,7 @@ function record(event, projectDir) {
       }
       try {
         const file = paths(projectDir).log;
-        mkdirSync2(dirname2(file), { recursive: true });
+        mkdirSync3(dirname3(file), { recursive: true });
         const stamp = (/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 16);
         appendFileSync2(file, `- ${stamp}  ${event.tool ?? "write"} ${rel}
 `);
@@ -11043,10 +11503,10 @@ var PATCH_HEADER = /^([ \t]*)\*{3} (.+?)\s*$/gm;
 var PATCH_OP = /^(Add|Update|Delete) File: (.+)$/;
 var PATCH_MOVE = /^Move to: (.+)$/;
 var PATCH_FRAME = /^(Begin Patch|End Patch|End of Patch|End of File)$/;
-function patchOperations(text) {
+function patchOperations(text2) {
   const operations = [];
   let unknownHeader = false;
-  for (const m of text.matchAll(PATCH_HEADER)) {
+  for (const m of text2.matchAll(PATCH_HEADER)) {
     const header = m[2];
     if (m[1] !== "") {
       unknownHeader = true;
@@ -11172,12 +11632,12 @@ function normalizeCodex(raw) {
   if (raw.hook_event_name === "PreToolUse" || raw.hook_event_name === "PostToolUse") {
     const kind = raw.hook_event_name === "PreToolUse" ? "pre-write" : "post-write";
     if (tool === "apply_patch") {
-      const text = String(input["command"] ?? input["patch"] ?? "");
-      const { operations, unknownHeader } = patchOperations(text);
+      const text2 = String(input["command"] ?? input["patch"] ?? "");
+      const { operations, unknownHeader } = patchOperations(text2);
       if (operations.length === 0 || unknownHeader) {
         return { event: kind, tool, paths: [], unknownTarget: kind === "pre-write", cwd: raw.cwd };
       }
-      return { event: kind, tool, operations, paths: [], patchText: text, cwd: raw.cwd };
+      return { event: kind, tool, operations, paths: [], patchText: text2, cwd: raw.cwd };
     }
     if (isShellTool(tool)) {
       return kind === "pre-write" ? { event: "shell", tool, command: extractCommand(input), cwd: raw.cwd } : { event: "other", tool, cwd: raw.cwd };
@@ -11279,7 +11739,7 @@ function runGuard(args2) {
     const event = normalize(raw);
     if (guardOff) {
       try {
-        mkdirSync2(dirname2(paths(projectDir).log), { recursive: true });
+        mkdirSync3(dirname3(paths(projectDir).log), { recursive: true });
         appendFileSync2(
           paths(projectDir).log,
           `- ${(/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 16)}  guard.disabled  AIDEV_GUARD=off \u671F\u95F4\u53D1\u751F ${event.event}

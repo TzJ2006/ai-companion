@@ -199,12 +199,13 @@ const TABLE: Row[] = [
       verdict: { allow: true },
       claude: { hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "src/a.ts" }, cwd: dir },
       // 归一化器认得 Cursor 的 beforeReadFile 和 Codex 的 read_file（见下面那条
-      // 单独的用例），但装出去的接线里没人订阅：cursorHooks() 根本没有读文件的
-      // 钩子，codexHooks() 的 PostToolUse matcher 是
-      // ^(Bash|apply_patch|Edit|Write|mcp__.*)$，不含 Read。所以 R7 的扫描清单
-      // 「只有真实的读才划得掉」这条机器保证，今天仍然只有 Claude 一家有（D12/D22）。
+      // 单独的用例）。Codex 的接线已经订阅了读：codexHooks() 的 PostToolUse matcher
+      // 是从 READ_TOOLS 那张表拼出来的（matcher 长什么样去读 manifests.ts，别在这里
+      // 抄字面量）。还没订阅的只剩 Cursor —— cursorHooks() 根本没有读文件的钩子。
+      // 所以 R7 的扫描清单「只有真实的读才划得掉」这条机器保证，今天 Claude 和
+      // Codex 两家有，只差 Cursor 一家（D12/D22）。
       cursor: na("cursorHooks() 没订阅任何读文件事件，Cursor 的读永远到不了守卫（D12/D22）"),
-      codex: na("codexHooks() 的 PostToolUse matcher 不含 Read，Codex 的读永远到不了守卫（D12/D22）"),
+      codex: { hook_event_name: "PostToolUse", tool_name: "read_file", tool_input: { path: "src/a.ts" }, cwd: dir },
     }),
   },
 ];
@@ -282,7 +283,6 @@ describe("companion three-host contract table (H6)", () => {
     }
     expect(gaps).toEqual([
       "a read · cursor — cursorHooks() 没订阅任何读文件事件，Cursor 的读永远到不了守卫（D12/D22）",
-      "a read · codex — codexHooks() 的 PostToolUse matcher 不含 Read，Codex 的读永远到不了守卫（D12/D22）",
     ]);
   });
 
