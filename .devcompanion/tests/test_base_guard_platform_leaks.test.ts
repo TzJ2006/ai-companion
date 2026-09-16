@@ -128,7 +128,7 @@ ideas:
     }
   });
 
-  it("the briefing is the engine's own status table, and every encoder delivers it", () => {
+  it("the briefing names the current work (I-152: doing ideas, not the whole table), and every encoder delivers it", () => {
     const message = sessionBriefing(dir);
     expect(message).toMatch(/I-001/);
     expect(message).toMatch(/doing/);

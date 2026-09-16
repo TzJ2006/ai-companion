@@ -92,7 +92,7 @@ ideas:
   });
 
   it("naming the project graph explicitly still writes", () => {
-    const { code } = run(["set", "I-001", "blocked", "--file", join(dir, "ideas", "graph.yaml"),
+    const { code } = run(["set", "I-001", "blocked", "--because", "等一个还没到的依赖", "--file", join(dir, "ideas", "graph.yaml"),
       "--project", dir, "--date", "2026-09-02"]);
     expect(code).toBe(0);
     expect(readFileSync(join(dir, "ideas", "graph.yaml"), "utf8")).toContain("status: blocked");

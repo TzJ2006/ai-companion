@@ -1,6 +1,6 @@
 # Working in AI Companion
 
-Read README.md. Companion installations were retired on 2026-09-05 at the owner's request and then installed here again the same day: `.companion/companion.mjs` is wired into `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json`, the five skills sit under `.claude/skills/` and `.agents/skills/`, and the mandatory approval workflow (D7/D17) is in force in this session — `set <id> doing` and product writes both refuse without a current plan approval. Do not load archived instructions as active policy, and do not install or uninstall hooks/skills automatically.
+Read README.md. Companion installations were retired on 2026-09-05 at the owner's request and then installed here again the same day: `.companion/companion.mjs` is wired into `.claude/settings.json`, `.cursor/hooks.json` and `.codex/hooks.json`, the six skills sit under `.claude/skills/` and `.agents/skills/`, and the guard is in force in this session. Since 2026-09-16 (I-146) it checks claims only: a product write must be named in a `doing` idea's `code.file` or `verify.test_files` (D16), `done` needs a current GREEN (D20), and manual checks need a human sign-off (D27). There is no plan-approval gate and no RED-before-implementation gate — see FORMAT.md D7/D8/D17 修订. Do not load archived instructions as active policy, and do not install or uninstall hooks/skills automatically.
 
 The current source is in `companion/`; tests are in `.devcompanion/tests/`. Use `npm test` for source changes and `node companion/build.mjs` when a bundle rebuild is needed. Preserve existing uncommitted changes.
 
@@ -8,4 +8,4 @@ Retired implementations, installation backups, and old ledgers used to sit under
 
 The guard that gates this session is the installed bundle `.companion/companion.mjs`, not the source, so an edit to `companion/guard.ts` changes no behaviour on its own — but this checkout IS an installed copy: `node companion/build.mjs` writes `companion/dist/companion.mjs` and nothing else, and an install (`npx tsx companion/install.ts --update`) is what copies that bundle over `.companion/companion.mjs` and changes this session.
 
-The idea tree (`parent`, at most seven per level, one page per idea) and the per-idea approval (one `plan` gate bound to that idea's own content, several ideas per challenge) landed on 2026-09-05 — see `companion/FORMAT.md`, "The tree" and D7.
+The idea tree (`parent`, at most seven per level, one page per idea) landed on 2026-09-05 — see `companion/FORMAT.md`, "The tree". The per-idea `plan` approval that landed the same day was retired on 2026-09-16 (D7 修订, I-146).

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test": "vitest run --dir .devcompanion/tests"
+    "test": "vitest run --dir .devcompanion/tests",
+    "graph": "node .companion/companion.mjs serve"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

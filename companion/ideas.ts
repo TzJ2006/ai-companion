@@ -16,13 +16,14 @@
 
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, readdirSync, unlinkSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
+import { tmpdir } from "node:os";
 import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { argv, exit, cwd, pid, platform, env } from "node:process";
 import { parseDocument, stringify, type Document } from "yaml";
 import { ENGINE_RELATIVE } from "./manifests.js";
-import { coordMain } from "./coordination.js";
+import { coordMain, withProjectLock, coordinationEnabled, ownerOf } from "./coordination.js";
 
 /**
  * How a person actually invokes this engine in a repository that installed it
@@ -79,6 +80,7 @@ export interface Idea {
   id: string;
   name: string;
   status?: Status;
+  blocked_because?: string;       // why it is blocked — required while status is blocked (I-133)
   needs?: string[];
   parent?: string;                // the idea this one sits under; absent = top level (FORMAT.md, "The tree")
   what?: string; why?: string; expected?: string; how?: string; why_this_way?: string;
@@ -158,6 +160,116 @@ function atomicWrite(file: string, text: string): void {
 /** Write back through the parsed Document so comments and formatting survive. */
 function save(file: string, doc: Document): void {
   atomicWrite(file, String(doc));
+}
+
+// ─── the graph transaction (I-116) ──────────────────────────────────────────
+// atomicWrite keeps a crash from leaving half a file; it does nothing about two
+// processes that both read the graph, both change it and both write it back —
+// the second write silently drops the first one's change, and a slow render
+// can overwrite the HTML with a picture of an older graph. One boundary for
+// every write: take the project's short lock, read the CURRENT file inside it,
+// change, write, render, release. The lock covers the commit only (milliseconds),
+// never a task. Nesting is refused by the lock itself, so callers hand their
+// work in and do not take the lock again inside.
+
+export interface Mutation<T> {
+  result: T;
+  /** What redraw printed, or null when the HTML could not be written. */
+  rendered: string | null;
+  /** The YAML is saved; only the page needs rebuilding (`render`). */
+  renderError?: string;
+}
+
+/** Read-modify-write on the parsed Document, under the lock. `work` mutates
+ *  `doc` in place (the same way setStatus / addIdea already do). */
+export function mutateGraph<T>(
+  file: string, projectDir: string, work: (doc: Document, graph: Graph) => T,
+): Mutation<T> {
+  return withProjectLock(paths(projectDir).runtime, () => {
+    const { doc, graph } = load(file);
+    const result = work(doc, graph);
+    save(file, doc);
+    return { result, ...renderUnderLock(file, projectDir) };
+  }, { timeoutMs: 10_000 });
+}
+
+/** Same boundary for the text-based path (`apply` works on the source text so
+ *  it can fingerprint what the page edited). `work` returns the new text, or
+ *  null to refuse — nothing is written then. */
+export function mutateGraphText<T>(
+  file: string, projectDir: string, work: (source: string) => T & { text?: string },
+): Mutation<T> {
+  return withProjectLock(paths(projectDir).runtime, () => {
+    const result = work(readFileSync(file, "utf8"));
+    if (typeof result.text !== "string") return { result, rendered: null };
+    atomicWrite(file, result.text);
+    return { result, ...renderUnderLock(file, projectDir) };
+  }, { timeoutMs: 10_000 });
+}
+
+/** Render only, under the same lock — so an independent `render` can never
+ *  land a stale picture on top of a graph somebody just committed. */
+export function renderLocked(file: string, projectDir: string): string {
+  return withProjectLock(paths(projectDir).runtime, () => redraw(file, projectDir), { timeoutMs: 10_000 });
+}
+
+/** The YAML is the truth and is already on disk when this runs; a failed
+ *  render is reported as exactly that, never as a failed commit. */
+function renderUnderLock(file: string, projectDir: string): { rendered: string | null; renderError?: string } {
+  try { return { rendered: redraw(file, projectDir) }; }
+  catch (error) {
+    return { rendered: null, renderError: `图已保存，网页没重建成：${error instanceof Error ? error.message : error} —— 跑 ${ENGINE_CMD} render 重建` };
+  }
+}
+
+/** Fields `edit` may change: the eight prose answers and the reference fields.
+ *  `code` and `verify` may be replaced whole; `status` walks through `set`, and
+ *  `signed_off` through a human's one-time reply — never through here (D24/D27). */
+const EDIT_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent", "needs", "code", "verify", "blocked_because"] as const;
+
+/**
+ * One field of one idea, committed as a local change (I-116): `expectedOld`
+ * (when given) must equal the field's current value or the edit is refused —
+ * that is how two sessions editing the same field from the same stale view
+ * resolve to exactly one winner. Anything that would add a `check` error
+ * (unknown parent, a needs cycle, a stray path) is refused before writing.
+ */
+export function editIdeaField(
+  doc: Document, graph: Graph, projectDir: string, id: string, field: string,
+  value: unknown, expectedOld: unknown | undefined, entry: { by?: string; date: string },
+): { old: unknown } {
+  const index = graph.ideas.findIndex((i) => i.id === id);
+  if (index < 0) throw new Error(`no idea with id ${id}`);
+  if (!(EDIT_FIELDS as readonly string[]).includes(field)) {
+    throw new Error(`edit 只认这几个字段：${EDIT_FIELDS.join("、")} —— status 走 set，signed_off 只能由人回口令（D24/D27）`);
+  }
+  const idea = graph.ideas[index];
+  const old = idea[field as keyof Idea];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  if (expectedOld !== undefined && !same(old, expectedOld)) {
+    throw new Error(`${id}.${field} 的当前值和你看到的旧值不一样（别的会话改过了）—— 先重新读，再决定还要不要改。当前：${JSON.stringify(old ?? null).slice(0, 200)}`);
+  }
+  if (field === "verify" && value && typeof value === "object" && "signed_off" in (value as object)) {
+    const current = idea.verify?.signed_off ?? null;
+    if (!same((value as Verify).signed_off ?? null, current)) throw new Error(`verify.signed_off 只能由人回一次性口令写入（D27），edit 不写它`);
+  }
+  if (typeof old === "string" && typeof value !== "string" && value !== null) {
+    throw new Error(`${field} 是一段文字，给的却是 ${typeof value}`);
+  }
+  const before = check(graph, projectDir).errors;
+  const patched = structuredClone(graph);
+  (patched.ideas[index] as unknown as Record<string, unknown>)[field] = value ?? undefined;
+  const after = check(patched, projectDir).errors.filter((e) => !before.includes(e));
+  if (after.length) throw new Error(`这一改会让图出错，不写：${after.join("；")}`);
+
+  if (value === null || value === undefined) doc.deleteIn(["ideas", index, field]);
+  else doc.setIn(["ideas", index, field], value);
+  const log = (idea.log ?? []).concat({
+    date: entry.date, ...(entry.by ? { by: entry.by } : {}),
+    note: `edit ${field}：${JSON.stringify(old ?? null).slice(0, 60)} → ${JSON.stringify(value ?? null).slice(0, 60)}`,
+  });
+  doc.setIn(["ideas", index, "log"], log);
+  return { old };
 }
 
 // ─── graph queries ──────────────────────────────────────────────────────────
@@ -649,13 +761,19 @@ export function check(g: Graph, projectDir: string, file?: string): CheckResult 
       }
     }
 
+    // I-133: a blocked idea with no stated reason is "受阻" and nothing else —
+    // why it stopped and what would restart it live nowhere a reader can find.
+    if (status === "blocked" && !String(idea.blocked_because ?? "").trim()) {
+      errors.push(`${at}: blocked but no \`blocked_because\` — 写清为什么停下、等什么才能继续（set ${at} blocked --because "…"，或直接在图里补这个字段）（I-133）`);
+    }
+
     // D8: an idea being built on a whole-project command with no `test_files`
     // has nothing that can go red on its own, so its implementation gate only
     // opens on a human red-waiver. A warning, not an error — the shape is legal
     // — said now, while adding a test file is still cheap, rather than at the
     // first blocked write.
     if (status === "doing" && idea.verify?.command && !(idea.verify.test_files ?? []).length) {
-      warnings.push(`${at}: 在做，但 \`verify\` 只有一条命令、没有 \`test_files\` —— 没有能单独失败的测试就撑不起 RED，实现前要么补上测试文件，要么请人批一次 red-waiver（D8）`);
+      warnings.push(`${at}: 在做，但 \`verify\` 只有一条命令、没有 \`test_files\` —— 实现每改一笔 GREEN 都要重跑，没有点名的测试文件就只能整套重跑，趁现在补上（D8/D20）`);
     }
 
     for (const ref of idea.code ?? []) {
@@ -750,12 +868,15 @@ export function check(g: Graph, projectDir: string, file?: string): CheckResult 
 // guard's write policy (I-093) reuses, so "the engine says go" and "the guard
 // says write" can never disagree.
 
-/** The plan questions that must be answered before work starts (D17). */
-const PLAN_FIELDS = ["what", "why", "expected", "how", "why_this_way", "future"] as const;
+/** The plan questions that must be answered before work starts (D17). 2026-09-16
+ *  (I-153): a short record — what, why, where, how confirmed — is enough to start;
+ *  the other four are still asked for, by `check` as warnings, not by this gate.
+ *  A one-line fix should not cost a design document. */
+const SHORT_RECORD_FIELDS = ["what", "why"] as const;
 
 /** Null when ready to build; otherwise exactly what is missing. */
 export function isBuildReady(idea: Idea): string | null {
-  for (const field of PLAN_FIELDS) {
+  for (const field of SHORT_RECORD_FIELDS) {
     if (!String(idea[field] ?? "").trim()) return `missing ${field}`;
   }
   if (!(idea.code ?? []).some((c) => c.file)) return "missing code.file (where the implementation will live)";
@@ -820,7 +941,8 @@ const sameFile = (a: string, b: string) => {
   return platform === "win32" ? norm(a).toLowerCase() === norm(b).toLowerCase() : norm(a) === norm(b);
 };
 
-/** Null, or the OTHER doing idea already holding one of this idea's files (D18). */
+/** Null, or the OTHER doing idea referencing one of this idea's files (D18). Since
+ *  I-149 this is a report for the log, not a gate: referencing is not holding. */
 export function fileClash(idea: Idea, graph: Graph): string | null {
   const mine = claimedFiles(idea);
   for (const other of graph.ideas) {
@@ -878,16 +1000,28 @@ function writeNextId(doc: Document, value: number): void {
  * (D28). Never "highest + 1" from the current graph: a deleted highest number
  * would be handed out again, and two parallel editors would mint the same id.
  */
-export function addIdea(doc: Document, graph: Graph, name: string, needs: string[], date: string): string {
+/** I-153: the fields `new` can fill in one call, so a small change is one
+ *  command from ready — the short record (what/why/code/verify) plus whatever
+ *  else the caller already knows. */
+export interface NewIdeaFields {
+  what?: string; why?: string; expected?: string; how?: string; parent?: string;
+  code?: string[]; verify?: string; tests?: string[];
+}
+export function addIdea(doc: Document, graph: Graph, name: string, needs: string[], date: string, fields: NewIdeaFields = {}): string {
   for (const n of needs) {
     if (!graph.ideas.some((i) => i.id === n)) throw new Error(`未知前置 ${n}`);
   }
   const highest = graph.ideas.reduce((m, i) => Math.max(m, idNumber(i.id) || 0), 0);
   const n = Number(graph.next_id) || highest + 1;   // the counter's initial value is a rule
   const id = formatId(n);
+  const prose = (["what", "why", "expected", "how", "parent"] as const)
+    .filter((f) => fields[f]).map((f) => [f, fields[f]] as const);
   doc.setIn(["ideas", graph.ideas.length], {
     id, name, status: "todo",
     ...(needs.length ? { needs } : {}),
+    ...Object.fromEntries(prose),
+    ...(fields.code?.length ? { code: fields.code.map((file) => ({ file })) } : {}),
+    ...(fields.verify ? { verify: { command: fields.verify, test_files: fields.tests ?? [], pass: "exit 0" } } : {}),
     log: [{ date, by: "new", note: "创建" }],
   });
   writeNextId(doc, n + 1);
@@ -1088,14 +1222,16 @@ export function applyApproval(
   // D27: a manual check is signed only through this path — the CLI writes the
   // signature digest back into the graph, traceable to the one-time reply.
   if (decision === "approved" && pending.gate === "manual-check") {
-    const { doc, graph: g } = load(graphPath(projectDir));
-    for (const id of ids) {
-      const index = g.ideas.findIndex((i) => i.id === id);
-      if (index < 0) continue;
-      doc.setIn(["ideas", index, "verify", "signed_off"],
-        `${pending.by || "人"} ${meta.date} —— 经一次性口令 ${challenge} 批准；回执 ideas/approvals/receipts/${challenge}.json`);
-    }
-    save(graphPath(projectDir), doc);
+    // I-116: the signature lands on the graph as it is at this moment, under
+    // the same lock every other write takes.
+    mutateGraph(graphPath(projectDir), projectDir, (doc, g) => {
+      for (const id of ids) {
+        const index = g.ideas.findIndex((i) => i.id === id);
+        if (index < 0) continue;
+        doc.setIn(["ideas", index, "verify", "signed_off"],
+          `${pending.by || "人"} ${meta.date} —— 经一次性口令 ${challenge} 批准；回执 ideas/approvals/receipts/${challenge}.json`);
+      }
+    });
   }
   return { ok: true, decision, gate: pending.gate };
 }
@@ -1316,6 +1452,23 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
     : full.startsWith(root + "/");
   const rel = inRoot ? full.slice(root.length + 1) : full;
   const p = paths(projectDir);
+
+  // I-147: a path that leaves the project is not one of this project's product
+  // files, so D16 has nothing to say about it. The OS temp directory is the one
+  // place that is scratch by definition — allowed. Anywhere else outside the
+  // root stays refused, but with the true reason: the graph does not govern it.
+  if (!inRoot) {
+    const tmp = resolve(tmpdir()).replaceAll("\\", "/");
+    const underTmp = platform === "win32"
+      ? full.toLowerCase().startsWith(tmp.toLowerCase() + "/")
+      : full.startsWith(tmp + "/");
+    if (underTmp) return { allow: true, reason: "临时目录里的文件不是这个项目的产品文件，这张图不管它（I-147）" };
+    return {
+      allow: false,
+      reason: `${full} 在项目之外 —— 这张图只管 ${root} 下的文件，项目外的文件它不认领也不放行（D16/I-147）。`
+        + `草稿放到操作系统的临时目录里；真要写别的项目，去那个项目里做。`,
+    };
+  }
 
   for (const [file, label] of [
     [p.approved, "批准记录"], [p.worklist, "扫描清单"], [p.done, "已读记录"], [p.html, "生成的网页"],
@@ -1570,6 +1723,11 @@ function convertCodex(nodesDir: string, projectName: string, date: string): { te
           };
     return {
       id, name: n.name ?? n.id, status: folded,
+      // I-133: a blocked idea says why. The Codex record carried no reason
+      // field, so the fold itself is the reason — and it says to fill in more.
+      ...(folded === "blocked" ? { blocked_because: n.status === "superseded"
+        ? "迁移自 Codex：原状态 superseded（废弃），保号置 blocked；编号保留，永不复用"
+        : "迁移自 Codex：原状态 blocked，原因没随迁移带过来 —— 请补一句为什么停下、等什么才能继续" } : {}),
       ...(needs.length ? { needs } : { needs: [] }),
       what: n.what ?? "", why: n.why ?? "", expected: n.expected_result ?? "",
       how: n.implementation?.how ?? "", why_this_way: n.implementation?.why_this_way ?? "",
@@ -1716,7 +1874,8 @@ const TRANSITIONS: Record<Status, Status[]> = {
 
 export function setStatus(
   doc: Document, graph: Graph, id: string, status: Status,
-  entry: { by?: string; note?: string; date: string },
+  // `because` is the blocked reason (I-133); when absent, `note` stands in for it.
+  entry: { by?: string; note?: string; because?: string; date: string },
   // With a projectDir the done-gate also demands current GREEN evidence (D20).
   // The doing-gate reads the graph only (D17, revised 2026-09-16 / I-146).
   projectDir?: string,
@@ -1735,10 +1894,11 @@ export function setStatus(
     if (notReady) throw new Error(`${id}: cannot be doing — ${notReady}. 先把想法想清楚（/ccthink）`);
     const unmet = needsUnmet(idea, graph);
     if (unmet) throw new Error(`${id}: cannot be doing — ${unmet}`);
-    const clash = fileClash(idea, graph);
-    if (clash) throw new Error(`${id}: cannot be doing — ${clash}`);
-    // 2026-09-16（I-146）：进 doing 不再要人工批准。八问填齐、前置完成、路径不冲突，
-    // 三条都是图里的事实，够了；人想看计划，打开渲染出的网页看，不对就 set 回 todo。
+    // 2026-09-16（I-146）：进 doing 不再要人工批准。八问填齐、前置完成，
+    // 两条都是图里的事实，够了；人想看计划，打开渲染出的网页看，不对就 set 回 todo。
+    // 2026-09-16（I-149）：引用同一文件不再挡开工。`code.file` 答的是「实现在哪」，
+    // 不是「谁在写」——只做验收的想法不占写入权。真正的写互斥在写那一刻按会话核对
+    // （协作模式，guard ruleOwnership）；单会话没有可争的。重叠只记进 log，给人看。
   }
   if (status === "done") {
     if (!idea.code?.length) throw new Error(`${id}: cannot be done without \`code\` — say where it lives`);
@@ -1757,12 +1917,24 @@ export function setStatus(
     const openKids = childrenUnfinished(idea, graph);
     if (openKids) throw new Error(`${id}: cannot be done — ${openKids}`);
   }
+  // I-133: "blocked" is a status that has to say why. Enforced at the one
+  // transition point every entrance shares (CLI set, the web envelope, the
+  // local service), not against the file at rest — a reason is asked for the
+  // moment somebody stops, when they still know it.
+  const because = (entry.because ?? entry.note ?? "").trim();
+  if (status === "blocked" && !because) {
+    throw new Error(`${id}: cannot be blocked without a reason — 说清为什么停下、等什么才能继续：set ${id} blocked --because "…"（I-133）`);
+  }
 
   doc.setIn(["ideas", index, "status"], status);
+  if (status === "blocked") doc.setIn(["ideas", index, "blocked_because"], because);
+  else if (idea.blocked_because !== undefined) doc.deleteIn(["ideas", index, "blocked_because"]);
+  const clash = status === "doing" ? fileClash(idea, graph) : null;
   const log = (idea.log ?? []).concat({
     date: entry.date,
     ...(entry.by ? { by: entry.by } : {}),
-    note: entry.note || `status → ${status}`,
+    note: (entry.note || `status → ${status}`)
+      + (clash ? `；${clash}（引用不等于占用，I-149：同目录多会话并行请 coord enable，写时按会话核对）` : ""),
   });
   doc.setIn(["ideas", index, "log"], log);
 }
@@ -1805,7 +1977,7 @@ const NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way
  *  and `log` are lifecycle, and lifecycle only moves through the CLI. Without
  *  this list a `set` on `status` is a `done` with no gate at all: it writes a
  *  folded scalar that reads back as a perfectly valid status. */
-const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
+const SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent", "blocked_because"];
 
 /** `parent` is an id, not prose: it is compared by exact value against other
  *  ideas' ids, so it is stored as one plain line — a folded block would read
@@ -1967,7 +2139,8 @@ export function applyChanges(
     if (idea.status === "done" && BEHAVIOUR_FIELDS.includes(op.field!)) {
       setStatus(doc, doc.toJSON() as Graph, op.id!, "blocked", {
         by: "apply", date: today,
-        note: `已完成的想法被改了 ${op.field}，自动退回 blocked —— 想清楚再走一遍 doing，测试先行、人批准三条规则对它重新生效`,
+        note: `已完成的想法被改了 ${op.field}，自动退回 blocked —— 想清楚再走一遍 doing，完成前要重新拿到 GREEN`,
+        because: `已完成之后 ${op.field} 被改了：行为变了，原来的验证不再作数，想清楚再走一遍 doing`,
       }, projectDir);
       changed.push(`${op.id} 因行为字段被改，退回 blocked`);
     }
@@ -2553,7 +2726,8 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   <h3><span class="ro">${esc(i.name)}</span><input class="rw" data-idea="${attr(i.id)}" data-field="name" value="${attr(i.name)}"> <span class="badge ro">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${statusPicker(i)}${ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<button class="edit-toggle" data-edit="${attr(i.id)}">编辑</button><button class="edit-toggle danger" data-remove="${attr(i.id)}" title="标记待删，再点一次撤销">删除</button><span class="iid">${esc(i.id)}</span></h3>
   <dl>${field(i, "parent", "父想法")}${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
-    <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}
+    <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}${
+    i.status === "blocked" || i.blocked_because ? field(i, "blocked_because", "受阻原因") : ""}
   </dl>
   <p class="edges needs" data-needs-of="${attr(i.id)}"><b>前置想法</b> <span class="chips">${
     (i.needs ?? []).filter((n) => map.has(n)).map((n) => needChip(n, i.id)).join("") || NONE
@@ -2581,15 +2755,31 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
       v.signed_off ? `<br><span class="signoff">人工签字：${esc(v.signed_off)}</span>` : ""}`;
     return `${esc(v.manual)}<br><span class="signoff">人工签字：${v.signed_off ? esc(v.signed_off) : "未签"}</span>`;
   };
+  // I-132: one more level without changing page — the row's own children, name
+  // and status each, every one a link to that idea's page. Whole section absent
+  // when there are none. No data-row inside (the diagram's focus-a-row selector
+  // reads `.children details[data-row]` and a nested one would make the same id
+  // appear twice), no .bname (the rename-sync selector is document-wide), no
+  // ids, no data-idea — the same invisibility the whole digest keeps.
+  const briefKids = (i: Idea) => {
+    const kids = kidsOf(i.id);
+    if (kids.length === 0) return "";
+    return `<div class="brief-kids"><b>它自己的子想法</b> <span class="legend">${esc(countsOf(kids))}</span>${
+      kids.map((k) => `<div class="brief-kid ${cls(k)}"><a class="xlink" href="#${esc(k.id)}" data-goto="${esc(k.id)}">${
+        esc(k.name)}</a><span class="badge">${esc(STATUS_ZH[k.status ?? "todo"])}</span></div>`).join("")}</div>`;
+  };
   const briefDetail = (i: Idea) => `<div class="brief-detail"><dl>
     <dt>父想法</dt><dd>${i.parent && map.has(i.parent) ? links([i.parent]) : NONE}</dd>${PROSE.slice(0, 5).map((q) =>
     `<dt>${q.label}</dt><dd>${esc(i[q.key as keyof Idea]) || NONE}</dd>`).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
     <dt>${askedAs(7)}</dt><dd>${verifyPlain(i)}</dd>
-    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>
+    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>${
+    i.status === "blocked" || i.blocked_because ? `
+    <dt>受阻原因</dt><dd class="blocked-because">${esc(i.blocked_because) || NONE}</dd>` : ""}
   </dl>
   <p class="edges"><b>前置想法</b> ${links((i.needs ?? []).filter((n) => map.has(n)))}</p>
   <p class="edges"><b>它是这些想法的前置</b> ${links(dependents(g, i.id))}</p>
+  ${briefKids(i)}
   ${i.log?.length ? `<div class="brief-log"><b>修改记录</b>${i.log.map((l) =>
     `<div>${esc(l.date)}${l.by ? " · " + esc(l.by) : ""} — ${esc(l.note)}</div>`).join("")}</div>` : ""}
   </div>`;
@@ -2598,6 +2788,44 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
     ends.has(i.id) ? '<span class="badge end">终点</span>' : ""}<span class="blurb">${
     esc(String(i.what ?? "").split("\n")[0].trim())}</span><a class="enter" href="#${esc(i.id)}" data-brief="${attr(i.id)}">进入 →</a></summary>
 ${briefDetail(i)}</details>`;
+
+  // I-134: the page's change timeline — every log entry of this idea AND its
+  // descendants (the home page: the whole graph), newest first, grouped by day,
+  // each line a link back to the idea it belongs to. Everything is rendered;
+  // beyond the first RECENT entries the rest fold into a closed <details>
+  // whose summary states the exact hidden count — a closed details still
+  // opens for find-in-page and anchor navigation, so nothing is lost and no
+  // script is needed. Read-only: log is a lifecycle field the write-back does
+  // not accept, so no ids and no data-* live in here.
+  const RECENT = 20;
+  const timeline = (owner: Idea | null, scope: Idea[]) => {
+    const wall = (owner ? [owner] : []).concat(scope);
+    const entries: { date: string; by: string; note: string; id: string; name: string }[] = [];
+    for (const i of wall) for (const l of i.log ?? []) {
+      entries.push({ date: String(l.date ?? ""), by: l.by ?? "", note: String(l.note ?? ""), id: i.id, name: i.name });
+    }
+    if (entries.length === 0) return "";
+    // Newest day first; within a day the graph's own order (later entries of
+    // one idea were appended later), reversed so the latest is on top.
+    const byDay = new Map<string, typeof entries>();
+    for (const e of entries.slice().reverse()) (byDay.get(e.date) ?? byDay.set(e.date, []).get(e.date)!).push(e);
+    const days = [...byDay.keys()].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+    const row = (e: typeof entries[number]) => `<div class="tl-row"><a class="xlink" href="#${esc(e.id)}" data-goto="${esc(e.id)}">${
+      esc(e.name)}</a><span class="tl-note">${e.by ? esc(e.by) + " — " : ""}${esc(e.note)}</span></div>`;
+    const day = (d: string, rows: typeof entries) => `<div class="tl-day"><b>${esc(d || "（没写日期）")}</b>${rows.map(row).join("")}</div>`;
+    // Split by entry count, on a day boundary, so a day is never cut in half.
+    const recent: string[] = []; const older: string[] = []; let shown = 0;
+    for (const d of days) {
+      const rows = byDay.get(d)!;
+      if (shown < RECENT) { recent.push(day(d, rows)); shown += rows.length; } else older.push(day(d, rows));
+    }
+    const hidden = entries.length - shown;
+    return `<details class="worklist timeline"><summary>改动时间线 (${entries.length}) <span class="legend">${
+      owner ? "这个想法和它的子孙" : "整个项目"} · 从新到旧</span></summary>
+  ${recent.join("\n  ")}${older.length ? `
+  <details class="tl-more"><summary>更早的 ${hidden} 条</summary>${older.join("")}</details>` : ""}
+</details>`;
+  };
 
   /** One page: the home page (`owner` null) or one idea's. Sections are all in
    *  the document, hidden; the script shows the one the hash names. */
@@ -2621,6 +2849,7 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
 }))}`}
 <h2>${owner ? "子想法" : "顶层想法"} <span class="legend">按依赖顺序排列</span></h2>
 <div class="children">${kids.map(brief).join("\n")}</div>
+${timeline(owner, scope)}
 </section>`;
   };
 
@@ -2747,9 +2976,22 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   .pending-row.void .badge { background:#e4cbc7; color:#9a4a40; }
   .pending-text { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df;
     white-space:pre-wrap; font:inherit; max-height:60vh; overflow:auto; }
+  /* I-134: the change timeline at the foot of every page. */
+  .timeline { margin-top:18px; }
+  .tl-day { margin:10px 0 0; }
+  .tl-day > b { display:block; color:#63746a; font-weight:normal; font-size:12px; }
+  .tl-row { display:flex; gap:10px; align-items:baseline; margin:4px 0 0 12px; }
+  .tl-row .xlink { margin:0; flex:none; }
+  .tl-note { color:#3d4f47; font-size:12px; }
+  .tl-more { margin:10px 0 0; } .tl-more > summary { cursor:pointer; color:#63746a; font-size:12px; }
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
   .wl-note { color:#63746a; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* I-131: three key points under the header, on idea pages only. Read-only,
+     no ids, no data-* — invisible to editing, drafts and signing. */
+  .keypoints { margin:-6px 0 18px; padding:0 0 0 18px; color:#3d4f47; font-size:14px; line-height:1.7; }
+  .keypoints li { margin:2px 0; }
+  .keypoints[hidden] { display:none; }
   .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#63746a; }
   .crumbs a { color:#356b58; text-decoration:none; }
   .crumbs a.here { color:#293d36; font-weight:600; }
@@ -2778,6 +3020,11 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   .brief .enter:hover { text-decoration:underline; }
   .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #dce2d9; font-size:13px; color:#293d36; }
   .brief-detail dl { margin-top:8px; }
+  /* I-132: the row's own children — one more level, no page change. */
+  .brief-kids { margin:11px 0 0; font-size:13px; }
+  .brief-kids b { color:#63746a; font-weight:normal; margin-right:4px; }
+  .brief-kid { display:flex; gap:8px; align-items:baseline; margin:4px 0 0 12px; }
+  .brief-kid .xlink { margin:0; }
   .brief-log { margin:10px 0 0; font-size:12px; color:#63746a; }
   .brief-log b { color:#63746a; font-weight:normal; margin-right:6px; }
   .brief-log div { margin:4px 0 0 14px; }
@@ -2892,6 +3139,7 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   // Nothing to fold means no element at all: an expander that opens onto
   // nothing reads as broken.
   overview.slice(1).map((p) => `<p>${esc(p)}</p>`).join("")}</details>` : ""}
+<ul id="keypoints" class="keypoints" hidden></ul>
 <div id="restore" hidden>发现 <b><span id="restore-count">0</span></b> 处未提交的改动（上次关掉页面时没有提交）。
   逐条确认要不要恢复 —— 本地网页的存储不止这一页能写，所以这一步不会自动做：
   <div id="restore-list"></div></div>
@@ -3170,8 +3418,57 @@ ${
     if (lead) lead.textContent = owner ? first(effectiveField(owner, "what")) : first(DATA.overview);
     // The fold holds the project's own history; it belongs to the home page only.
     if (more) more.hidden = !!owner;
+    showKeypoints(owner, first);
     try { document.title = owner ? nameOf(owner) + " — " + project : project + " — 想法图"; }
     catch (e) { /* not every host has a document title to set */ }
+  }
+
+  // I-131: three key points between the header and the diagram, derived — never
+  // typed — from the eight answers and the idea's place in the tree. Point one
+  // is the first line of "是什么", point two the first line of "预期结果", point
+  // three a computed fact: where it sits, how many direct children are done,
+  // how many unfinished prerequisites it waits on. Facts come from snapshot()
+  // (the live graph with the ledger applied), so a status changed on the page
+  // shows here at once. Read-only, no ids, no data-*: invisible to the three
+  // mechanisms that find elements by id. A point over fifty words is warned
+  // about, not truncated in silence.
+  const STATUS_WORD = { todo: "待办", doing: "进行中", done: "已完成", blocked: "受阻" };
+  function keypointsOf(owner, first) {
+    const g = snapshot();
+    const me = g.ideas.find((i) => i.id === owner);
+    if (!me) return [];
+    const what = first(effectiveField(owner, "what"));
+    const expected = first(effectiveField(owner, "expected"));
+    const parent = effectiveField(owner, "parent");
+    const parentName = parent && g.ideas.some((i) => i.id === parent) ? nameOf(parent) : "";
+    const kids = g.ideas.filter((i) => i.parent === owner);
+    const kidsDone = kids.filter((i) => (i.status || "todo") === "done").length;
+    const waiting = (me.needs || []).filter((n) => { const p = g.ideas.find((i) => i.id === n); return p && (p.status || "todo") !== "done"; });
+    const facts = [
+      STATUS_WORD[me.status || "todo"] || String(me.status),
+      parentName ? "归在「" + parentName + "」下面" : "顶层想法",
+      kids.length ? "直接子想法做完 " + kidsDone + "/" + kids.length : "没有子想法",
+      waiting.length ? "在等 " + waiting.length + " 个没做完的前置想法" : "没有前置挡着它",
+    ];
+    return [
+      what ? "是什么：" + what : "是什么：—",
+      expected ? "预期结果：" + expected : "预期结果：—",
+      facts.join("；"),
+    ];
+  }
+  function showKeypoints(owner, first) {
+    const box = document.getElementById("keypoints");
+    if (!box) return;
+    box.replaceChildren();
+    box.hidden = !owner;
+    if (!owner) return;
+    for (const point of keypointsOf(owner, first)) {
+      const li = document.createElement("li");
+      li.textContent = point;
+      box.append(li);
+      const words = (point.match(/[\\u3000-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef]|[^\\s\\u3000-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef]+/g) || []).length;
+      if (words > 50) { try { console.warn("[companion] 要点超过五十词，读起来就不是要点了：" + point.slice(0, 40) + "…"); } catch (e) { /* no console */ } }
+    }
   }
 
   function showPage() {
@@ -3805,18 +4102,21 @@ export async function serve(
           send(res, 403, { ok: false, reason: "令牌不对 —— 这个服务只接受它自己发出去的那个页面" });
           return;
         }
-        const source = readFileSync(file, "utf8");
         const today = new Date().toISOString().slice(0, 10);
         // The project dir goes with it: a status op from the page is gated the
-        // same way `set` is (D17/D20), not more loosely for coming over HTTP.
-        const result = applyChanges(source, body.envelope, today, projectDir);
-        if (!result.ok) { send(res, 200, { ok: false, reason: result.reason }); return; }
-
+        // same way `set` is (D20), not more loosely for coming over HTTP.
         // Two steps on one route: first tell the person exactly what would
-        // happen, and only write once they have said yes.
-        if (body.confirm !== true) { send(res, 200, { ok: true, preview: true, changed: result.changed }); return; }
-
-        atomicWrite(file, result.text!);
+        // happen, and only write once they have said yes. The preview reads
+        // the file as it is; the commit re-reads it under the lock (I-116), so
+        // a graph changed between the two is caught by the page's baseDigest.
+        if (body.confirm !== true) {
+          const preview = applyChanges(readFileSync(file, "utf8"), body.envelope, today, projectDir);
+          send(res, 200, preview.ok ? { ok: true, preview: true, changed: preview.changed } : { ok: false, reason: preview.reason });
+          return;
+        }
+        const m = mutateGraphText(file, projectDir, (source) => applyChanges(source, body.envelope, today, projectDir));
+        const result = m.result;
+        if (!result.ok) { send(res, 200, { ok: false, reason: result.reason }); return; }
         appendServeLog(projectDir, result.changed ?? []);
         const graph = parseDocument(result.text!).toJSON() as Graph;
         // D27: the page cannot sign. It asks, and the person answers the
@@ -3824,7 +4124,7 @@ export async function serve(
         const signs = requestSignatures(projectDir, graph, result.signRequests ?? [], today);
         for (const line of signs) console.log(line);
         const git = commitAndPush(`网页写回 ${result.changed?.length ?? 0} 处（serve）`);
-        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...(git ? { git } : {}) });
+        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...(git ? { git } : {}), ...(m.renderError ? { renderError: m.renderError } : {}) });
         return;
       }
 
@@ -3935,13 +4235,14 @@ export const SUBCOMMANDS: [name: string, args: string][] = [
   ["init", ""],
   ["migrate", "[--pick claude|cursor|codex] [--dry-run]"],
   ["scan", "[--reset] [--n 40] [--skipped]"],
-  ["new", "<名称> [--needs I-001,I-002]"],
+  ["new", "<名称> [--needs I-001,I-002] [--what … --why … --code 文件,文件 --verify 命令 --tests 文件,文件 --parent I-xxx]（I-153：小改动一条命令建好即可开工）"],
+  ["edit", "<id> --field <字段> --value-json <新值> [--old-json <你看到的旧值>] [--stdin]"],
   ["check", ""],
   ["status", ""],
   ["next", ""],
   ["show", "<id>"],
   ["log", "[id] [--n 10]"],
-  ["set", "<id> <status>"],
+  ["set", "<id> <status> [--because 为什么受阻]"],
   ["allow", "<path>"],
   ["render", ""],
   ["apply", "[file]"],
@@ -4118,6 +4419,9 @@ export function main(args: string[]): number {
       // prompt so the two can never drift apart (I-102); question 7 gained the
       // three fields this branch used to drop on the floor.
       for (const block of questionLines(idea)) console.log(`\n${block}`);
+      // I-133: printed after the eight questions, not among them — it is a
+      // lifecycle fact, and questionLines is shared with the approval prompt.
+      if (idea.status === "blocked" || idea.blocked_because) console.log(`\n受阻原因\n  ${idea.blocked_because || "—"}`);
       console.log(`\n前置想法  ${(idea.needs ?? []).map((n) => `${n} (${map.get(n)?.status ?? "?"})`).join(", ") || "—"}`);
       console.log(`它是谁的前置  ${dependents(graph, idea.id).join(", ") || "—"}`);
       for (const l of idea.log ?? []) console.log(`  log ${l.date} ${l.by ?? ""} ${l.note}`);
@@ -4145,23 +4449,48 @@ export function main(args: string[]): number {
       return 0;
     }
     case "set": {
-      setStatus(doc, graph, args[1], args[2] as Status,
-        { by: flag(args, "by"), note: flag(args, "note"), date: today }, projectDir);
-      save(file, doc);
-      // Re-render here too, so the page on disk is never a stale copy of a
-      // graph somebody already changed.
-      redraw(file, projectDir);
+      // I-116: read-change-write-render happens inside the project lock, on the
+      // file as it is NOW — not on the copy loaded at the top of main.
+      const m = mutateGraph(file, projectDir, (d, g) => setStatus(d, g, args[1], args[2] as Status,
+        { by: flag(args, "by"), note: flag(args, "note"), because: flag(args, "because"), date: today }, projectDir));
       console.log(`${args[1]} → ${args[2]}`);
+      if (m.renderError) console.error(m.renderError);
       return 0;
     }
     case "new": {
       const name = args[1];
       if (!name || name.startsWith("--")) { console.error(usageOf("new")); return 2; }
       const needs = (flag(args, "needs") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const id = addIdea(doc, graph, name, needs, today);
-      save(file, doc);
-      redraw(file, projectDir);
-      console.log(id);
+      const list = (k: string) => (flag(args, k) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const fields: NewIdeaFields = {   // I-153: a short record in one call
+        what: flag(args, "what"), why: flag(args, "why"), expected: flag(args, "expected"),
+        how: flag(args, "how"), parent: flag(args, "parent"),
+        code: list("code"), verify: flag(args, "verify"), tests: list("tests"),
+      };
+      const m = mutateGraph(file, projectDir, (d, g) => addIdea(d, g, name, needs, today, fields));
+      console.log(m.result);
+      if (m.renderError) console.error(m.renderError);
+      return 0;
+    }
+    case "edit": {
+      // I-116: a local change committed under the lock — `edit <id> --field f
+      // --value-json '…' [--old-json '…']`. Complex values may come on stdin
+      // as {"value":…,"old":…} so Windows quoting never gets in the way.
+      const id = args[1];
+      const field = flag(args, "field");
+      if (!id || id.startsWith("--") || !field) { console.error(usageOf("edit")); return 2; }
+      let value: unknown, old: unknown;
+      try {
+        const stdin = args.includes("--stdin") ? JSON.parse(readFileSync(0, "utf8")) as { value?: unknown; old?: unknown } : undefined;
+        const v = flag(args, "value-json"); const o = flag(args, "old-json");
+        value = v !== undefined ? JSON.parse(v) : stdin?.value;
+        old = o !== undefined ? JSON.parse(o) : stdin?.old;
+      } catch (error) { console.error(`值不是合法的 JSON：${error instanceof Error ? error.message : error}`); return 2; }
+      if (value === undefined) { console.error(usageOf("edit")); return 2; }
+      const m = mutateGraph(file, projectDir, (d, g) =>
+        editIdeaField(d, g, projectDir, id, field, value, old, { by: flag(args, "by"), date: today }));
+      console.log(`${id}.${field} 已改（原值 ${JSON.stringify(m.result.old ?? null).slice(0, 80)}）`);
+      if (m.renderError) console.error(m.renderError);
       return 0;
     }
     case "allow": {
@@ -4169,6 +4498,16 @@ export function main(args: string[]): number {
       // The guard's verdict, verbatim — same function, same answer (I-099).
       const verdict = decideProductWrite(projectDir, graph, args[1]);
       console.log(`${verdict.allow ? "allow" : "deny"}\t${args[1]}\t${verdict.reason}`);
+      // I-115: in coordination mode the guard asks one more question — who
+      // holds the file. `allow` cannot know which session is asking, so it
+      // reports the holder and leaves the comparison to the write door.
+      const runtime = paths(projectDir).runtime;
+      if (verdict.allow && coordinationEnabled(runtime)) {
+        const owner = ownerOf(runtime, projectDir, args[1]);
+        console.log(owner
+          ? `协作模式：${args[1]} 现在归 ${owner.session} 持有（${owner.task}）—— 不是你的会话就会被守卫拒`
+          : `协作模式：${args[1]} 还没人认领 —— 写之前先 coord claim`);
+      }
       return verdict.allow ? 0 : 1;
     }
     case "run-check": {
@@ -4239,7 +4578,7 @@ export function main(args: string[]): number {
       return 0;
     }
     case "render": {
-      console.log(redraw(file, projectDir));
+      console.log(renderLocked(file, projectDir));   // I-116: never a stale picture over a fresh graph
       return 0;
     }
     case "serve": {
@@ -4273,16 +4612,18 @@ export function main(args: string[]): number {
       try { envelope = JSON.parse(readFileSync(changeFile, "utf8")); }
       catch (error) { console.error(`改动文件不是合法的 JSON：${error}`); return 1; }
 
-      // D17/D20: same gates as `set` — the approvals and the evidence are read
-      // from the project dir, so the write-back has to be told where it is.
-      const result = applyChanges(readFileSync(file, "utf8"), envelope, today, projectDir);
+      // D20: same gates as `set` — the evidence is read from the project dir,
+      // so the write-back has to be told where it is. I-116: the source is read
+      // and the result written inside one lock, so the baseDigest the page saw
+      // is compared against the file as it is at commit time.
+      const m = mutateGraphText(file, projectDir, (source) => applyChanges(source, envelope, today, projectDir));
+      const result = m.result;
       if (!result.ok) {
         // Refused means refused: the change file stays exactly where it is, so
         // the person's edits are not the thing that gets destroyed.
         console.error(`拒绝写回：${result.reason}\n\n改动文件原样留在 ${changeFile}，没有动过。`);
         return 1;
       }
-      atomicWrite(file, result.text!);
       for (const line of result.changed ?? []) console.log(`  ${line}`);
       console.log(`\n写回 ${result.changed?.length ?? 0} 处改动 → ${relative(projectDir, file)}`);
       // The signatures the envelope asked for become challenges, never writes (D27).
@@ -4293,7 +4634,7 @@ export function main(args: string[]): number {
       const archived = changeFile.replace(/\.json$/, "") + `.applied-${today}.json`;
       try { renameSync(changeFile, archived); console.log(`改动文件已归档 → ${relative(projectDir, archived)}`); }
       catch { console.log(`（改动文件归档失败，它还在 ${changeFile}）`); }
-      console.log(redraw(file, projectDir));
+      if (m.renderError) console.error(m.renderError); else console.log(m.rendered);
       console.log(`\n回浏览器刷新一下页面，再做下一轮。`);
       return 0;
     }

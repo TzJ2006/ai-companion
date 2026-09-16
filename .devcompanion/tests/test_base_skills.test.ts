@@ -11,7 +11,7 @@ import { ENGINE_RELATIVE } from "../../companion/manifests.js";
 // 引擎调用一律是中性的 node 调用。
 describe("companion shared skills (I-095)", () => {
   const ROOT = resolve(fileURLToPath(import.meta.url), "../../../companion/skills");
-  const NAMES = ["ccscan", "ccthink", "ccbuild", "ccfix", "ccgraph"];
+  const NAMES = ["ccscan", "ccthink", "ccbuild", "ccfix", "ccgraph", "ccapply"];   // ccapply：I-067
 
   const SPEC_FIELDS = new Set(["name", "description", "license", "compatibility", "metadata", "allowed-tools"]);
 
@@ -72,13 +72,12 @@ describe("companion shared skills (I-095)", () => {
     });
   }
 
-  // H26 — 共同技能是三家正文的合并，不是重写：前身里的护栏逐条钉死回来。
-  it("ccfix keeps the mismatch-review and give-up safeguards all three predecessors had", () => {
+  // H26 / I-148 — 保留证据与清理约束；阶段停顿不再是要求。
+  // 提问是否恰当需要场景审阅，关键词存在不能证明模型会作出正确决定。
+  it("ccfix keeps evidence, focused fixes and cleanup safeguards", () => {
     const body = bodyOf("ccfix");
     expect(body).toMatch(/独立可见的消息/);   // 清单要真的送到人眼前
-    expect(body).toMatch(/结束回合/);          // 送完就停，不许自己接着判谁对
     expect(body).toMatch(/一次只修一处/);      // 一批改动一起变绿说明不了什么
-    expect(body).toMatch(/三次/);              // 三次修不好就交出去
     expect(body).toMatch(/blocked/);
     expect(body).toMatch(/git diff/);          // 临时插桩收工前拆干净
   });
@@ -176,7 +175,7 @@ describe("the spec is true about the engine as it stands (H27)", () => {
     expect([...named].sort()).toEqual(offered);
 
     // 「落地情况」把同一串又列了一遍，两处必须逐字一致。
-    const landed = /一共\s*十八条\*\*：`([^`]+)`/.exec(row(28));
+    const landed = /一共\s*[一二三四五六七八九十]+条\*\*：`([^`]+)`/.exec(row(28));   // 条数会长（I-116 加了 edit）
     expect(landed, "D28 的落地情况没有用反引号列出已落地的命令面").not.toBeNull();
     expect(landed![1].trim().split(/\s+/).sort()).toEqual(offered);
   });

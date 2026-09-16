@@ -11,9 +11,9 @@ import {
   type Graph, type Idea,
 } from "../../companion/ideas.js";
 
-// I-089 — Cursor 版的开工检查进入共同引擎：想法没想清楚、前置没做完、文件和
-// 别人重叠，就不许开工；new 从 next_id 取号；allow 是写前自检。
-// 裁决依据：D17（doing 的机器判定条件）、D18（doing 可并行但文件不得重叠）、
+// I-089 — Cursor 版的开工检查进入共同引擎：想法没想清楚、前置没做完，就不许开工；
+// 文件和别人重叠只记进 log（I-149，引用不等于占用）；new 从 next_id 取号；allow 是写前自检。
+// 裁决依据：D17（doing 的机器判定条件）、D18（doing 可并行，写互斥按会话在写时核对）、
 // D19（四状态小转移表）、D28（发号只走 next_id）。
 describe("companion readiness checks (I-089)", () => {
   let dir: string;
@@ -66,7 +66,6 @@ ${full("I-003", "src/other.ts").replace("needs: []", "needs: [I-002]")}
     status: todo
     needs: [I-003]
     what: W
-    why: Y
     expected: E
     code:
       - file: src/late.ts
@@ -93,13 +92,16 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
   it("isBuildReady names the exact missing plan field", () => {
     const g = graphOf();
     expect(isBuildReady(byId(g, "I-002"))).toBeNull();
-    expect(isBuildReady(byId(g, "I-004"))).toMatch(/how/);
+    expect(isBuildReady(byId(g, "I-004"))).toMatch(/why/);
+    // I-153：短记录 —— what、why、code.file、verify 就能开工；其余四问由 check 提示。
+    const short = { ...byId(g, "I-002"), expected: undefined, how: undefined, why_this_way: undefined, future: undefined } as Idea;
+    expect(isBuildReady(short)).toBeNull();
     const noVerify = { ...byId(g, "I-002"), verify: undefined } as Idea;
     expect(isBuildReady(noVerify)).toMatch(/verify/);
     const noCode = { ...byId(g, "I-002"), code: [] } as Idea;
     expect(isBuildReady(noCode)).toMatch(/code/);
-    const noExpected = { ...byId(g, "I-002"), expected: undefined } as Idea;
-    expect(isBuildReady(noExpected)).toMatch(/expected/);
+    const noWhy = { ...byId(g, "I-002"), why: undefined } as Idea;
+    expect(isBuildReady(noWhy)).toMatch(/why/);
   });
 
   it("needsUnmet lists exactly the unfinished prerequisites", () => {
@@ -118,9 +120,10 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
   // ── set 的闸门：todo→doing 三道检查 + 两次批准 + 小转移表 ─────────────────
 
   // 纯单元用法：没有项目目录，就没有回执可读，只剩三道检查。
-  const trySet = (id: string, status: string) => {
+  // I-133：转成受阻要带一句原因，所以这里默认给一句；测试真想验证「没原因就拒」时传空串。
+  const trySet = (id: string, status: string, because = "测试里的受阻原因") => {
     const { doc, graph } = load(graphPath(dir));
-    setStatus(doc, graph, id, status as Idea["status"] & string, { date: "2026-08-31" });
+    setStatus(doc, graph, id, status as Idea["status"] & string, { date: "2026-08-31", because });
     return String(doc);
   };
 
@@ -137,15 +140,22 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
   };
 
   it("refuses doing when a plan field is missing, and says which", () => {
-    expect(() => trySet("I-004", "doing")).toThrow(/how/);
+    expect(() => trySet("I-004", "doing")).toThrow(/why/);
   });
 
   it("refuses doing when a prerequisite is not done, and names it", () => {
     expect(() => trySet("I-003", "doing")).toThrow(/I-002/);
   });
 
-  it("refuses doing when the file overlaps another doing idea", () => {
-    expect(() => trySet("I-006", "doing")).toThrow(/I-005/);
+  // 2026-09-16（I-149）：引用不等于占用。重叠不再挡开工，只把对方记进 log；
+  // 真正的写互斥在写那一刻按会话核对（协作模式，见 test_coord_guard）。
+  it("allows doing when the file overlaps another doing idea, and logs who else references it", () => {
+    const g = parseDocument(trySet("I-006", "doing")).toJSON() as Graph;
+    const six = byId(g, "I-006");
+    expect(six.status).toBe("doing");
+    const last = six.log?.at(-1)?.note ?? "";
+    expect(last).toContain("I-005: src/shared.ts");
+    expect(last).toContain("引用不等于占用");
   });
 
   it("allows doing when ready, prerequisites done, no overlap — no project dir, no receipts to read", () => {
@@ -174,6 +184,16 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(() => trySet("I-005", "todo")).toThrow(/doing.*todo|转移/);
     expect(trySet("I-001", "blocked")).toContain("status: blocked");    // 回归了：合法
     expect(trySet("I-007", "doing")).toContain("status: doing");        // blocked → doing 合法
+  });
+
+  // I-133：受阻必须说清为什么；原因写进 blocked_because，离开受阻时字段跟着走。
+  it("blocked needs a reason, stores it beside status, and drops it on the way out", () => {
+    expect(() => trySet("I-001", "blocked", "")).toThrow(/reason|原因/);
+    const blocked = trySet("I-001", "blocked", "等 I-009 的接口定下来");
+    expect(blocked).toContain("blocked_because: 等 I-009 的接口定下来");
+    // I-007 本来就是受阻的，走出去时字段该消失。
+    const back = trySet("I-007", "doing");
+    expect(back).not.toMatch(/I-007[\s\S]*?blocked_because/);
   });
 
   // ── new：发号只从 next_id 走 ─────────────────────────────────────────────
@@ -223,7 +243,7 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
   it("allowWrite ignores a doing idea that is not build-ready", () => {
     const g = graphOf();
     const shared = g.ideas.find((i) => i.id === "I-005")!;
-    delete (shared as { how?: string }).how;                 // doing 却没想清楚
+    delete (shared as { why?: string }).why;                 // doing 却连为什么都没写（I-153 后 how 不再是门）
     expect(allowWrite(g, dir, join(dir, "src", "shared.ts")).allow).toBe(false);
   });
 
@@ -245,12 +265,28 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
     expect(text).toContain("next_id: 9");
   });
 
+  // I-153：小改动一条命令建好就能开工 —— what/why/code/verify 随 new 一起给。
+  it("cli new with the short-record flags yields an idea that is ready at once", { timeout: 60_000 }, () => {
+    const r = spawnSync("npx", ["tsx", ENGINE, "new", "改一行README",
+      "--what", "把五个技能改成六个", "--why", "README 数错了", "--code", "README.md",
+      "--verify", "vitest", "--parent", "I-001",
+      "--project", dir, "--date", "2026-09-16"],
+      { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
+    expect(r.status).toBe(0);
+    const { graph } = load(graphPath(dir));
+    const idea = graph.ideas.find((i) => i.name === "改一行README")!;
+    expect(idea.parent).toBe("I-001");
+    expect(idea.code?.[0]?.file).toBe("README.md");
+    expect(idea.verify?.command).toBe("vitest");
+    expect(isBuildReady(idea)).toBeNull();
+  });
+
   it("cli status shows where every idea is stuck; cli allow answers with an exit code", { timeout: 60_000 }, () => {
     const s = spawnSync("npx", ["tsx", ENGINE, "status", "--project", dir],
       { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
     expect(s.status).toBe(0);
     const lines = s.stdout.split("\n");
-    expect(lines.find((l) => l.includes("I-004"))).toMatch(/how/);      // 缺 how
+    expect(lines.find((l) => l.includes("I-004"))).toMatch(/why/);      // 缺 why
     expect(lines.find((l) => l.includes("I-003"))).toMatch(/I-002/);    // 在等 I-002
     expect(lines.find((l) => l.includes("I-002"))).toMatch(/READY/i);   // 现在就能做
 
@@ -305,7 +341,7 @@ ${rows.join("")}`;
   const move = (text: string, id: string, status: Idea["status"] & string) => {
     const doc = parseDocument(text);
     const graph = doc.toJSON() as Graph;
-    setStatus(doc, graph, id, status, { date: "2026-09-07" });
+    setStatus(doc, graph, id, status, { date: "2026-09-07", because: status === "blocked" ? "测试里的受阻原因" : undefined });
     return (parseDocument(String(doc)).toJSON() as Graph).ideas.find((i) => i.id === id)!.status;
   };
   const graphOfTree = (text: string) => parseDocument(text).toJSON() as Graph;

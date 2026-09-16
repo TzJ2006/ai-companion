@@ -152,6 +152,8 @@ describe("manifest matchers subscribe every tool name the normalizers classify (
   const FILE_IN = { file_path: "src/a.ts", content: "x" };
   const CURSOR_FILE_IN = { path: "src/a.ts", content: "x" };
   const PATCH_IN = { command: "*** Begin Patch\n*** Update File: src/a.ts\n@@\n+x\n*** End Patch" };
+  /** I-106：取网页的工具带一个网址；冲着本机服务去的那种正是 R8 要看的。 */
+  const FETCH_IN = { url: "http://127.0.0.1:4173/graph", prompt: "read it" };
 
   const each = (tools: string[], input: Record<string, unknown>): Candidate[] =>
     tools.map((tool) => ({ tool, input }));
@@ -165,6 +167,7 @@ describe("manifest matchers subscribe every tool name the normalizers classify (
       ...each(["Edit", "Write", "NotebookEdit"], FILE_IN),
       ...each(["Read", "read", "read_file", "readfile"], FILE_IN),
       ...each(["mcp__fs__write_file"], FILE_IN),
+      ...each(["WebFetch"], FETCH_IN),
     ],
     cursor: [
       ...each(["Write", "write", "StrReplace", "Delete", "EditNotebook", "ApplyPatch", "search_replace"], CURSOR_FILE_IN),
@@ -183,8 +186,9 @@ describe("manifest matchers subscribe every tool name the normalizers classify (
   const matchersOf = (groups: { matcher?: string }[] | undefined) =>
     (groups ?? []).map((g) => g.matcher ?? ".*");
   const hits = (matchers: string[], tool: string) => matchers.some((m) => new RegExp(m).test(tool));
-  /** 守卫真的会看的四种事件；其余归一成 other，本来就不必订阅。 */
-  const GUARDED = new Set(["shell", "read", "pre-write", "post-write"]);
+  /** 守卫真的会看的五种事件；其余归一成 other，本来就不必订阅。fetch 是 I-106 加的：
+   *  R8 按目标判一次取网页，判得再对，事件到不了守卫手里就等于没有。 */
+  const GUARDED = new Set(["shell", "read", "pre-write", "post-write", "fetch"]);
 
   const claude = claudeHooks() as Record<string, { matcher?: string }[]>;
   const cursor = cursorHooks().hooks as Record<string, { matcher?: string }[]>;
@@ -211,8 +215,12 @@ describe("manifest matchers subscribe every tool name the normalizers classify (
     });
 
     it(`${host} ${event}: tools the guard has no rule for stay unsubscribed`, () => {
-      for (const tool of ["Grep", "Glob", "WebFetch", "WebSearch", "Task"]) {
+      // WebFetch 不在这张名单上了：Claude 的 PreToolUse 要它（I-106），别处照旧不订。
+      for (const tool of ["Grep", "Glob", "WebSearch", "Task"]) {
         expect(hits(matchers, tool), `${host}/${event} 不该把只读的 ${tool} 也拉进守卫`).toBe(false);
+      }
+      if (!(host === "claude" && event === "PreToolUse")) {
+        expect(hits(matchers, "WebFetch"), `${host}/${event} 没有取网页的规则，不该订阅它`).toBe(false);
       }
       expect(matchers, "全收 matcher 会让每一次工具调用都过一遍守卫").not.toContain(".*");
     });

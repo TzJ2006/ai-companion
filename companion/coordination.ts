@@ -297,6 +297,62 @@ export function acknowledge(runtime: string, session: string, upto: number, requ
   return appendEvent(runtime, { type: "ack", session, upto }, requestId);
 }
 
+// ─── I-115: the opt-in ownership mode the guard consults ────────────────────
+// Claims alone are a convention; they bind only when the guard reads them
+// before a write. That is switched on per project, explicitly, and recorded —
+// the graph and coord commands' own short lock does not depend on it.
+const enabledPath = (runtime: string) => join(location(runtime), "enabled.json");
+
+export function setCoordinationEnabled(runtime: string, on: boolean, by: string): { enabled: boolean } {
+  mkdirSync(location(runtime), { recursive: true });
+  if (on) writeFileSync(enabledPath(runtime), JSON.stringify({ enabled: true, by: text(by, "by", 256), at: new Date().toISOString() }));
+  else { try { unlinkSync(enabledPath(runtime)); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; } }
+  return { enabled: on };
+}
+
+export function coordinationEnabled(runtime: string): boolean {
+  try { return JSON.parse(readFileSync(enabledPath(runtime), "utf8")).enabled === true; }
+  catch { return false; }
+}
+
+/** Who holds `file` right now, or null when nobody does. A path the claim
+ *  protocol itself refuses (outside the project, the ledger, the runtime) has
+ *  no owner by definition — the caller decides what that means for it. */
+export function ownerOf(runtime: string, projectDir: string, file: string): Claim | null {
+  let target: string;
+  try { target = canonicalTarget(projectDir, file); } catch { return null; }
+  return withProjectLock(runtime, () => {
+    const { state } = replay(runtime);
+    for (const claim of state.claims.values()) if (claim.files.includes(target)) return claim;
+    return null;
+  });
+}
+
+/** The claims one session currently holds — what a Stop should remind it of. */
+export function claimsHeldBy(runtime: string, session: string): Claim[] {
+  return withProjectLock(runtime, () => [...replay(runtime).state.claims.values()].filter((c) => c.session === session));
+}
+
+/** Unread messages for a session, as plain lines of DATA to hand an agent —
+ *  never as instructions. Null when the session is not registered. */
+export function pendingFor(runtime: string, session: string, limit = 5): { count: number; lines: string[]; lastSeq: number } | null {
+  try {
+    const { events, hasMore, lastSeq } = readInbox(runtime, session, { limit });
+    const state = withProjectLock(runtime, () => replay(runtime).state);
+    const lines = events.map((e) => {
+      const who = state.sessions.get(e.session) ?? e.session;
+      const r = e.request as Record<string, unknown>;
+      const what = r.type === "say" ? String(r.text)
+        : r.type === "claim" ? `认领了 ${(r.files as string[]).join("、")}（${String(r.task)}）`
+          : r.type === "release" ? `释放了认领 ${String(r.claimId)}：${String(r.summary)}`
+            : r.type === "takeover" ? `接管了认领 ${String(r.claimId)}：${String(r.reason)}`
+              : r.type === "join" ? `加入了协作（${String(r.label)}）` : String(r.type);
+      return `#${e.seq} ${who}：${what}`;
+    });
+    return { count: lines.length + (hasMore ? 1 : 0), lines, lastSeq };
+  } catch { return null; }
+}
+
 export function claimFiles(runtime: string, projectDir: string, session: string, files: string[], task: string, requestId: string = randomUUID()): CoordEvent {
   if (realpathSync(projectDir) !== realpathSync(resolve(runtime, "../.."))) throw new Error("runtime 不属于这个项目");
   if (!Array.isArray(files)) throw new Error("files 必须是文件列表");
@@ -317,12 +373,13 @@ export function coordMain(runtime: string, args: string[]): number {
     join: ["label", "session", "request"], say: ["session", "text", "request"],
     inbox: ["session", "limit"], ack: ["session", "upto", "request"], status: [],
     recover: ["owner", "reason", "stopped"],
+    enable: ["by"], disable: ["by"],
     claim: ["session", "files-json", "task", "request"],
     release: ["session", "claim", "summary", "request"],
     takeover: ["session", "claim", "reason", "stopped", "request"],
   };
   const action = args[0];
-  if (!Object.hasOwn(actions, action)) throw new Error("usage: coord join|say|inbox|ack|status|recover|claim|release|takeover [--label 文本] [--session ID] [--request ID] [--text 文本] [--upto 序号] [--files-json JSON] [--task 文本] [--claim ID] [--summary 文本] [--reason 文本] [--stopped]");
+  if (!Object.hasOwn(actions, action)) throw new Error("usage: coord join|say|inbox|ack|status|recover|enable|disable|claim|release|takeover [--label 文本] [--session ID] [--request ID] [--text 文本] [--upto 序号] [--files-json JSON] [--task 文本] [--claim ID] [--summary 文本] [--reason 文本] [--by 谁] [--stopped]");
   const options: Record<string, string> = Object.create(null);
   for (let i = 1; i < args.length; i++) {
     const key = args[i].startsWith("--") ? args[i].slice(2) : "";
@@ -338,8 +395,18 @@ export function coordMain(runtime: string, args: string[]): number {
   if (action === "ack") result = acknowledge(runtime, options.session, Number(options.upto), options.request);
   if (action === "status") result = withProjectLock(runtime, () => {
     const { events, state } = replay(runtime);
-    return { lastSeq: events.length, sessions: [...state.sessions].map(([session, label]) => ({ session, label, acknowledged: state.cursors.get(session) ?? 0 })), claims: [...state.claims.values()] };
+    // I-115: say plainly whether ownership is a convention or is enforced at the
+    // write door — and that even enforced, it binds hook-driven writes only.
+    const enabled = coordinationEnabled(runtime);
+    return {
+      enabled, lastSeq: events.length,
+      enforcement: enabled ? "守卫在写前核对归属（只管经过 hook 的写；编辑器、后台进程、绕过 hook 的 shell 不受约束）" : "只有命令约定，守卫不核对归属（coord enable 开启）",
+      sessions: [...state.sessions].map(([session, label]) => ({ session, label, acknowledged: state.cursors.get(session) ?? 0 })),
+      claims: [...state.claims.values()],
+    };
   });
+  if (action === "enable") result = setCoordinationEnabled(runtime, true, options.by ?? "人");
+  if (action === "disable") result = setCoordinationEnabled(runtime, false, options.by ?? "人");
   if (action === "recover") {
     recoverLock(runtime, options.owner, options.reason, options.stopped === "true");
     result = { recovered: true, owner: options.owner, reason: options.reason };

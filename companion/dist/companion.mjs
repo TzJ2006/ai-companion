@@ -7367,6 +7367,7 @@ var require_dist = __commonJS({
 var import_yaml = __toESM(require_dist());
 import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, appendFileSync, renameSync, mkdirSync as mkdirSync2, existsSync, readdirSync, unlinkSync as unlinkSync2 } from "node:fs";
 import { join as join2, resolve as resolve2, dirname as dirname2, relative as relative2 } from "node:path";
+import { tmpdir } from "node:os";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -7680,6 +7681,57 @@ function readInbox(runtime, session, opts = {}) {
 function acknowledge(runtime, session, upto, requestId = randomUUID()) {
   return appendEvent(runtime, { type: "ack", session, upto }, requestId);
 }
+var enabledPath = (runtime) => join(location(runtime), "enabled.json");
+function setCoordinationEnabled(runtime, on, by) {
+  mkdirSync(location(runtime), { recursive: true });
+  if (on) writeFileSync(enabledPath(runtime), JSON.stringify({ enabled: true, by: text(by, "by", 256), at: (/* @__PURE__ */ new Date()).toISOString() }));
+  else {
+    try {
+      unlinkSync(enabledPath(runtime));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  return { enabled: on };
+}
+function coordinationEnabled(runtime) {
+  try {
+    return JSON.parse(readFileSync(enabledPath(runtime), "utf8")).enabled === true;
+  } catch {
+    return false;
+  }
+}
+function ownerOf(runtime, projectDir, file) {
+  let target;
+  try {
+    target = canonicalTarget(projectDir, file);
+  } catch {
+    return null;
+  }
+  return withProjectLock(runtime, () => {
+    const { state } = replay(runtime);
+    for (const claim of state.claims.values()) if (claim.files.includes(target)) return claim;
+    return null;
+  });
+}
+function claimsHeldBy(runtime, session) {
+  return withProjectLock(runtime, () => [...replay(runtime).state.claims.values()].filter((c) => c.session === session));
+}
+function pendingFor(runtime, session, limit = 5) {
+  try {
+    const { events, hasMore, lastSeq } = readInbox(runtime, session, { limit });
+    const state = withProjectLock(runtime, () => replay(runtime).state);
+    const lines = events.map((e) => {
+      const who = state.sessions.get(e.session) ?? e.session;
+      const r = e.request;
+      const what = r.type === "say" ? String(r.text) : r.type === "claim" ? `\u8BA4\u9886\u4E86 ${r.files.join("\u3001")}\uFF08${String(r.task)}\uFF09` : r.type === "release" ? `\u91CA\u653E\u4E86\u8BA4\u9886 ${String(r.claimId)}\uFF1A${String(r.summary)}` : r.type === "takeover" ? `\u63A5\u7BA1\u4E86\u8BA4\u9886 ${String(r.claimId)}\uFF1A${String(r.reason)}` : r.type === "join" ? `\u52A0\u5165\u4E86\u534F\u4F5C\uFF08${String(r.label)}\uFF09` : String(r.type);
+      return `#${e.seq} ${who}\uFF1A${what}`;
+    });
+    return { count: lines.length + (hasMore ? 1 : 0), lines, lastSeq };
+  } catch {
+    return null;
+  }
+}
 function claimFiles(runtime, projectDir, session, files, task, requestId = randomUUID()) {
   if (realpathSync(projectDir) !== realpathSync(resolve(runtime, "../.."))) throw new Error("runtime \u4E0D\u5C5E\u4E8E\u8FD9\u4E2A\u9879\u76EE");
   if (!Array.isArray(files)) throw new Error("files \u5FC5\u987B\u662F\u6587\u4EF6\u5217\u8868");
@@ -7699,12 +7751,14 @@ function coordMain(runtime, args2) {
     ack: ["session", "upto", "request"],
     status: [],
     recover: ["owner", "reason", "stopped"],
+    enable: ["by"],
+    disable: ["by"],
     claim: ["session", "files-json", "task", "request"],
     release: ["session", "claim", "summary", "request"],
     takeover: ["session", "claim", "reason", "stopped", "request"]
   };
   const action = args2[0];
-  if (!Object.hasOwn(actions, action)) throw new Error("usage: coord join|say|inbox|ack|status|recover|claim|release|takeover [--label \u6587\u672C] [--session ID] [--request ID] [--text \u6587\u672C] [--upto \u5E8F\u53F7] [--files-json JSON] [--task \u6587\u672C] [--claim ID] [--summary \u6587\u672C] [--reason \u6587\u672C] [--stopped]");
+  if (!Object.hasOwn(actions, action)) throw new Error("usage: coord join|say|inbox|ack|status|recover|enable|disable|claim|release|takeover [--label \u6587\u672C] [--session ID] [--request ID] [--text \u6587\u672C] [--upto \u5E8F\u53F7] [--files-json JSON] [--task \u6587\u672C] [--claim ID] [--summary \u6587\u672C] [--reason \u6587\u672C] [--by \u8C01] [--stopped]");
   const options = /* @__PURE__ */ Object.create(null);
   for (let i = 1; i < args2.length; i++) {
     const key = args2[i].startsWith("--") ? args2[i].slice(2) : "";
@@ -7723,8 +7777,17 @@ function coordMain(runtime, args2) {
   if (action === "ack") result = acknowledge(runtime, options.session, Number(options.upto), options.request);
   if (action === "status") result = withProjectLock(runtime, () => {
     const { events, state } = replay(runtime);
-    return { lastSeq: events.length, sessions: [...state.sessions].map(([session, label]) => ({ session, label, acknowledged: state.cursors.get(session) ?? 0 })), claims: [...state.claims.values()] };
+    const enabled = coordinationEnabled(runtime);
+    return {
+      enabled,
+      lastSeq: events.length,
+      enforcement: enabled ? "\u5B88\u536B\u5728\u5199\u524D\u6838\u5BF9\u5F52\u5C5E\uFF08\u53EA\u7BA1\u7ECF\u8FC7 hook \u7684\u5199\uFF1B\u7F16\u8F91\u5668\u3001\u540E\u53F0\u8FDB\u7A0B\u3001\u7ED5\u8FC7 hook \u7684 shell \u4E0D\u53D7\u7EA6\u675F\uFF09" : "\u53EA\u6709\u547D\u4EE4\u7EA6\u5B9A\uFF0C\u5B88\u536B\u4E0D\u6838\u5BF9\u5F52\u5C5E\uFF08coord enable \u5F00\u542F\uFF09",
+      sessions: [...state.sessions].map(([session, label]) => ({ session, label, acknowledged: state.cursors.get(session) ?? 0 })),
+      claims: [...state.claims.values()]
+    };
   });
+  if (action === "enable") result = setCoordinationEnabled(runtime, true, options.by ?? "\u4EBA");
+  if (action === "disable") result = setCoordinationEnabled(runtime, false, options.by ?? "\u4EBA");
   if (action === "recover") {
     recoverLock(runtime, options.owner, options.reason, options.stopped === "true");
     result = { recovered: true, owner: options.owner, reason: options.reason };
@@ -7791,6 +7854,67 @@ function atomicWrite(file, text2) {
 }
 function save(file, doc) {
   atomicWrite(file, String(doc));
+}
+function mutateGraph(file, projectDir, work) {
+  return withProjectLock(paths(projectDir).runtime, () => {
+    const { doc, graph } = load(file);
+    const result = work(doc, graph);
+    save(file, doc);
+    return { result, ...renderUnderLock(file, projectDir) };
+  }, { timeoutMs: 1e4 });
+}
+function mutateGraphText(file, projectDir, work) {
+  return withProjectLock(paths(projectDir).runtime, () => {
+    const result = work(readFileSync2(file, "utf8"));
+    if (typeof result.text !== "string") return { result, rendered: null };
+    atomicWrite(file, result.text);
+    return { result, ...renderUnderLock(file, projectDir) };
+  }, { timeoutMs: 1e4 });
+}
+function renderLocked(file, projectDir) {
+  return withProjectLock(paths(projectDir).runtime, () => redraw(file, projectDir), { timeoutMs: 1e4 });
+}
+function renderUnderLock(file, projectDir) {
+  try {
+    return { rendered: redraw(file, projectDir) };
+  } catch (error) {
+    return { rendered: null, renderError: `\u56FE\u5DF2\u4FDD\u5B58\uFF0C\u7F51\u9875\u6CA1\u91CD\u5EFA\u6210\uFF1A${error instanceof Error ? error.message : error} \u2014\u2014 \u8DD1 ${ENGINE_CMD} render \u91CD\u5EFA` };
+  }
+}
+var EDIT_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent", "needs", "code", "verify", "blocked_because"];
+function editIdeaField(doc, graph, projectDir, id, field, value, expectedOld, entry) {
+  const index = graph.ideas.findIndex((i) => i.id === id);
+  if (index < 0) throw new Error(`no idea with id ${id}`);
+  if (!EDIT_FIELDS.includes(field)) {
+    throw new Error(`edit \u53EA\u8BA4\u8FD9\u51E0\u4E2A\u5B57\u6BB5\uFF1A${EDIT_FIELDS.join("\u3001")} \u2014\u2014 status \u8D70 set\uFF0Csigned_off \u53EA\u80FD\u7531\u4EBA\u56DE\u53E3\u4EE4\uFF08D24/D27\uFF09`);
+  }
+  const idea = graph.ideas[index];
+  const old = idea[field];
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  if (expectedOld !== void 0 && !same(old, expectedOld)) {
+    throw new Error(`${id}.${field} \u7684\u5F53\u524D\u503C\u548C\u4F60\u770B\u5230\u7684\u65E7\u503C\u4E0D\u4E00\u6837\uFF08\u522B\u7684\u4F1A\u8BDD\u6539\u8FC7\u4E86\uFF09\u2014\u2014 \u5148\u91CD\u65B0\u8BFB\uFF0C\u518D\u51B3\u5B9A\u8FD8\u8981\u4E0D\u8981\u6539\u3002\u5F53\u524D\uFF1A${JSON.stringify(old ?? null).slice(0, 200)}`);
+  }
+  if (field === "verify" && value && typeof value === "object" && "signed_off" in value) {
+    const current = idea.verify?.signed_off ?? null;
+    if (!same(value.signed_off ?? null, current)) throw new Error(`verify.signed_off \u53EA\u80FD\u7531\u4EBA\u56DE\u4E00\u6B21\u6027\u53E3\u4EE4\u5199\u5165\uFF08D27\uFF09\uFF0Cedit \u4E0D\u5199\u5B83`);
+  }
+  if (typeof old === "string" && typeof value !== "string" && value !== null) {
+    throw new Error(`${field} \u662F\u4E00\u6BB5\u6587\u5B57\uFF0C\u7ED9\u7684\u5374\u662F ${typeof value}`);
+  }
+  const before = check(graph, projectDir).errors;
+  const patched = structuredClone(graph);
+  patched.ideas[index][field] = value ?? void 0;
+  const after = check(patched, projectDir).errors.filter((e) => !before.includes(e));
+  if (after.length) throw new Error(`\u8FD9\u4E00\u6539\u4F1A\u8BA9\u56FE\u51FA\u9519\uFF0C\u4E0D\u5199\uFF1A${after.join("\uFF1B")}`);
+  if (value === null || value === void 0) doc.deleteIn(["ideas", index, field]);
+  else doc.setIn(["ideas", index, field], value);
+  const log = (idea.log ?? []).concat({
+    date: entry.date,
+    ...entry.by ? { by: entry.by } : {},
+    note: `edit ${field}\uFF1A${JSON.stringify(old ?? null).slice(0, 60)} \u2192 ${JSON.stringify(value ?? null).slice(0, 60)}`
+  });
+  doc.setIn(["ideas", index, "log"], log);
+  return { old };
 }
 var byId = (g) => new Map(g.ideas.map((i) => [i.id, i]));
 function dependents(g, id) {
@@ -8062,8 +8186,11 @@ function check(g, projectDir, file) {
         warnings.push(`${at}: done but no line numbers in \`code\``);
       }
     }
+    if (status === "blocked" && !String(idea.blocked_because ?? "").trim()) {
+      errors.push(`${at}: blocked but no \`blocked_because\` \u2014 \u5199\u6E05\u4E3A\u4EC0\u4E48\u505C\u4E0B\u3001\u7B49\u4EC0\u4E48\u624D\u80FD\u7EE7\u7EED\uFF08set ${at} blocked --because "\u2026"\uFF0C\u6216\u76F4\u63A5\u5728\u56FE\u91CC\u8865\u8FD9\u4E2A\u5B57\u6BB5\uFF09\uFF08I-133\uFF09`);
+    }
     if (status === "doing" && idea.verify?.command && !(idea.verify.test_files ?? []).length) {
-      warnings.push(`${at}: \u5728\u505A\uFF0C\u4F46 \`verify\` \u53EA\u6709\u4E00\u6761\u547D\u4EE4\u3001\u6CA1\u6709 \`test_files\` \u2014\u2014 \u6CA1\u6709\u80FD\u5355\u72EC\u5931\u8D25\u7684\u6D4B\u8BD5\u5C31\u6491\u4E0D\u8D77 RED\uFF0C\u5B9E\u73B0\u524D\u8981\u4E48\u8865\u4E0A\u6D4B\u8BD5\u6587\u4EF6\uFF0C\u8981\u4E48\u8BF7\u4EBA\u6279\u4E00\u6B21 red-waiver\uFF08D8\uFF09`);
+      warnings.push(`${at}: \u5728\u505A\uFF0C\u4F46 \`verify\` \u53EA\u6709\u4E00\u6761\u547D\u4EE4\u3001\u6CA1\u6709 \`test_files\` \u2014\u2014 \u5B9E\u73B0\u6BCF\u6539\u4E00\u7B14 GREEN \u90FD\u8981\u91CD\u8DD1\uFF0C\u6CA1\u6709\u70B9\u540D\u7684\u6D4B\u8BD5\u6587\u4EF6\u5C31\u53EA\u80FD\u6574\u5957\u91CD\u8DD1\uFF0C\u8D81\u73B0\u5728\u8865\u4E0A\uFF08D8/D20\uFF09`);
     }
     for (const ref of idea.code ?? []) {
       if (!ref.file) {
@@ -8141,9 +8268,9 @@ function check(g, projectDir, file) {
   }
   return { errors, warnings };
 }
-var PLAN_FIELDS = ["what", "why", "expected", "how", "why_this_way", "future"];
+var SHORT_RECORD_FIELDS = ["what", "why"];
 function isBuildReady(idea) {
-  for (const field of PLAN_FIELDS) {
+  for (const field of SHORT_RECORD_FIELDS) {
     if (!String(idea[field] ?? "").trim()) return `missing ${field}`;
   }
   if (!(idea.code ?? []).some((c) => c.file)) return "missing code.file (where the implementation will live)";
@@ -8191,18 +8318,22 @@ function writeNextId(doc, value) {
     top.items.splice(at < 0 ? top.items.length : at, 0, added);
   }
 }
-function addIdea(doc, graph, name, needs, date) {
+function addIdea(doc, graph, name, needs, date, fields = {}) {
   for (const n2 of needs) {
     if (!graph.ideas.some((i) => i.id === n2)) throw new Error(`\u672A\u77E5\u524D\u7F6E ${n2}`);
   }
   const highest = graph.ideas.reduce((m, i) => Math.max(m, idNumber(i.id) || 0), 0);
   const n = Number(graph.next_id) || highest + 1;
   const id = formatId(n);
+  const prose = ["what", "why", "expected", "how", "parent"].filter((f) => fields[f]).map((f) => [f, fields[f]]);
   doc.setIn(["ideas", graph.ideas.length], {
     id,
     name,
     status: "todo",
     ...needs.length ? { needs } : {},
+    ...Object.fromEntries(prose),
+    ...fields.code?.length ? { code: fields.code.map((file) => ({ file })) } : {},
+    ...fields.verify ? { verify: { command: fields.verify, test_files: fields.tests ?? [], pass: "exit 0" } } : {},
     log: [{ date, by: "new", note: "\u521B\u5EFA" }]
   });
   writeNextId(doc, n + 1);
@@ -8323,16 +8454,16 @@ function applyApproval(projectDir, prompt, meta) {
   }, null, 2));
   rmFileQuietly(file);
   if (decision === "approved" && pending.gate === "manual-check") {
-    const { doc, graph: g } = load(graphPath(projectDir));
-    for (const id of ids) {
-      const index = g.ideas.findIndex((i) => i.id === id);
-      if (index < 0) continue;
-      doc.setIn(
-        ["ideas", index, "verify", "signed_off"],
-        `${pending.by || "\u4EBA"} ${meta.date} \u2014\u2014 \u7ECF\u4E00\u6B21\u6027\u53E3\u4EE4 ${challenge} \u6279\u51C6\uFF1B\u56DE\u6267 ideas/approvals/receipts/${challenge}.json`
-      );
-    }
-    save(graphPath(projectDir), doc);
+    mutateGraph(graphPath(projectDir), projectDir, (doc, g) => {
+      for (const id of ids) {
+        const index = g.ideas.findIndex((i) => i.id === id);
+        if (index < 0) continue;
+        doc.setIn(
+          ["ideas", index, "verify", "signed_off"],
+          `${pending.by || "\u4EBA"} ${meta.date} \u2014\u2014 \u7ECF\u4E00\u6B21\u6027\u53E3\u4EE4 ${challenge} \u6279\u51C6\uFF1B\u56DE\u6267 ideas/approvals/receipts/${challenge}.json`
+        );
+      }
+    });
   }
   return { ok: true, decision, gate: pending.gate };
 }
@@ -8474,6 +8605,15 @@ function decideProductWrite(projectDir, graph, filePath) {
   const inRoot = platform === "win32" ? full.toLowerCase().startsWith(root.toLowerCase() + "/") : full.startsWith(root + "/");
   const rel = inRoot ? full.slice(root.length + 1) : full;
   const p = paths(projectDir);
+  if (!inRoot) {
+    const tmp = resolve2(tmpdir()).replaceAll("\\", "/");
+    const underTmp = platform === "win32" ? full.toLowerCase().startsWith(tmp.toLowerCase() + "/") : full.startsWith(tmp + "/");
+    if (underTmp) return { allow: true, reason: "\u4E34\u65F6\u76EE\u5F55\u91CC\u7684\u6587\u4EF6\u4E0D\u662F\u8FD9\u4E2A\u9879\u76EE\u7684\u4EA7\u54C1\u6587\u4EF6\uFF0C\u8FD9\u5F20\u56FE\u4E0D\u7BA1\u5B83\uFF08I-147\uFF09" };
+    return {
+      allow: false,
+      reason: `${full} \u5728\u9879\u76EE\u4E4B\u5916 \u2014\u2014 \u8FD9\u5F20\u56FE\u53EA\u7BA1 ${root} \u4E0B\u7684\u6587\u4EF6\uFF0C\u9879\u76EE\u5916\u7684\u6587\u4EF6\u5B83\u4E0D\u8BA4\u9886\u4E5F\u4E0D\u653E\u884C\uFF08D16/I-147\uFF09\u3002\u8349\u7A3F\u653E\u5230\u64CD\u4F5C\u7CFB\u7EDF\u7684\u4E34\u65F6\u76EE\u5F55\u91CC\uFF1B\u771F\u8981\u5199\u522B\u7684\u9879\u76EE\uFF0C\u53BB\u90A3\u4E2A\u9879\u76EE\u91CC\u505A\u3002`
+    };
+  }
   for (const [file, label] of [
     [p.approved, "\u6279\u51C6\u8BB0\u5F55"],
     [p.worklist, "\u626B\u63CF\u6E05\u5355"],
@@ -8630,6 +8770,9 @@ function convertCodex(nodesDir, projectName, date) {
       id,
       name: n.name ?? n.id,
       status: folded,
+      // I-133: a blocked idea says why. The Codex record carried no reason
+      // field, so the fold itself is the reason — and it says to fill in more.
+      ...folded === "blocked" ? { blocked_because: n.status === "superseded" ? "\u8FC1\u79FB\u81EA Codex\uFF1A\u539F\u72B6\u6001 superseded\uFF08\u5E9F\u5F03\uFF09\uFF0C\u4FDD\u53F7\u7F6E blocked\uFF1B\u7F16\u53F7\u4FDD\u7559\uFF0C\u6C38\u4E0D\u590D\u7528" : "\u8FC1\u79FB\u81EA Codex\uFF1A\u539F\u72B6\u6001 blocked\uFF0C\u539F\u56E0\u6CA1\u968F\u8FC1\u79FB\u5E26\u8FC7\u6765 \u2014\u2014 \u8BF7\u8865\u4E00\u53E5\u4E3A\u4EC0\u4E48\u505C\u4E0B\u3001\u7B49\u4EC0\u4E48\u624D\u80FD\u7EE7\u7EED" } : {},
       ...needs.length ? { needs } : { needs: [] },
       what: n.what ?? "",
       why: n.why ?? "",
@@ -8765,8 +8908,6 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
     if (notReady) throw new Error(`${id}: cannot be doing \u2014 ${notReady}. \u5148\u628A\u60F3\u6CD5\u60F3\u6E05\u695A\uFF08/ccthink\uFF09`);
     const unmet = needsUnmet(idea, graph);
     if (unmet) throw new Error(`${id}: cannot be doing \u2014 ${unmet}`);
-    const clash = fileClash(idea, graph);
-    if (clash) throw new Error(`${id}: cannot be doing \u2014 ${clash}`);
   }
   if (status === "done") {
     if (!idea.code?.length) throw new Error(`${id}: cannot be done without \`code\` \u2014 say where it lives`);
@@ -8780,18 +8921,25 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
     const openKids = childrenUnfinished(idea, graph);
     if (openKids) throw new Error(`${id}: cannot be done \u2014 ${openKids}`);
   }
+  const because = (entry.because ?? entry.note ?? "").trim();
+  if (status === "blocked" && !because) {
+    throw new Error(`${id}: cannot be blocked without a reason \u2014 \u8BF4\u6E05\u4E3A\u4EC0\u4E48\u505C\u4E0B\u3001\u7B49\u4EC0\u4E48\u624D\u80FD\u7EE7\u7EED\uFF1Aset ${id} blocked --because "\u2026"\uFF08I-133\uFF09`);
+  }
   doc.setIn(["ideas", index, "status"], status);
+  if (status === "blocked") doc.setIn(["ideas", index, "blocked_because"], because);
+  else if (idea.blocked_because !== void 0) doc.deleteIn(["ideas", index, "blocked_because"]);
+  const clash = status === "doing" ? fileClash(idea, graph) : null;
   const log = (idea.log ?? []).concat({
     date: entry.date,
     ...entry.by ? { by: entry.by } : {},
-    note: entry.note || `status \u2192 ${status}`
+    note: (entry.note || `status \u2192 ${status}`) + (clash ? `\uFF1B${clash}\uFF08\u5F15\u7528\u4E0D\u7B49\u4E8E\u5360\u7528\uFF0CI-149\uFF1A\u540C\u76EE\u5F55\u591A\u4F1A\u8BDD\u5E76\u884C\u8BF7 coord enable\uFF0C\u5199\u65F6\u6309\u4F1A\u8BDD\u6838\u5BF9\uFF09` : "")
   });
   doc.setIn(["ideas", index, "log"], log);
 }
 var CHANGE_VERSION = 1;
 var BEHAVIOUR_FIELDS = ["what", "expected", "how", "why_this_way", "verify"];
 var NEW_IDEA_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
-var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent"];
+var SET_FIELDS = ["name", "what", "why", "expected", "how", "why_this_way", "future", "parent", "blocked_because"];
 var fieldNode = (doc, field, value) => field === "parent" ? String(value ?? "").trim() : proseNode(doc, value);
 var idNumber = (id) => {
   const m = /^I-(\d+)$/.exec(String(id));
@@ -8903,7 +9051,8 @@ function applyChanges(source, envelope, today, projectDir) {
       setStatus(doc, doc.toJSON(), op.id, "blocked", {
         by: "apply",
         date: today,
-        note: `\u5DF2\u5B8C\u6210\u7684\u60F3\u6CD5\u88AB\u6539\u4E86 ${op.field}\uFF0C\u81EA\u52A8\u9000\u56DE blocked \u2014\u2014 \u60F3\u6E05\u695A\u518D\u8D70\u4E00\u904D doing\uFF0C\u6D4B\u8BD5\u5148\u884C\u3001\u4EBA\u6279\u51C6\u4E09\u6761\u89C4\u5219\u5BF9\u5B83\u91CD\u65B0\u751F\u6548`
+        note: `\u5DF2\u5B8C\u6210\u7684\u60F3\u6CD5\u88AB\u6539\u4E86 ${op.field}\uFF0C\u81EA\u52A8\u9000\u56DE blocked \u2014\u2014 \u60F3\u6E05\u695A\u518D\u8D70\u4E00\u904D doing\uFF0C\u5B8C\u6210\u524D\u8981\u91CD\u65B0\u62FF\u5230 GREEN`,
+        because: `\u5DF2\u5B8C\u6210\u4E4B\u540E ${op.field} \u88AB\u6539\u4E86\uFF1A\u884C\u4E3A\u53D8\u4E86\uFF0C\u539F\u6765\u7684\u9A8C\u8BC1\u4E0D\u518D\u4F5C\u6570\uFF0C\u60F3\u6E05\u695A\u518D\u8D70\u4E00\u904D doing`
       }, projectDir);
       changed.push(`${op.id} \u56E0\u884C\u4E3A\u5B57\u6BB5\u88AB\u6539\uFF0C\u9000\u56DE blocked`);
     }
@@ -9245,7 +9394,7 @@ function render(g, source = "", projectDir = "", token = "") {
   <h3><span class="ro">${esc(i.name)}</span><input class="rw" data-idea="${attr(i.id)}" data-field="name" value="${attr(i.name)}"> <span class="badge ro">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${statusPicker(i)}${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<button class="edit-toggle" data-edit="${attr(i.id)}">\u7F16\u8F91</button><button class="edit-toggle danger" data-remove="${attr(i.id)}" title="\u6807\u8BB0\u5F85\u5220\uFF0C\u518D\u70B9\u4E00\u6B21\u64A4\u9500">\u5220\u9664</button><span class="iid">${esc(i.id)}</span></h3>
   <dl>${field(i, "parent", "\u7236\u60F3\u6CD5")}${PROSE.slice(0, 5).map((q) => field(i, q.key, q.label)).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
-    <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}
+    <dt>${askedAs(7)}</dt><dd>${verifyOf(i)}</dd>${field(i, "future", askedAs(8))}${i.status === "blocked" || i.blocked_because ? field(i, "blocked_because", "\u53D7\u963B\u539F\u56E0") : ""}
   </dl>
   <p class="edges needs" data-needs-of="${attr(i.id)}"><b>\u524D\u7F6E\u60F3\u6CD5</b> <span class="chips">${(i.needs ?? []).filter((n) => map.has(n)).map((n) => needChip(n, i.id)).join("") || NONE}</span>${linkPicker(i)}</p>
   <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
@@ -9258,19 +9407,55 @@ function render(g, source = "", projectDir = "", token = "") {
     if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}${testFilesOf(v)}${v.signed_off ? `<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${esc(v.signed_off)}</span>` : ""}`;
     return `${esc(v.manual)}<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${v.signed_off ? esc(v.signed_off) : "\u672A\u7B7E"}</span>`;
   };
+  const briefKids = (i) => {
+    const kids = kidsOf(i.id);
+    if (kids.length === 0) return "";
+    return `<div class="brief-kids"><b>\u5B83\u81EA\u5DF1\u7684\u5B50\u60F3\u6CD5</b> <span class="legend">${esc(countsOf(kids))}</span>${kids.map((k) => `<div class="brief-kid ${cls(k)}"><a class="xlink" href="#${esc(k.id)}" data-goto="${esc(k.id)}">${esc(k.name)}</a><span class="badge">${esc(STATUS_ZH[k.status ?? "todo"])}</span></div>`).join("")}</div>`;
+  };
   const briefDetail = (i) => `<div class="brief-detail"><dl>
     <dt>\u7236\u60F3\u6CD5</dt><dd>${i.parent && map.has(i.parent) ? links([i.parent]) : NONE}</dd>${PROSE.slice(0, 5).map((q) => `<dt>${q.label}</dt><dd>${esc(i[q.key]) || NONE}</dd>`).join("")}
     <dt>${askedAs(6)}</dt><dd>${codeOf(i)}</dd>
     <dt>${askedAs(7)}</dt><dd>${verifyPlain(i)}</dd>
-    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>
+    <dt>${askedAs(8)}</dt><dd>${esc(i.future) || NONE}</dd>${i.status === "blocked" || i.blocked_because ? `
+    <dt>\u53D7\u963B\u539F\u56E0</dt><dd class="blocked-because">${esc(i.blocked_because) || NONE}</dd>` : ""}
   </dl>
   <p class="edges"><b>\u524D\u7F6E\u60F3\u6CD5</b> ${links((i.needs ?? []).filter((n) => map.has(n)))}</p>
   <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
+  ${briefKids(i)}
   ${i.log?.length ? `<div class="brief-log"><b>\u4FEE\u6539\u8BB0\u5F55</b>${i.log.map((l) => `<div>${esc(l.date)}${l.by ? " \xB7 " + esc(l.by) : ""} \u2014 ${esc(l.note)}</div>`).join("")}</div>` : ""}
   </div>`;
   const brief = (i) => `<details class="brief-row ${cls(i)}" data-row="${attr(i.id)}"><summary class="brief">
     <span class="bname">${esc(i.name)}</span><span class="badge">${esc(STATUS_ZH[i.status ?? "todo"])}</span>${ends.has(i.id) ? '<span class="badge end">\u7EC8\u70B9</span>' : ""}<span class="blurb">${esc(String(i.what ?? "").split("\n")[0].trim())}</span><a class="enter" href="#${esc(i.id)}" data-brief="${attr(i.id)}">\u8FDB\u5165 \u2192</a></summary>
 ${briefDetail(i)}</details>`;
+  const RECENT = 20;
+  const timeline = (owner, scope) => {
+    const wall = (owner ? [owner] : []).concat(scope);
+    const entries = [];
+    for (const i of wall) for (const l of i.log ?? []) {
+      entries.push({ date: String(l.date ?? ""), by: l.by ?? "", note: String(l.note ?? ""), id: i.id, name: i.name });
+    }
+    if (entries.length === 0) return "";
+    const byDay = /* @__PURE__ */ new Map();
+    for (const e of entries.slice().reverse()) (byDay.get(e.date) ?? byDay.set(e.date, []).get(e.date)).push(e);
+    const days = [...byDay.keys()].sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
+    const row = (e) => `<div class="tl-row"><a class="xlink" href="#${esc(e.id)}" data-goto="${esc(e.id)}">${esc(e.name)}</a><span class="tl-note">${e.by ? esc(e.by) + " \u2014 " : ""}${esc(e.note)}</span></div>`;
+    const day = (d, rows) => `<div class="tl-day"><b>${esc(d || "\uFF08\u6CA1\u5199\u65E5\u671F\uFF09")}</b>${rows.map(row).join("")}</div>`;
+    const recent = [];
+    const older = [];
+    let shown = 0;
+    for (const d of days) {
+      const rows = byDay.get(d);
+      if (shown < RECENT) {
+        recent.push(day(d, rows));
+        shown += rows.length;
+      } else older.push(day(d, rows));
+    }
+    const hidden = entries.length - shown;
+    return `<details class="worklist timeline"><summary>\u6539\u52A8\u65F6\u95F4\u7EBF (${entries.length}) <span class="legend">${owner ? "\u8FD9\u4E2A\u60F3\u6CD5\u548C\u5B83\u7684\u5B50\u5B59" : "\u6574\u4E2A\u9879\u76EE"} \xB7 \u4ECE\u65B0\u5230\u65E7</span></summary>
+  ${recent.join("\n  ")}${older.length ? `
+  <details class="tl-more"><summary>\u66F4\u65E9\u7684 ${hidden} \u6761</summary>${older.join("")}</details>` : ""}
+</details>`;
+  };
   const page = (owner) => {
     const id = owner ? owner.id : "";
     const kids = kidsOf(id);
@@ -9290,6 +9475,7 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
     }))}`}
 <h2>${owner ? "\u5B50\u60F3\u6CD5" : "\u9876\u5C42\u60F3\u6CD5"} <span class="legend">\u6309\u4F9D\u8D56\u987A\u5E8F\u6392\u5217</span></h2>
 <div class="children">${kids.map(brief).join("\n")}</div>
+${timeline(owner, scope)}
 </section>`;
   };
   const paragraphs = (s) => String(s ?? "").split("\n").map((t) => t.trim()).filter(Boolean);
@@ -9408,9 +9594,22 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   .pending-row.void .badge { background:#e4cbc7; color:#9a4a40; }
   .pending-text { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df;
     white-space:pre-wrap; font:inherit; max-height:60vh; overflow:auto; }
+  /* I-134: the change timeline at the foot of every page. */
+  .timeline { margin-top:18px; }
+  .tl-day { margin:10px 0 0; }
+  .tl-day > b { display:block; color:#63746a; font-weight:normal; font-size:12px; }
+  .tl-row { display:flex; gap:10px; align-items:baseline; margin:4px 0 0 12px; }
+  .tl-row .xlink { margin:0; flex:none; }
+  .tl-note { color:#3d4f47; font-size:12px; }
+  .tl-more { margin:10px 0 0; } .tl-more > summary { cursor:pointer; color:#63746a; font-size:12px; }
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
   .wl-note { color:#63746a; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* I-131: three key points under the header, on idea pages only. Read-only,
+     no ids, no data-* \u2014 invisible to editing, drafts and signing. */
+  .keypoints { margin:-6px 0 18px; padding:0 0 0 18px; color:#3d4f47; font-size:14px; line-height:1.7; }
+  .keypoints li { margin:2px 0; }
+  .keypoints[hidden] { display:none; }
   .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#63746a; }
   .crumbs a { color:#356b58; text-decoration:none; }
   .crumbs a.here { color:#293d36; font-weight:600; }
@@ -9439,6 +9638,11 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   .brief .enter:hover { text-decoration:underline; }
   .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #dce2d9; font-size:13px; color:#293d36; }
   .brief-detail dl { margin-top:8px; }
+  /* I-132: the row's own children \u2014 one more level, no page change. */
+  .brief-kids { margin:11px 0 0; font-size:13px; }
+  .brief-kids b { color:#63746a; font-weight:normal; margin-right:4px; }
+  .brief-kid { display:flex; gap:8px; align-items:baseline; margin:4px 0 0 12px; }
+  .brief-kid .xlink { margin:0; }
   .brief-log { margin:10px 0 0; font-size:12px; color:#63746a; }
   .brief-log b { color:#63746a; font-weight:normal; margin-right:6px; }
   .brief-log div { margin:4px 0 0 14px; }
@@ -9552,6 +9756,7 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   // Nothing to fold means no element at all: an expander that opens onto
   // nothing reads as broken.
   overview.slice(1).map((p) => `<p>${esc(p)}</p>`).join("")}</details>` : ""}
+<ul id="keypoints" class="keypoints" hidden></ul>
 <div id="restore" hidden>\u53D1\u73B0 <b><span id="restore-count">0</span></b> \u5904\u672A\u63D0\u4EA4\u7684\u6539\u52A8\uFF08\u4E0A\u6B21\u5173\u6389\u9875\u9762\u65F6\u6CA1\u6709\u63D0\u4EA4\uFF09\u3002
   \u9010\u6761\u786E\u8BA4\u8981\u4E0D\u8981\u6062\u590D \u2014\u2014 \u672C\u5730\u7F51\u9875\u7684\u5B58\u50A8\u4E0D\u6B62\u8FD9\u4E00\u9875\u80FD\u5199\uFF0C\u6240\u4EE5\u8FD9\u4E00\u6B65\u4E0D\u4F1A\u81EA\u52A8\u505A\uFF1A
   <div id="restore-list"></div></div>
@@ -9828,8 +10033,57 @@ ${// One section per page, every idea's card exactly once (on its own page).
     if (lead) lead.textContent = owner ? first(effectiveField(owner, "what")) : first(DATA.overview);
     // The fold holds the project's own history; it belongs to the home page only.
     if (more) more.hidden = !!owner;
+    showKeypoints(owner, first);
     try { document.title = owner ? nameOf(owner) + " \u2014 " + project : project + " \u2014 \u60F3\u6CD5\u56FE"; }
     catch (e) { /* not every host has a document title to set */ }
+  }
+
+  // I-131: three key points between the header and the diagram, derived \u2014 never
+  // typed \u2014 from the eight answers and the idea's place in the tree. Point one
+  // is the first line of "\u662F\u4EC0\u4E48", point two the first line of "\u9884\u671F\u7ED3\u679C", point
+  // three a computed fact: where it sits, how many direct children are done,
+  // how many unfinished prerequisites it waits on. Facts come from snapshot()
+  // (the live graph with the ledger applied), so a status changed on the page
+  // shows here at once. Read-only, no ids, no data-*: invisible to the three
+  // mechanisms that find elements by id. A point over fifty words is warned
+  // about, not truncated in silence.
+  const STATUS_WORD = { todo: "\u5F85\u529E", doing: "\u8FDB\u884C\u4E2D", done: "\u5DF2\u5B8C\u6210", blocked: "\u53D7\u963B" };
+  function keypointsOf(owner, first) {
+    const g = snapshot();
+    const me = g.ideas.find((i) => i.id === owner);
+    if (!me) return [];
+    const what = first(effectiveField(owner, "what"));
+    const expected = first(effectiveField(owner, "expected"));
+    const parent = effectiveField(owner, "parent");
+    const parentName = parent && g.ideas.some((i) => i.id === parent) ? nameOf(parent) : "";
+    const kids = g.ideas.filter((i) => i.parent === owner);
+    const kidsDone = kids.filter((i) => (i.status || "todo") === "done").length;
+    const waiting = (me.needs || []).filter((n) => { const p = g.ideas.find((i) => i.id === n); return p && (p.status || "todo") !== "done"; });
+    const facts = [
+      STATUS_WORD[me.status || "todo"] || String(me.status),
+      parentName ? "\u5F52\u5728\u300C" + parentName + "\u300D\u4E0B\u9762" : "\u9876\u5C42\u60F3\u6CD5",
+      kids.length ? "\u76F4\u63A5\u5B50\u60F3\u6CD5\u505A\u5B8C " + kidsDone + "/" + kids.length : "\u6CA1\u6709\u5B50\u60F3\u6CD5",
+      waiting.length ? "\u5728\u7B49 " + waiting.length + " \u4E2A\u6CA1\u505A\u5B8C\u7684\u524D\u7F6E\u60F3\u6CD5" : "\u6CA1\u6709\u524D\u7F6E\u6321\u7740\u5B83",
+    ];
+    return [
+      what ? "\u662F\u4EC0\u4E48\uFF1A" + what : "\u662F\u4EC0\u4E48\uFF1A\u2014",
+      expected ? "\u9884\u671F\u7ED3\u679C\uFF1A" + expected : "\u9884\u671F\u7ED3\u679C\uFF1A\u2014",
+      facts.join("\uFF1B"),
+    ];
+  }
+  function showKeypoints(owner, first) {
+    const box = document.getElementById("keypoints");
+    if (!box) return;
+    box.replaceChildren();
+    box.hidden = !owner;
+    if (!owner) return;
+    for (const point of keypointsOf(owner, first)) {
+      const li = document.createElement("li");
+      li.textContent = point;
+      box.append(li);
+      const words = (point.match(/[\\u3000-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef]|[^\\s\\u3000-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef]+/g) || []).length;
+      if (words > 50) { try { console.warn("[companion] \u8981\u70B9\u8D85\u8FC7\u4E94\u5341\u8BCD\uFF0C\u8BFB\u8D77\u6765\u5C31\u4E0D\u662F\u8981\u70B9\u4E86\uFF1A" + point.slice(0, 40) + "\u2026"); } catch (e) { /* no console */ } }
+    }
   }
 
   function showPage() {
@@ -10435,24 +10689,24 @@ ${error instanceof Error ? error.message : String(error)}
           send(res, 403, { ok: false, reason: "\u4EE4\u724C\u4E0D\u5BF9 \u2014\u2014 \u8FD9\u4E2A\u670D\u52A1\u53EA\u63A5\u53D7\u5B83\u81EA\u5DF1\u53D1\u51FA\u53BB\u7684\u90A3\u4E2A\u9875\u9762" });
           return;
         }
-        const source = readFileSync2(file, "utf8");
         const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-        const result = applyChanges(source, body.envelope, today, projectDir);
+        if (body.confirm !== true) {
+          const preview = applyChanges(readFileSync2(file, "utf8"), body.envelope, today, projectDir);
+          send(res, 200, preview.ok ? { ok: true, preview: true, changed: preview.changed } : { ok: false, reason: preview.reason });
+          return;
+        }
+        const m = mutateGraphText(file, projectDir, (source) => applyChanges(source, body.envelope, today, projectDir));
+        const result = m.result;
         if (!result.ok) {
           send(res, 200, { ok: false, reason: result.reason });
           return;
         }
-        if (body.confirm !== true) {
-          send(res, 200, { ok: true, preview: true, changed: result.changed });
-          return;
-        }
-        atomicWrite(file, result.text);
         appendServeLog(projectDir, result.changed ?? []);
         const graph = (0, import_yaml.parseDocument)(result.text).toJSON();
         const signs = requestSignatures(projectDir, graph, result.signRequests ?? [], today);
         for (const line of signs) console.log(line);
         const git = commitAndPush(`\u7F51\u9875\u5199\u56DE ${result.changed?.length ?? 0} \u5904\uFF08serve\uFF09`);
-        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...git ? { git } : {} });
+        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...git ? { git } : {}, ...m.renderError ? { renderError: m.renderError } : {} });
         return;
       }
       if (req.method === "POST" && path === "/approve") {
@@ -10541,13 +10795,14 @@ var SUBCOMMANDS = [
   ["init", ""],
   ["migrate", "[--pick claude|cursor|codex] [--dry-run]"],
   ["scan", "[--reset] [--n 40] [--skipped]"],
-  ["new", "<\u540D\u79F0> [--needs I-001,I-002]"],
+  ["new", "<\u540D\u79F0> [--needs I-001,I-002] [--what \u2026 --why \u2026 --code \u6587\u4EF6,\u6587\u4EF6 --verify \u547D\u4EE4 --tests \u6587\u4EF6,\u6587\u4EF6 --parent I-xxx]\uFF08I-153\uFF1A\u5C0F\u6539\u52A8\u4E00\u6761\u547D\u4EE4\u5EFA\u597D\u5373\u53EF\u5F00\u5DE5\uFF09"],
+  ["edit", "<id> --field <\u5B57\u6BB5> --value-json <\u65B0\u503C> [--old-json <\u4F60\u770B\u5230\u7684\u65E7\u503C>] [--stdin]"],
   ["check", ""],
   ["status", ""],
   ["next", ""],
   ["show", "<id>"],
   ["log", "[id] [--n 10]"],
-  ["set", "<id> <status>"],
+  ["set", "<id> <status> [--because \u4E3A\u4EC0\u4E48\u53D7\u963B]"],
   ["allow", "<path>"],
   ["render", ""],
   ["apply", "[file]"],
@@ -10687,6 +10942,9 @@ ${graph.ideas.length} ideas \xB7 ${errors.length} errors \xB7 ${warnings.length}
       console.log(`${idea.id}  ${idea.name}  [${idea.status ?? "todo"}]`);
       for (const block of questionLines(idea)) console.log(`
 ${block}`);
+      if (idea.status === "blocked" || idea.blocked_because) console.log(`
+\u53D7\u963B\u539F\u56E0
+  ${idea.blocked_because || "\u2014"}`);
       console.log(`
 \u524D\u7F6E\u60F3\u6CD5  ${(idea.needs ?? []).map((n) => `${n} (${map.get(n)?.status ?? "?"})`).join(", ") || "\u2014"}`);
       console.log(`\u5B83\u662F\u8C01\u7684\u524D\u7F6E  ${dependents(graph, idea.id).join(", ") || "\u2014"}`);
@@ -10715,17 +10973,16 @@ ${block}`);
       return 0;
     }
     case "set": {
-      setStatus(
-        doc,
-        graph,
+      const m = mutateGraph(file, projectDir, (d, g) => setStatus(
+        d,
+        g,
         args2[1],
         args2[2],
-        { by: flag(args2, "by"), note: flag(args2, "note"), date: today },
+        { by: flag(args2, "by"), note: flag(args2, "note"), because: flag(args2, "because"), date: today },
         projectDir
-      );
-      save(file, doc);
-      redraw(file, projectDir);
+      ));
       console.log(`${args2[1]} \u2192 ${args2[2]}`);
+      if (m.renderError) console.error(m.renderError);
       return 0;
     }
     case "new": {
@@ -10735,10 +10992,48 @@ ${block}`);
         return 2;
       }
       const needs = (flag(args2, "needs") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      const id = addIdea(doc, graph, name, needs, today);
-      save(file, doc);
-      redraw(file, projectDir);
-      console.log(id);
+      const list = (k) => (flag(args2, k) ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      const fields = {
+        // I-153: a short record in one call
+        what: flag(args2, "what"),
+        why: flag(args2, "why"),
+        expected: flag(args2, "expected"),
+        how: flag(args2, "how"),
+        parent: flag(args2, "parent"),
+        code: list("code"),
+        verify: flag(args2, "verify"),
+        tests: list("tests")
+      };
+      const m = mutateGraph(file, projectDir, (d, g) => addIdea(d, g, name, needs, today, fields));
+      console.log(m.result);
+      if (m.renderError) console.error(m.renderError);
+      return 0;
+    }
+    case "edit": {
+      const id = args2[1];
+      const field = flag(args2, "field");
+      if (!id || id.startsWith("--") || !field) {
+        console.error(usageOf("edit"));
+        return 2;
+      }
+      let value, old;
+      try {
+        const stdin = args2.includes("--stdin") ? JSON.parse(readFileSync2(0, "utf8")) : void 0;
+        const v = flag(args2, "value-json");
+        const o = flag(args2, "old-json");
+        value = v !== void 0 ? JSON.parse(v) : stdin?.value;
+        old = o !== void 0 ? JSON.parse(o) : stdin?.old;
+      } catch (error) {
+        console.error(`\u503C\u4E0D\u662F\u5408\u6CD5\u7684 JSON\uFF1A${error instanceof Error ? error.message : error}`);
+        return 2;
+      }
+      if (value === void 0) {
+        console.error(usageOf("edit"));
+        return 2;
+      }
+      const m = mutateGraph(file, projectDir, (d, g) => editIdeaField(d, g, projectDir, id, field, value, old, { by: flag(args2, "by"), date: today }));
+      console.log(`${id}.${field} \u5DF2\u6539\uFF08\u539F\u503C ${JSON.stringify(m.result.old ?? null).slice(0, 80)}\uFF09`);
+      if (m.renderError) console.error(m.renderError);
       return 0;
     }
     case "allow": {
@@ -10748,6 +11043,11 @@ ${block}`);
       }
       const verdict = decideProductWrite(projectDir, graph, args2[1]);
       console.log(`${verdict.allow ? "allow" : "deny"}	${args2[1]}	${verdict.reason}`);
+      const runtime = paths(projectDir).runtime;
+      if (verdict.allow && coordinationEnabled(runtime)) {
+        const owner = ownerOf(runtime, projectDir, args2[1]);
+        console.log(owner ? `\u534F\u4F5C\u6A21\u5F0F\uFF1A${args2[1]} \u73B0\u5728\u5F52 ${owner.session} \u6301\u6709\uFF08${owner.task}\uFF09\u2014\u2014 \u4E0D\u662F\u4F60\u7684\u4F1A\u8BDD\u5C31\u4F1A\u88AB\u5B88\u536B\u62D2` : `\u534F\u4F5C\u6A21\u5F0F\uFF1A${args2[1]} \u8FD8\u6CA1\u4EBA\u8BA4\u9886 \u2014\u2014 \u5199\u4E4B\u524D\u5148 coord claim`);
+      }
       return verdict.allow ? 0 : 1;
     }
     case "run-check": {
@@ -10818,7 +11118,7 @@ ${block}`);
       return 0;
     }
     case "render": {
-      console.log(redraw(file, projectDir));
+      console.log(renderLocked(file, projectDir));
       return 0;
     }
     case "serve": {
@@ -10852,14 +11152,14 @@ ${block}`);
         console.error(`\u6539\u52A8\u6587\u4EF6\u4E0D\u662F\u5408\u6CD5\u7684 JSON\uFF1A${error}`);
         return 1;
       }
-      const result = applyChanges(readFileSync2(file, "utf8"), envelope, today, projectDir);
+      const m = mutateGraphText(file, projectDir, (source) => applyChanges(source, envelope, today, projectDir));
+      const result = m.result;
       if (!result.ok) {
         console.error(`\u62D2\u7EDD\u5199\u56DE\uFF1A${result.reason}
 
 \u6539\u52A8\u6587\u4EF6\u539F\u6837\u7559\u5728 ${changeFile}\uFF0C\u6CA1\u6709\u52A8\u8FC7\u3002`);
         return 1;
       }
-      atomicWrite(file, result.text);
       for (const line of result.changed ?? []) console.log(`  ${line}`);
       console.log(`
 \u5199\u56DE ${result.changed?.length ?? 0} \u5904\u6539\u52A8 \u2192 ${relative2(projectDir, file)}`);
@@ -10875,7 +11175,8 @@ ${line}`);
       } catch {
         console.log(`\uFF08\u6539\u52A8\u6587\u4EF6\u5F52\u6863\u5931\u8D25\uFF0C\u5B83\u8FD8\u5728 ${changeFile}\uFF09`);
       }
-      console.log(redraw(file, projectDir));
+      if (m.renderError) console.error(m.renderError);
+      else console.log(m.rendered);
       console.log(`
 \u56DE\u6D4F\u89C8\u5668\u5237\u65B0\u4E00\u4E0B\u9875\u9762\uFF0C\u518D\u505A\u4E0B\u4E00\u8F6E\u3002`);
       return 0;
@@ -10897,7 +11198,7 @@ if (argv[1]?.endsWith("ideas.ts")) {
 
 // companion/guard.ts
 var import_yaml2 = __toESM(require_dist());
-import { readFileSync as readFileSync3, existsSync as existsSync2, appendFileSync as appendFileSync2, mkdirSync as mkdirSync3 } from "node:fs";
+import { readFileSync as readFileSync3, existsSync as existsSync2, appendFileSync as appendFileSync2, mkdirSync as mkdirSync3, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join3, resolve as resolve3, dirname as dirname3 } from "node:path";
 import { platform as platform2 } from "node:process";
 var OK = { allow: true };
@@ -10922,12 +11223,21 @@ function projectRoot(reported) {
   }
   return start;
 }
+var REFUSAL_KINDS = [
+  [/签字|signed_off|manual-check|人工验收|人亲手|人自己打/, "\u9700\u4EBA\u5224\u65AD"],
+  [/提交这一步归人|先让人看过内容|--replace-legacy|扩大范围/, "\u7F3A\u6388\u6743"],
+  [/I-104|本地服务|loopback|localhost|127\.0\.0\.1|项目外|I-147|hook 入口|自己造事件|D26|守卫自身出错/, "\u80FD\u529B\u53D7\u9650"]
+];
+function refusalKind(reason) {
+  return REFUSAL_KINDS.find(([re]) => re.test(reason))?.[1] ?? "\u81EA\u884C\u5904\u7406";
+}
+var categorized = (v) => v.allow || !v.reason || /^【/.test(v.reason) ? v : { ...v, reason: `\u3010${refusalKind(v.reason)}\u3011${v.reason}` };
 function decide(event, projectDir, opts = {}) {
   if (opts.guardOff) {
     return { allow: true, warn: "AIDEV_GUARD=off \u2014 \u4E03\u6761\u89C4\u5219\u5168\u90E8\u505C\u7528\u3002\u8FD9\u662F\u9003\u751F\u53E3\uFF0C\u4E0D\u662F\u5E38\u6001\uFF1B\u8BB0\u5F55\u91CC\u4F1A\u5199\u660E\u5F3A\u5236\u5F53\u65F6\u662F\u5173\u7740\u7684\u3002" };
   }
   try {
-    return decideInner(event, projectDir);
+    return categorized(decideInner(event, projectDir));
   } catch (error) {
     const what = error instanceof Error ? error.message : String(error);
     if (event.event === "post-write") {
@@ -10985,8 +11295,33 @@ function rulePreWrite(event, projectDir) {
     const verdict = decideOnePath(event, graph, projectDir, target);
     if (!verdict.allow) return verdict;
   }
-  return OK;
+  return ruleOwnership(event, projectDir, targets);
 }
+function ruleOwnership(event, projectDir, targets) {
+  const runtime = paths(projectDir).runtime;
+  if (!coordinationEnabled(runtime)) return OK;
+  if (!event.actor) {
+    return { allow: false, reason: `\u534F\u4F5C\u6A21\u5F0F\u5F00\u7740\uFF0C\u4F46\u8FD9\u6B21\u5199\u5165\u6CA1\u5E26\u5BBF\u4E3B\u7ED9\u7684\u4F1A\u8BDD\u8EAB\u4EFD \u2014\u2014 \u5B88\u536B\u4E0D\u8BA4\u547D\u4EE4\u884C\u6216\u5DE5\u5177\u53C2\u6570\u91CC\u81EA\u62A5\u7684\u8EAB\u4EFD\uFF0C\u6240\u4EE5\u62D2\uFF08I-115\uFF09\u3002\u5BBF\u4E3B\u7684 hook \u4E8B\u4EF6\u91CC\u6CA1\u6709 session_id / conversation_id \u65F6\uFF0C\u8FD9\u6761\u8DEF\u53EA\u80FD\u5408\u4F5C\u5F0F\u5730\u7528 coord \u547D\u4EE4\u3002` };
+  }
+  const graphFile = paths(projectDir).graph.replaceAll("\\", "/");
+  for (const target of targets) {
+    if (sameFile2(resolve3(projectDir, target).replaceAll("\\", "/"), graphFile)) {
+      return { allow: false, reason: `\u534F\u4F5C\u6A21\u5F0F\u4E0B\u60F3\u6CD5\u56FE\u4E0D\u8BB8\u88F8\u5199\uFF08D24/I-115\uFF09\u2014\u2014 \u51E0\u4E2A\u4F1A\u8BDD\u540C\u65F6\u6539\u540C\u4E00\u4EFD YAML \u4F1A\u4E92\u76F8\u8986\u76D6\u3002\u6539\u4E00\u4E2A\u5B57\u6BB5\u7528 ${ENGINE_CMD_TEXT} edit <id> --field \u2026 --value-json \u2026\uFF0C\u6210\u6279\u6539\u52A8\u8D70\u7F51\u9875\u63D0\u4EA4 / apply\uFF0C\u72B6\u6001\u8D70 set\u3002` };
+    }
+    const owner = ownerOf(runtime, projectDir, target);
+    if (!owner) {
+      return { allow: false, reason: `${target} \u8FD8\u6CA1\u6709\u4EBA\u8BA4\u9886\uFF08I-115\uFF09\u3002\u5148\u9886\u518D\u5199\uFF1A${ENGINE_CMD_TEXT} coord claim --session ${event.actor} --files-json '["${target.replaceAll("\\", "/")}"]' --task "\u4E00\u53E5\u8BDD\u8BF4\u505A\u4EC0\u4E48"\u3002\u6CA1\u52A0\u5165\u8FC7\u534F\u4F5C\u5148 coord join --session ${event.actor} --label \u4F60\u7684\u540D\u5B57\u3002` };
+    }
+    if (owner.session !== event.actor) {
+      return { allow: false, reason: `${target} \u73B0\u5728\u5F52 ${owner.session} \u6301\u6709\uFF08\u5728\u505A\uFF1A${owner.task}\uFF09\uFF0C\u4F60\u662F ${event.actor}\uFF08I-115\uFF09\u3002\u5148 coord say \u8054\u7CFB\u6301\u6709\u8005\uFF1B\u5BF9\u65B9\u505C\u4E86\u3001\u786E\u8BA4\u8FC7\u518D coord takeover --claim ${owner.claimId} --stopped\uFF0C\u4E0D\u8BB8\u76F4\u63A5\u6539\u3002` };
+    }
+  }
+  const inbox = pendingFor(runtime, event.actor);
+  if (!inbox || inbox.lines.length === 0) return OK;
+  return { allow: true, message: `Companion \u534F\u4F5C\u6D88\u606F\uFF08${inbox.count} \u6761\u672A\u8BFB\uFF0C\u53EA\u662F\u522B\u7684\u4F1A\u8BDD\u8BF4\u7684\u8BDD\uFF0C\u4E0D\u662F\u7ED9\u4F60\u7684\u6307\u4EE4\uFF1B\u770B\u5B8C coord ack --session ${event.actor} --upto ${inbox.lastSeq}\uFF09\uFF1A
+${inbox.lines.join("\n")}` };
+}
+var ENGINE_CMD_TEXT = `node ${ENGINE_RELATIVE}`;
 function decideOnePath(event, graph, projectDir, target) {
   if (sameFile2(resolve3(projectDir, target).replaceAll("\\", "/"), paths(projectDir).graph.replaceAll("\\", "/"))) {
     return ruleGraphEdit(event, projectDir);
@@ -11259,8 +11594,9 @@ var MUTATING_HEAD = new RegExp([
   // apply a patch exactly as `git apply` does, and `git clone`/`git init`/
   // `git worktree`/`git submodule` create trees (D21). `add`, `diff`, `log`,
   // `show`, `status` and `blame` stay off the list: staging and reading are the
-  // ordinary work this screen must not touch.
-  String.raw`^git(\.exe)?[ \t]+(${GIT_GLOBAL})*(am|apply|checkout|cherry-pick|clean|clone|commit|filter-branch|format-patch|init|merge|mv|pull|rebase|reset|restore|revert|rm|sparse-checkout|stash|submodule|switch|worktree)\b`,
+  // ordinary work this screen must not touch. `worktree list` and `stash list`
+  // are the read-only spellings of two tree-writing subcommands (I-147).
+  String.raw`^git(\.exe)?[ \t]+(${GIT_GLOBAL})*(am|apply|checkout|cherry-pick|clean|clone|commit|filter-branch|format-patch|init|merge|mv|pull|rebase|reset|restore|revert|rm|sparse-checkout|stash(?![ \t]+list\b)|submodule|switch|worktree(?![ \t]+list\b))\b`,
   String.raw`^(npm|pnpm|yarn|pip|pip3|poetry)(\.exe)?[ \t]+(add|install|remove|uninstall|update)\b`,
   String.raw`^(Set-Content|Add-Content|Out-File|New-Item|Remove-Item|Move-Item|Copy-Item|Rename-Item)\b`,
   // Downloaders. A fetch that lands a file is a write, and it was the one write
@@ -11281,7 +11617,7 @@ var MUTATING_HEAD = new RegExp([
 ].join("|"), "i");
 var DOWNLOADER_HEAD = /^(curl|wget|aria2c|rsync|iwr|irm|Invoke-)/i;
 var GIT_COMMIT_HEAD = /^git(\.exe)?\b.*\bcommit$/i;
-var REDIRECT = /(?:^|[^<])(<>|>{1,2})/;
+var REDIRECT = /(?:^|[^<=])(<>|>{1,2})/;
 var NON_FILE_REDIRECT = /\d*>{1,2}&(?:\d+|-)|\d*>{1,2}[ \t]*(?:\/dev\/null|NUL|\$null)\b/gi;
 var REDIRECT_TARGET = /(?:<>|>{1,2})[ \t]*("[^"\r\n]*"|'[^'\r\n]*'|[^\s;&|<>]+)/g;
 var isRedirectToken = (token) => /^(?:<>|>{1,2})$/.test(token);
@@ -11517,7 +11853,11 @@ function ruleShell(event, projectDir) {
     if (declared) return OK;
   } catch {
   }
-  return screenShell(command, projectDir);
+  const verdict = screenShell(command, projectDir);
+  if (verdict.allow && event.actor && /companion\.mjs|ideas\.ts|cli\.ts/i.test(command)) {
+    touch(projectDir, event.actor, { ids: command.match(/\bI-\d{3,}\b/g) ?? [] });
+  }
+  return verdict;
 }
 function screenShell(command, projectDir) {
   if (!SMUGGLED_TAIL.test(command)) {
@@ -11537,16 +11877,91 @@ function screenShell(command, projectDir) {
   if (mutation !== null) return { allow: false, reason: mutatingReason(command, mutation) };
   return OK;
 }
+var touchedPath = (projectDir, actor) => join3(paths(projectDir).runtime, "touched", actor.replace(/[^A-Za-z0-9_.-]/g, "_") + ".json");
+function readTouched(projectDir, actor) {
+  try {
+    return JSON.parse(readFileSync3(touchedPath(projectDir, actor), "utf8"));
+  } catch {
+    return { files: [], ids: [] };
+  }
+}
+function touch(projectDir, actor, add) {
+  try {
+    const cur = readTouched(projectDir, actor);
+    const next = {
+      files: [.../* @__PURE__ */ new Set([...cur.files, ...add.files ?? []])],
+      ids: [.../* @__PURE__ */ new Set([...cur.ids, ...add.ids ?? []])]
+    };
+    const file = touchedPath(projectDir, actor);
+    mkdirSync3(dirname3(file), { recursive: true });
+    writeFileSync3(file, JSON.stringify(next));
+  } catch {
+  }
+}
+function affectedIds(graph, projectDir, actor) {
+  const t = readTouched(projectDir, actor);
+  const norm2 = (p) => p.replaceAll("\\", "/").toLowerCase();
+  const files = new Set(t.files.map(norm2));
+  const ids = new Set(t.ids);
+  for (const i of graph.ideas) {
+    const mine = [...(i.code ?? []).map((c) => c.file), ...i.verify?.test_files ?? []].filter(Boolean).map(norm2);
+    if (mine.some((f) => files.has(f))) ids.add(i.id);
+  }
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const i of graph.ideas) {
+      if (ids.has(i.id)) {
+        if (i.parent && !ids.has(i.parent)) {
+          ids.add(i.parent);
+          grew = true;
+        }
+        continue;
+      }
+      if ((i.needs ?? []).some((n) => ids.has(n))) {
+        ids.add(i.id);
+        grew = true;
+      }
+    }
+  }
+  return ids;
+}
 function ruleStop(event, projectDir) {
   if (event.stop_hook_active) return OK;
   if (!existsSync2(graphPath(projectDir))) return OK;
   const graph = load(graphPath(projectDir)).graph;
-  const { errors } = check(graph, projectDir);
-  if (errors.length === 0) return OK;
+  const all = check(graph, projectDir).errors;
+  let errors = all;
+  const history = [];
+  if (event.actor && all.length) {
+    const scope = affectedIds(graph, projectDir, event.actor);
+    errors = [];
+    for (const e of all) {
+      const id = /^(I-\d+)/.exec(e)?.[1];
+      if (id && !scope.has(id)) history.push(e);
+      else errors.push(e);
+    }
+  }
+  if (errors.length === 0 && history.length) {
+    return { allow: true, warn: `\u60F3\u6CD5\u56FE\u6709 ${history.length} \u4E2A\u5386\u53F2\u9519\u8BEF\uFF0C\u90FD\u4E0D\u5728\u672C\u6B21\u5DE5\u4F5C\u7684\u5F71\u54CD\u8303\u56F4\u5185\uFF0C\u4E0D\u62E6\u7ED3\u675F\uFF08I-150\uFF09\uFF1B\u8981\u4FEE\u5C31\u7528 ccfix \u9886\u8D70\uFF1A
+${history.map((e) => `  - ${e}`).join("\n")}` };
+  }
+  if (errors.length === 0) {
+    try {
+      const runtime = paths(projectDir).runtime;
+      if (event.actor && coordinationEnabled(runtime)) {
+        const held = claimsHeldBy(runtime, event.actor);
+        if (held.length) return { allow: true, warn: `\u8FD8\u6301\u6709 ${held.length} \u4E2A\u6587\u4EF6\u8BA4\u9886\u6CA1\u91CA\u653E\uFF08${held.map((c) => c.files.join("\u3001")).join("\uFF1B")}\uFF09\u2014\u2014 \u505A\u5B8C\u5C31 coord release --claim <id> --summary \u4E00\u53E5\u8BDD\uFF0C\u6CA1\u505A\u5B8C\u5C31 coord say \u8BF4\u660E\u8FDB\u5EA6\uFF0C\u522B\u8BA9\u540C\u4F34\u7B49\u4E00\u4E2A\u4E0D\u4F1A\u6765\u7684\u4EA4\u63A5\uFF08I-115\uFF09\u3002` };
+      }
+    } catch {
+    }
+    return OK;
+  }
   return {
     allow: false,
-    reason: `\u60F3\u6CD5\u56FE\u6709 ${errors.length} \u4E2A\u9519\u8BEF\uFF0C\u4FEE\u5B8C\u518D\u7ED3\u675F\uFF08R5\uFF09\uFF1A
-${errors.map((e) => `  - ${e}`).join("\n")}`
+    reason: `\u60F3\u6CD5\u56FE\u6709 ${errors.length} \u4E2A\u9519\u8BEF\u5728\u672C\u6B21\u5DE5\u4F5C\u7684\u5F71\u54CD\u8303\u56F4\u5185\uFF0C\u4FEE\u5B8C\u518D\u7ED3\u675F\uFF08R5/I-150\uFF09\uFF1A
+${errors.map((e) => `  - ${e}`).join("\n")}` + (history.length ? `
+\u53E6\u6709 ${history.length} \u4E2A\u5386\u53F2\u9519\u8BEF\u4E0E\u672C\u6B21\u65E0\u5173\uFF0C\u4E0D\u62E6\u3002` : "")
   };
 }
 function record(event, projectDir) {
@@ -11559,6 +11974,7 @@ function record(event, projectDir) {
     } catch {
       graph = null;
     }
+    if (event.actor) touch(projectDir, event.actor, { files: targets.map((t) => relTo(projectDir, t)) });
     for (const target of targets) {
       const rel = relTo(projectDir, target);
       if (graph) {
@@ -11581,6 +11997,15 @@ function record(event, projectDir) {
     return { allow: true, warn: `\u5199\u540E\u8BB0\u5F55\u5931\u8D25\uFF08${error instanceof Error ? error.message : error}\uFF09\u2014\u2014 \u653E\u884C\u4F46\u6CA1\u8BB0\u4E0A\uFF08D9\uFF09\u3002` };
   }
 }
+function actorOf(host, raw) {
+  if (host === "claude") return raw.session_id ? `claude:${raw.session_id}${raw.agent_id ? `/${raw.agent_id}` : ""}` : void 0;
+  if (host === "cursor") return raw.conversation_id ? `cursor:${raw.conversation_id}` : void 0;
+  return raw.session_id ? `codex:${raw.session_id}` : void 0;
+}
+var tagActor = (host, raw, event) => {
+  const actor = actorOf(host, raw);
+  return actor ? { ...event, actor } : event;
+};
 var CLAUDE_WRITE_TOOLS = /^(Edit|Write|NotebookEdit)$/;
 var CURSOR_WRITE_TOOLS2 = /^(Write|StrReplace|Delete|EditNotebook|ApplyPatch|search_replace)$/i;
 var SHELL_TOOLS2 = /* @__PURE__ */ new Set(["bash", "powershell", "pwsh", "shell", "local_shell"]);
@@ -11721,6 +12146,9 @@ function patchOperations(text2) {
   return { operations, unknownHeader };
 }
 function normalizeClaude(raw) {
+  return tagActor("claude", raw, normalizeClaudeInner(raw));
+}
+function normalizeClaudeInner(raw) {
   const input = asRecord(raw.tool_input);
   const tool = raw.tool_name ?? "";
   switch (raw.hook_event_name) {
@@ -11750,6 +12178,13 @@ function normalizeClaude(raw) {
 }
 function encodeClaude(event, verdict) {
   if (verdict.allow) {
+    if (event.event === "pre-write" && verdict.message) {
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", additionalContext: verdict.message } }),
+        stderr: verdict.warn
+      };
+    }
     return { exitCode: 0, stdout: verdict.message ? verdict.message + "\n" : void 0, stderr: verdict.warn };
   }
   if (event.event === "pre-write" || event.event === "shell" || event.event === "fetch") {
@@ -11766,6 +12201,9 @@ function encodeClaude(event, verdict) {
   return { exitCode: 2, stderr: verdict.reason };
 }
 function normalizeCursor(raw) {
+  return tagActor("cursor", raw, normalizeCursorInner(raw));
+}
+function normalizeCursorInner(raw) {
   const input = asRecord(raw.tool_input);
   const tool = raw.tool_name ?? "";
   switch (raw.hook_event_name) {
@@ -11817,10 +12255,13 @@ function encodeCursor(event, verdict) {
   return {
     exitCode: 0,
     // Cursor reads the JSON, not the exit code
-    stdout: JSON.stringify(verdict.allow ? { permission: "allow" } : { permission: "deny", user_message: verdict.reason, agent_message: `Companion \u62E6\u4E0B\u4E86\u8FD9\u6B21\u64CD\u4F5C\u3002${verdict.reason ?? ""}` })
+    stdout: JSON.stringify(verdict.allow ? { permission: "allow", ...verdict.message ? { agent_message: verdict.message } : {} } : { permission: "deny", user_message: verdict.reason, agent_message: `Companion \u62E6\u4E0B\u4E86\u8FD9\u6B21\u64CD\u4F5C\u3002${verdict.reason ?? ""}` })
   };
 }
 function normalizeCodex(raw) {
+  return tagActor("codex", raw, normalizeCodexInner(raw));
+}
+function normalizeCodexInner(raw) {
   const input = asRecord(raw.tool_input);
   const tool = raw.tool_name ?? "";
   if (raw.hook_event_name === "PreToolUse" || raw.hook_event_name === "PostToolUse") {
@@ -11860,6 +12301,13 @@ function normalizeCodex(raw) {
 }
 function encodeCodex(event, verdict) {
   if (verdict.allow) {
+    if (event.event === "pre-write" && verdict.message) {
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow", additionalContext: verdict.message } }),
+        stderr: verdict.warn
+      };
+    }
     return { exitCode: 0, stdout: verdict.message ? verdict.message + "\n" : void 0, stderr: verdict.warn };
   }
   if (event.event === "stop") {
@@ -11884,20 +12332,28 @@ function handlePrompt(event, projectDir) {
   });
 }
 function sessionBriefing(projectDir) {
-  const lines = [];
-  const real = console.log;
-  console.log = (...parts) => {
-    lines.push(parts.map(String).join(" "));
-  };
+  if (!existsSync2(graphPath(projectDir))) return void 0;
+  let graph;
   try {
-    main(["status", "--project", projectDir]);
+    graph = load(graphPath(projectDir)).graph;
   } catch {
     return void 0;
-  } finally {
-    console.log = real;
   }
-  return lines.length > 0 ? `Companion \u60F3\u6CD5\u56FE\u73B0\u72B6\uFF08status\uFF09\uFF1A
-${lines.join("\n")}` : void 0;
+  const doing = graph.ideas.filter((i) => i.status === "doing");
+  const blocked = graph.ideas.filter((i) => i.status === "blocked");
+  const ready = graph.ideas.filter((i) => (i.status ?? "todo") === "todo" && !isBuildReady(i) && !needsUnmet(i, graph));
+  const lines = [`Companion \u5F53\u524D\u5DE5\u4F5C\uFF08\u5168\u8868\uFF1A${ENGINE_CMD_TEXT} status\uFF09\uFF1A`];
+  for (const i of doing) {
+    lines.push(`  ${i.id} [doing] ${i.name}`);
+    const last = (i.log ?? []).at(-1);
+    if (last?.note) lines.push(`    \u6700\u8FD1\u8BB0\u5F55 ${last.date ?? ""}\uFF1A${String(last.note).slice(0, 600)}`);
+  }
+  if (doing.length === 0) lines.push("  \u6CA1\u6709\u8FDB\u884C\u4E2D\u7684\u60F3\u6CD5\u3002");
+  const readyIds = ready.slice(0, 7).map((i) => i.id).join(" ") + (ready.length > 7 ? " \u2026" : "");
+  lines.push(`  \u53D7\u963B ${blocked.length} \u4E2A \xB7 \u53EF\u5F00\u5DE5 ${ready.length} \u4E2A${ready.length ? `\uFF08${readyIds}\uFF09` : ""}`);
+  const waiting = doing.filter((i) => i.verify?.manual && !i.verify.signed_off);
+  lines.push(waiting.length ? `  \u9700\u8981\u4EBA\u64CD\u4F5C\uFF1A${waiting.map((i) => `${i.id} \u4EBA\u5DE5\u9A8C\u6536\uFF08${ENGINE_CMD_TEXT} request-approval --gate manual-check --node ${i.id}\uFF09`).join("\uFF1B")}` : "  \u9700\u8981\u4EBA\u64CD\u4F5C\uFF1A\u65E0");
+  return lines.join("\n");
 }
 var ENCODERS = { claude: encodeClaude, cursor: encodeCursor, codex: encodeCodex };
 var NORMALIZERS = { claude: normalizeClaude, cursor: normalizeCursor, codex: normalizeCodex };
@@ -11955,7 +12411,17 @@ function runGuard(args2) {
         message = outcome.ok ? `Companion\uFF1A${outcome.decision === "approved" ? "\u6279\u51C6" : "\u62D2\u7EDD"}\u5DF2\u8BB0\u5F55\uFF08${outcome.gate}\uFF09\u3002` : `Companion\uFF1A${outcome.reason}`;
       }
     }
-    if (event.event === "session") message = sessionBriefing(projectDir);
+    if (event.event === "session") {
+      message = sessionBriefing(projectDir);
+      try {
+        if (coordinationEnabled(paths(projectDir).runtime)) {
+          const who = event.actor ? `\u4F60\u7684\u5199\u5165\u8EAB\u4EFD\u662F ${event.actor}` : "\u8FD9\u4E2A\u5BBF\u4E3B\u7684\u4F1A\u8BDD\u5F00\u59CB\u4E8B\u4EF6\u6CA1\u5E26\u8EAB\u4EFD\uFF0C\u5199\u5165\u4F1A\u88AB\u5B88\u536B\u6309\u7F3A\u8EAB\u4EFD\u62D2";
+          message = `${message ?? ""}
+\u534F\u4F5C\u6A21\u5F0F\u5F00\u7740\uFF08coord enable\uFF09\uFF1A${who}\u3002\u5F00\u5DE5\u524D coord join --session ${event.actor ?? "<\u8EAB\u4EFD>"} --label \u4F60\u7684\u540D\u5B57\uFF0C\u518D coord claim \u8BA4\u9886\u8981\u6539\u7684\u6587\u4EF6\uFF1B\u6539\u524D coord inbox \u8BFB\u6D88\u606F\uFF0C\u6536\u5C3E coord release\u3002`;
+        }
+      } catch {
+      }
+    }
     if (event.event === "read") {
       try {
         for (const path of event.paths ?? []) strike(projectDir, path);

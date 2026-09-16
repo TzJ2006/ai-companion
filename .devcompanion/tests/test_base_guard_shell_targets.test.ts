@@ -145,6 +145,13 @@ ideas:
       "git -C . stash pop",
       "git --no-pager pull",
     ]);
+    // I-147：同一个词的只读拼法不是写 —— 列工作树、列暂存，什么都不动。
+    allows([
+      "git worktree list",
+      "git worktree list --porcelain",
+      "git stash list",
+      "git -C . worktree list",
+    ]);
   });
 
   // ── (d) 受保护的账本证据按目标认，不按动词认 ────────────────────────────

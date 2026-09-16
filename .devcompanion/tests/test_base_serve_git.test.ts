@@ -53,7 +53,11 @@ ideas:
     }
     mkdirSync(join(a, "ideas"), { recursive: true });
     writeFileSync(graphPath(a), yaml);
-    git(a, "add", "ideas/graph.yaml");
+    // I-116：写回现在在同一把锁里顺手重画网页；真仓库的 .gitignore 本来就排除它
+    // （ideas/graph.html 是可重渲染的产物），样例仓库照着来，否则「树是干净的」这条
+    // 断言会被一份生成文件打红。
+    writeFileSync(join(a, ".gitignore"), "ideas/graph.html\n");
+    git(a, "add", "ideas/graph.yaml", ".gitignore");
     git(a, "commit", "-q", "-m", "seed");
     git(a, "push", "-q", "-u", "origin", "main");
     git(root, "clone", "-q", remote, b);

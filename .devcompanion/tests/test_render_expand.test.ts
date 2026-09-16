@@ -232,3 +232,75 @@ describe("I-117 脚本造出来的行也是新结构", () => {
     expect(text(row(document, "I-001", tmp).querySelector(".bname"))).toBe("刚起的名字");
   });
 });
+
+// I-132 —— 展开一行，里面多一节「它自己的子想法」：下一层的名字和状态，各自能点回去；
+// 没有子想法的行不多这一节；节里不放 data-row、不放 .bname，四组「不可见」断言照旧成立。
+describe("I-132 展开行里列出它自己的子想法", () => {
+  const DEEP = THREE + `  - id: I-004
+    name: "梁"
+    status: doing
+    needs: []
+    parent: I-002
+    what: 梁是什么
+  - id: I-005
+    name: "柱"
+    status: done
+    needs: []
+    parent: I-002
+    what: 柱是什么
+    code:
+      - file: src/pillar.ts
+        lines: "1-1"
+    verify: { command: "npx vitest run pillar.test.ts", pass: "exit 0" }
+`;
+  const { document } = open(DEEP);
+
+  it("有子想法的行：多出一节，列着下一层的名字和状态，每一项都是跳页链接", () => {
+    const kids = row(document, "I-001", "I-002").querySelector(".brief-kids");
+    expect(kids, "I-002 那一行展开后没有「它自己的子想法」").not.toBeNull();
+    const items = [...kids.querySelectorAll(".brief-kid")];
+    expect(items.map((k: any) => text(k.querySelector("a")))).toEqual(["梁", "柱"]);
+    expect(items.map((k: any) => text(k.querySelector(".badge")))).toEqual(["进行中", "已完成"]);
+    expect(items.map((k: any) => k.querySelector("a").getAttribute("href"))).toEqual(["#I-004", "#I-005"]);
+    expect(text(kids.querySelector(".legend"))).toContain("已完成 1");
+  });
+
+  it("没有子想法的行：这一节整个不出现", () => {
+    expect(row(document, "I-001", "I-003").querySelector(".brief-kids")).toBeNull();
+  });
+
+  it("这一节不夺走定位和改名同步用的选择器：没有 data-row、没有 .bname、没有编号", () => {
+    const kids = row(document, "I-001", "I-002").querySelector(".brief-kids");
+    expect(kids.querySelectorAll("[data-row], .bname, [id], [data-idea], [data-field], input, textarea, button").length).toBe(0);
+    // 全篇里 I-004 的 data-row 只在它自己父页面上出现一次。
+    expect(document.querySelectorAll('[data-row="I-004"]').length).toBe(1);
+  });
+});
+
+// I-133 —— 受阻的想法在八问下面印一行「受阻原因」，卡片和展开行都印；不受阻的一行都不多。
+describe("I-133 受阻原因印在八问下面", () => {
+  const BLOCKED = THREE.replace(
+    "  - id: I-002\n    name: \"中间层\"\n    status: todo\n",
+    "  - id: I-002\n    name: \"中间层\"\n    status: blocked\n    blocked_because: 等地基那边把接口定下来\n",
+  );
+  const { document } = open(BLOCKED);
+
+  it("展开行里：最后一个 dt 是受阻原因，值就是那句话", () => {
+    const dts = [...row(document, "I-001", "I-002").querySelectorAll(".brief-detail dl dt")].map(text);
+    expect(dts.at(-1)).toBe("受阻原因");
+    expect(text(row(document, "I-001", "I-002").querySelector(".blocked-because"))).toBe("等地基那边把接口定下来");
+  });
+
+  it("卡片里：同一行也在，排在第八问之后，而且能编辑（带 data-field）", () => {
+    const dd = document.querySelector('#I-002 dd[data-f="blocked_because"]');
+    expect(dd, "卡片上没有受阻原因那一格").not.toBeNull();
+    expect(text(dd!.querySelector(".ro"))).toBe("等地基那边把接口定下来");
+    const dts = [...document.querySelectorAll("#I-002 > dl > dt")].map(text);
+    expect(dts.indexOf("受阻原因")).toBeGreaterThan(dts.indexOf("未来怎么用"));
+  });
+
+  it("不受阻的想法：两处都没有这一行", () => {
+    expect(document.querySelector('#I-001 dd[data-f="blocked_because"]')).toBeNull();
+    expect(row(document, "I-001", "I-003").querySelector(".blocked-because")).toBeNull();
+  });
+});

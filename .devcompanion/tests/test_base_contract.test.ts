@@ -37,11 +37,13 @@ interface Built {
 }
 interface Row { name: string; build: (dir: string) => Built }
 
-/** The event minus the two fields the contract deliberately excuses: the tool
- *  NAME is each host's own vocabulary, and cwd is each host's own reported
- *  directory. Everything else has to match key for key (D22). */
+/** The event minus the three fields the contract deliberately excuses: the tool
+ *  NAME is each host's own vocabulary, cwd is each host's own reported
+ *  directory, and `actor` (I-115) is the host's own name for the writer —
+ *  `claude:…` / `cursor:…` / `codex:…` by construction. Everything else has to
+ *  match key for key (D22). */
 function shape(event: NormalizedEvent): Record<string, unknown> {
-  const { tool: _tool, cwd: _cwd, ...rest } = event;
+  const { tool: _tool, cwd: _cwd, actor: _actor, ...rest } = event;
   return rest;
 }
 
