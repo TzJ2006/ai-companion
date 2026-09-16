@@ -65,11 +65,16 @@ ideas:
 
   // ── 名字对、位置不对 ≠ 引擎 ─────────────────────────────────────────────
   it("a file merely NAMED companion.mjs, in a directory of the attacker's choosing, is not the engine", () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), "not the engine-")).replaceAll("\\", "/");
-    dirs.push(elsewhere);
+    // 带空格的目录只用带引号的写法。不带引号时那个空格在真 shell 里就把路径切断了，
+    // 命令根本不是「跑那个文件」—— 以前它被拒是解释器墙顺手拦的（I-144 拆掉了），
+    // 拿它当「身份检查」的证据是假证据。身份这条性质由下面几行如实锁住。
+    const spaced = mkdtempSync(join(tmpdir(), "not the engine-")).replaceAll("\\", "/");
+    const elsewhere = mkdtempSync(join(tmpdir(), "not-the-engine-")).replaceAll("\\", "/");
+    dirs.push(spaced, elsewhere);
     denies([
+      `node "${spaced}/companion.mjs" check`,
+      `node '${spaced}/companion.mjs' check`,
       `node ${elsewhere}/companion.mjs check`,
-      `node "${elsewhere}/companion.mjs" check`,
       `npx tsx ${elsewhere}/ideas.ts next`,
       `tsx ${elsewhere}/cli.ts status`,
     ]);
@@ -123,10 +128,14 @@ ideas:
     ]);
   });
 
-  it("but an arbitrary script named install.ts or build.mjs is still an arbitrary script", () => {
+  // I-144 起，「被认可的脚本」这个概念没有了：它只是解释器墙上的一个洞，墙拆了洞也就
+  // 不存在了，任意脚本和安装器一样放行。上面那条用例锁的是安装器**还跑得起来**（那条
+  // 性质没变），这条锁的是放宽本身 —— 别让它悄悄发生。引擎白名单是另一回事，仍然按
+  // 身份认，见下一条 hook 入口的用例。
+  it("…and an arbitrary script named install.ts or build.mjs runs too now (I-144)", () => {
     const elsewhere = mkdtempSync(join(tmpdir(), "not an installer-")).replaceAll("\\", "/");
     dirs.push(elsewhere);
-    denies([
+    allows([
       "npx tsx scripts/install.ts",
       "node tools/build.mjs",
       "npx tsx ideas/install.ts --status",

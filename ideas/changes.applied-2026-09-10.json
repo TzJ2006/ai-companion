@@ -1,0 +1,55 @@
+{
+  "v": 1,
+  "project": "D:/GitHub/LifeCopilotBeta",
+  "baseDigest": "311dd009d1de",
+  "ops": [
+    { "op": "set", "id": "I-009", "field": "how", "old": "",
+      "new": "五个子想法按先后：I-010 起子进程并代理 → I-011 项目页做最高层级 → I-012 登录 → I-013 转发批准 → I-014 上常开机器 → I-015 终点。引擎那边对应 ai-companion 的 I-137（serve 接 git）、I-138（口令和回执进 git）、I-139（批准入口），做的顺序穿插：引擎 I-137 → 门户 I-010、I-011 → 引擎 I-138、I-139 → 门户 I-013。代码全在 lifecopilot/ 现有文件里加：settings.py 加配置项，api.py 加路由和代理，main.py 的生命周期里起和收子进程，portal/index.html 的项目面板加链接。" },
+    { "op": "set", "id": "I-009", "field": "why_this_way", "old": "",
+      "new": "为什么门户不自己改 graph.yaml、不自己写回执：改图的规则（转移表、批准、指纹锁）全在引擎里，门户再实现一遍就是两份规则，早晚打架；门户只做代理和登录，引擎一行不改就能换宿主。为什么不走 Plane（2026-09-09 在 ai-companion 那边的调研）：免费档 webhook 不能加请求头、前置关系接口不稳、八个问题挤进描述框；而门户已经有多仓库扫描和项目页，接上引擎的页面就是现成的编辑界面。为什么先本机后 EC2：链路先在一台机器上跑通，网络和 HTTPS 是另一层问题，分开验。" },
+    { "op": "set", "id": "I-009", "field": "future", "old": "",
+      "new": "门户成为所有 companion 仓库的总入口之后，今日计划、Plane 待办和想法图三样在一个页面里，下一步是让今日计划直接引用想法图里的想法。" },
+
+    { "op": "set", "id": "I-010", "field": "how", "old": "",
+      "new": "settings.py 加 companion_ports_from（默认 4300）和 approve_secret（keys/ 文件或环境变量，可空）。main.py 的 lifespan 里，对 graph_repos 每个仓库用 asyncio.create_subprocess_exec 起 node <仓库>/.companion/companion.mjs serve --port <起始端口加序号> --no-open --git-sync，环境变量带 AIDEV_APPROVE_SECRET（有才带）；读标准输出第一行「想法图开在 http://127.0.0.1:端口」取地址，存进 app.state.repos[名字]。api.py 加一个通配路由 /repos/{name}/{path:path}，GET 和 POST 都用 httpx 原样转发（含请求体和 content-type），回应原样返回。jobs.py 的 tick 里每分钟看一眼子进程 returncode，死了就重起并记一条。" },
+    { "op": "set", "id": "I-010", "field": "why_this_way", "old": "",
+      "new": "为什么起子进程而不是把引擎当库导入：引擎是 node，门户是 python，进程边界是最便宜的边界，而且引擎的守卫规则（只听回环地址）一字不改照旧生效。为什么用 httpx 转发而不是 nginx 之类反向代理：登录（I-012）要在转发之前检查会话，得在门户进程里做；httpx 已经是依赖（mcp_server.py 用它）。为什么每个仓库一个端口而不是一个进程多仓库：serve 一次只认一个项目目录，改它比多起几个进程贵。为什么用 tick 看死活而不是 supervisor：tick 已经每分钟跑，加三行就够。" },
+    { "op": "set", "id": "I-010", "field": "future", "old": "",
+      "new": "同一套起进程和代理的代码，换成 cursor 或 codex 的接线也能用，门户不关心背后是哪个 agent 在写。" },
+
+    { "op": "set", "id": "I-011", "field": "how", "old": "",
+      "new": "graphs.py 的 scan_graphs 结果里多带每个仓库的顶层想法（没有 parent 的）名称和状态；api.py 的 /projects 把它们放进每个 graphs 项，并加 url 字段 /repos/<名>/；portal/index.html 的项目面板每个仓库渲染成：名字（链接到 url）、顶层想法各一行带状态、未完成数。" },
+    { "op": "set", "id": "I-011", "field": "why_this_way", "old": "",
+      "new": "为什么复用 /projects 而不是新开一页：它已经按仓库汇总，差的只是顶层想法一列和一个链接。为什么只列顶层不列全部：每层最多七个是想法图的规矩（FORMAT.md「The tree」），首页列顶层就是「最高层级」的定义；再往下点进去看引擎自己的页面。为什么不在门户里画跨仓库的依赖图：想法图不跨仓库连边，画不出来的东西不画。" },
+    { "op": "set", "id": "I-011", "field": "future", "old": "",
+      "new": "项目页有了每个仓库的顶层进度，今日计划就能按「哪个仓库卡住了」来排优先级。" },
+
+    { "op": "set", "id": "I-012", "field": "how", "old": "",
+      "new": "settings.py 加 portal_password（keys/portal_password 文件或环境变量）和 auth_required（默认：监听地址不是回环地址时为真）。api.py 加 POST /login（密码对了发一个随机会话 cookie，存在 app.state.sessions 里）和一个 FastAPI 依赖 require_login；所有路由和 /repos/ 代理都挂它，auth_required 为假时直接放行。portal/index.html 加一个密码框，401 时显示。密码只在 settings 里，不进日志、不进任何响应。" },
+    { "op": "set", "id": "I-012", "field": "why_this_way", "old": "",
+      "new": "为什么一个密码而不是用户系统：单人使用，一个密码就是全部需求，用户系统是没人用的抽象。为什么会话 cookie 而不是每次带密码：手机上不能每次输密码；cookie 是浏览器原生的。为什么回环地址默认关：本机开发不该被自己的门挡住，开到外网时 auth_required 自动为真，忘了配密码就起不来。为什么密码不走 URL 参数：会进日志和历史记录。" },
+    { "op": "set", "id": "I-012", "field": "future", "old": "",
+      "new": "登录成了唯一的门之后，Discord 和 MCP 两条渠道也能各自接一份凭证，走同一个 require_login。" },
+
+    { "op": "set", "id": "I-013", "field": "how", "old": "",
+      "new": "在 /repos/{name}/ 代理里对 POST …/approve 单独处理：require_login 通过之后，把请求体里人打的那句话放进 {secret: settings.approve_secret, words: 原话}，转发给那个仓库 serve 的 POST /approve，引擎的回答原样返回。approve_secret 为空时这条路径回 503「批准入口未配置」。门户不解析口令、不看回执、不写任何文件。" },
+    { "op": "set", "id": "I-013", "field": "why_this_way", "old": "",
+      "new": "为什么门户只转发不校验：校验（口令存在、内容指纹、一次性）全在引擎的 applyApproval 里，门户重做一遍就是两份规则。为什么凭证由门户持有而不是页面：页面上的东西 agent 驱动浏览器就能读到（ai-companion I-105 的实测），门户进程里的东西它读不到。为什么 secret 放请求体不放 URL：URL 会进日志。" },
+    { "op": "set", "id": "I-013", "field": "future", "old": "",
+      "new": "同一个转发点接上 Discord 按钮或 MCP 工具，人在哪里回那句话都行，边界不变。" },
+
+    { "op": "set", "id": "I-014", "field": "how", "old": "",
+      "new": "手工步骤写成一份 docs/deploy.md：一，起一台最小实例，装 git、node 20、python 3.12；二，用只读加推送权限的部署密钥检出各仓库和本项目；三，写 .env（graph_repos、portal_password、approve_secret、监听 0.0.0.0）；四，caddy 反向代理配 HTTPS 到门户端口；五，systemd 单元让门户开机自启；六，各仓库 git 的 user.name 设成「portal」，提交能认出来。" },
+    { "op": "set", "id": "I-014", "field": "why_this_way", "old": "",
+      "new": "为什么 caddy 而不是 nginx：自动签证书，配置三行。为什么 systemd 而不是 docker：一个 python 进程加几个 node 子进程，容器只多一层。为什么部署密钥只给推送不给管理：那台机器被拿下也改不了仓库设置。为什么先写文档不写脚本：只做一次的事写脚本是浪费。" },
+    { "op": "set", "id": "I-014", "field": "future", "old": "",
+      "new": "常开机器有了之后，Discord 机器人和后台任务也不再依赖本机开着。" },
+
+    { "op": "set", "id": "I-015", "field": "how", "old": "",
+      "new": "人手做：手机浏览器打开网址，登录；项目页点进一个仓库；改一个想法的 what 提交；在电脑终端对那个想法 request-approval，提交口令文件推上去；手机上回「批准 CC-XXXXXXXX」；电脑 git pull，set doing 放行；截图和 git log 粘进 ideas/log.md 的 I-015 一段。" },
+    { "op": "set", "id": "I-015", "field": "why_this_way", "old": "",
+      "new": "为什么是人工验收：跨手机、常开机器和电脑三处，机器判不了。为什么要真手机不用桌面浏览器缩小：登录 cookie、触屏和网络才是这一步要验的东西。" },
+    { "op": "set", "id": "I-015", "field": "future", "old": "",
+      "new": "演练通过之后，「在任何设备上管理我的项目」就成立了，之后加的每个仓库只是 graph_repos 多一行。" }
+  ]
+}

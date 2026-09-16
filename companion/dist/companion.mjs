@@ -7369,7 +7369,7 @@ import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, appendF
 import { join as join2, resolve as resolve2, dirname as dirname2, relative as relative2 } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { argv, exit, cwd, pid, platform, env } from "node:process";
 
 // companion/manifests.ts
@@ -7749,7 +7749,8 @@ function paths(projectDir) {
     worklist: join2(ideas, ".scan-todo"),
     done: join2(ideas, ".scan-done"),
     approved: join2(ideas, ".approved"),
-    runtime: join2(ideas, ".runtime")
+    runtime: join2(ideas, ".runtime"),
+    approvals: join2(ideas, "approvals")
   };
 }
 var graphPath = (projectDir) => paths(projectDir).graph;
@@ -8154,6 +8155,15 @@ function needsUnmet(idea, graph) {
   const unmet = (idea.needs ?? []).filter((n) => (map.get(n)?.status ?? "todo") !== "done");
   return unmet.length ? `waiting on ${unmet.join(", ")}` : null;
 }
+var filedUnder = (map, idea) => idea.parent && map.has(idea.parent) ? idea.parent : "";
+var childrenOf = (graph, id) => {
+  const map = byId(graph);
+  return graph.ideas.filter((i) => filedUnder(map, i) === id);
+};
+function childrenUnfinished(idea, graph) {
+  const open = childrenOf(graph, idea.id).filter((c) => (c.status ?? "todo") !== "done");
+  return open.length ? `\u5B50\u60F3\u6CD5\u8FD8\u6CA1\u5B8C\u6210\uFF1A${open.map((c) => c.id).join(", ")}` : null;
+}
 var claimedFiles = (idea) => [
   ...(idea.code ?? []).map((c) => c.file).filter(Boolean),
   ...idea.verify?.test_files ?? []
@@ -8236,8 +8246,10 @@ ${block}`);
   }
   return out;
 }
-var pendingDir = (projectDir) => join2(paths(projectDir).runtime, "pending");
-var approvalsDir = (projectDir) => join2(paths(projectDir).runtime, "approvals");
+var pendingDir = (projectDir) => join2(paths(projectDir).approvals, "pending");
+var approvalsDir = (projectDir) => join2(paths(projectDir).approvals, "receipts");
+var legacyPendingDir = (projectDir) => join2(paths(projectDir).runtime, "pending");
+var legacyApprovalsDir = (projectDir) => join2(paths(projectDir).runtime, "approvals");
 function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
   if (!nodeIds.length) throw new Error(`${gate} \u5173\u5361\u5FC5\u987B\u70B9\u540D\u60F3\u6CD5\uFF08nodeIds\uFF09`);
   if (gate === "manual-check") {
@@ -8245,6 +8257,8 @@ function requestApproval(projectDir, graph, gate, nodeIds, meta = {}) {
       const idea = byId(graph).get(id);
       if (!idea?.verify?.manual) throw new Error(`${id} \u7684\u9A8C\u8BC1\u4E0D\u662F\u4EBA\u5DE5\u68C0\u67E5\uFF08manual\uFF09\u2014\u2014manual-check \u5173\u5361\u53EA\u7B7E\u4EBA\u5DE5\u9A8C\u6536`);
       if (idea.verify.signed_off) throw new Error(`${id} \u5DF2\u7ECF\u6709\u4EBA\u7B7E\u8FC7\u5B57\u4E86\uFF0C\u4E0D\u80FD\u8986\u76D6`);
+      const openKids = childrenUnfinished(idea, graph);
+      if (openKids) throw new Error(`${id} \u8FD8\u4E0D\u80FD\u63D0\u7B7E\u5B57\u8BF7\u6C42 \u2014\u2014 ${openKids}`);
     }
   }
   const snapshots = Object.fromEntries(nodeIds.map((id) => [id, approvalSnapshot(graph, id)]));
@@ -8267,8 +8281,8 @@ function applyApproval(projectDir, prompt, meta) {
   if (!m) return null;
   const decision = /^(批准|同意|APPROVE)$/i.test(m[1]) ? "approved" : "rejected";
   const challenge = m[2].toUpperCase();
-  const file = join2(pendingDir(projectDir), `${challenge}.json`);
-  if (!existsSync(file)) return { ok: false, reason: `\u53E3\u4EE4 ${challenge} \u4E0D\u5B58\u5728\u6216\u5DF2\u7528\u8FC7 \u2014\u2014 \u91CD\u65B0 request-approval` };
+  const file = [pendingDir(projectDir), legacyPendingDir(projectDir)].map((d) => join2(d, `${challenge}.json`)).find((f) => existsSync(f));
+  if (!file) return { ok: false, reason: `\u53E3\u4EE4 ${challenge} \u4E0D\u5B58\u5728\u6216\u5DF2\u7528\u8FC7 \u2014\u2014 \u91CD\u65B0 request-approval` };
   const pending = JSON.parse(readFileSync2(file, "utf8"));
   const { graph } = load(graphPath(projectDir));
   const ids = Object.keys(pending.snapshots ?? {});
@@ -8284,6 +8298,19 @@ function applyApproval(projectDir, prompt, meta) {
   if (ids.length === 0 || drifted) {
     rmFileQuietly(file);
     return { ok: false, reason: "\u88AB\u6279\u7684\u5185\u5BB9\u5728\u8BF7\u6C42\u4E4B\u540E\u88AB\u6539\u8FC7\u4E86\uFF0C\u53E3\u4EE4\u4F5C\u5E9F \u2014\u2014 \u91CD\u65B0 request-approval" };
+  }
+  if (decision === "approved" && pending.gate === "manual-check") {
+    for (const id of ids) {
+      const idea = byId(graph).get(id);
+      const openKids = idea && childrenUnfinished(idea, graph);
+      if (openKids) {
+        rmFileQuietly(file);
+        return {
+          ok: false,
+          reason: `${id} \u7B7E\u4E0D\u4E0A \u2014\u2014 ${openKids}\u3002\u7B49\u5B50\u60F3\u6CD5\u5B8C\u6210\u540E\u91CD\u65B0 request-approval --gate manual-check --node ${id}`
+        };
+      }
+    }
   }
   mkdirSync2(approvalsDir(projectDir), { recursive: true });
   atomicWrite(join2(approvalsDir(projectDir), `${challenge}.json`), JSON.stringify({
@@ -8302,7 +8329,7 @@ function applyApproval(projectDir, prompt, meta) {
       if (index < 0) continue;
       doc.setIn(
         ["ideas", index, "verify", "signed_off"],
-        `${pending.by || "\u4EBA"} ${meta.date} \u2014\u2014 \u7ECF\u4E00\u6B21\u6027\u53E3\u4EE4 ${challenge} \u6279\u51C6\uFF1B\u56DE\u6267 ideas/.runtime/approvals/${challenge}.json`
+        `${pending.by || "\u4EBA"} ${meta.date} \u2014\u2014 \u7ECF\u4E00\u6B21\u6027\u53E3\u4EE4 ${challenge} \u6279\u51C6\uFF1B\u56DE\u6267 ideas/approvals/receipts/${challenge}.json`
       );
     }
     save(graphPath(projectDir), doc);
@@ -8316,19 +8343,20 @@ function rmFileQuietly(file) {
   }
 }
 function validApproval(projectDir, graph, gate, nodeId) {
-  const dirPath = approvalsDir(projectDir);
-  if (!existsSync(dirPath)) return false;
   let want;
   try {
     want = approvalSnapshot(graph, nodeId);
   } catch {
     return false;
   }
-  for (const name of readdirSync(dirPath)) {
-    try {
-      const r = JSON.parse(readFileSync2(join2(dirPath, name), "utf8"));
-      if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
-    } catch {
+  for (const dirPath of [approvalsDir(projectDir), legacyApprovalsDir(projectDir)]) {
+    if (!existsSync(dirPath)) continue;
+    for (const name of readdirSync(dirPath)) {
+      try {
+        const r = JSON.parse(readFileSync2(join2(dirPath, name), "utf8"));
+        if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
+      } catch {
+      }
     }
   }
   return false;
@@ -8458,7 +8486,10 @@ function decideProductWrite(projectDir, graph, filePath) {
   }
   const relLower = platform === "win32" ? rel.toLowerCase() : rel;
   if (relLower === "ideas/.runtime" || relLower.startsWith("ideas/.runtime/")) {
-    return { allow: false, reason: "ideas/.runtime/ \u91CC\u662F\u7A0B\u5E8F\u4FDD\u7BA1\u7684\u8BC1\u636E\uFF08\u6279\u51C6\u56DE\u6267\u3001\u6D4B\u8BD5\u7EA2\u7EFF\u8BB0\u5F55\uFF09\uFF0C\u53EA\u80FD\u7531 CLI \u4EA7\u751F\uFF08D24\uFF09\u3002\u8981\u7559\u8BC1\u636E\uFF1Arun-check / request-approval\u3002" };
+    return { allow: false, reason: "ideas/.runtime/ \u91CC\u662F\u7A0B\u5E8F\u4FDD\u7BA1\u7684\u8BC1\u636E\uFF08\u6D4B\u8BD5\u7EA2\u7EFF\u8BB0\u5F55\u3001\u65E7\u7684\u6279\u51C6\u56DE\u6267\uFF09\uFF0C\u53EA\u80FD\u7531 CLI \u4EA7\u751F\uFF08D24\uFF09\u3002\u8981\u7559\u8BC1\u636E\uFF1Arun-check / request-approval\u3002" };
+  }
+  if (relLower === "ideas/approvals" || relLower.startsWith("ideas/approvals/")) {
+    return { allow: false, reason: "ideas/approvals/ \u91CC\u662F\u4E00\u6B21\u6027\u53E3\u4EE4\u548C\u6279\u51C6\u56DE\u6267\uFF0C\u8FDB git \u4F46\u53EA\u80FD\u7531 CLI \u548C hook \u4EA7\u751F\uFF08D24\uFF0CI-138\uFF09\u3002\u8981\u8BF7\u6279\u51C6\uFF1Arequest-approval\uFF1B\u56DE\u7B54\u53EA\u80FD\u7531\u4EBA\u5728\u5BF9\u8BDD\u91CC\u56DE\u3002" };
   }
   if (/^ideas\/graph\.[^/]+\.ya?ml$/i.test(rel)) {
     return { allow: false, reason: `${rel} \u662F\u8FC1\u79FB\u8F93\u5165\uFF0C\u8FC1\u79FB\u540E\u53EA\u8BFB\uFF08D10\uFF09\u2014\u2014 \u9879\u76EE\u7684\u56FE\u53EA\u6709 ideas/graph.yaml \u4E00\u4EFD\u3002\u8981\u5408\u5E76\u65E7\u5185\u5BB9\uFF1Amigrate\u3002` };
@@ -8467,22 +8498,10 @@ function decideProductWrite(projectDir, graph, filePath) {
     return { allow: true, reason: "\u8D26\u672C\u6587\u4EF6\u53EF\u7F16\u8F91\uFF08status/signed_off \u7684\u9632\u624B\u6539\u7531\u5B88\u536B\u6309\u5177\u4F53\u6539\u52A8\u53E6\u5224\uFF09" };
   }
   const doing = graph.ideas.filter((i) => i.status === "doing" && !isBuildReady(i));
-  const needsPlan = (idea) => ({
-    allow: false,
-    reason: `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --node ${idea.id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u540E\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7\uFF09\u3002`
-  });
   const testOwner = doing.find((i) => (i.verify?.test_files ?? []).some((f) => sameFile(f, rel)));
-  if (testOwner) {
-    if (!validApproval(projectDir, graph, "plan", testOwner.id)) return needsPlan(testOwner);
-    return { allow: true, reason: `${testOwner.id} \u7684\u6D4B\u8BD5\u6587\u4EF6 \u2014\u2014 \u5148\u5199\u4F1A\u5931\u8D25\u7684\u6D4B\u8BD5\u6B63\u662F\u7B2C\u4E00\u6B65` };
-  }
+  if (testOwner) return { allow: true, reason: `${testOwner.id} \u7684\u6D4B\u8BD5\u6587\u4EF6\uFF08verify.test_files \u70B9\u540D\uFF09` };
   const codeOwner = doing.find((i) => (i.code ?? []).some((c) => c.file && sameFile(c.file, rel)));
-  if (codeOwner) {
-    if (!validApproval(projectDir, graph, "plan", codeOwner.id)) return needsPlan(codeOwner);
-    const gate = redGateReady(projectDir, graph, codeOwner.id);
-    if (!gate.ready) return { allow: false, reason: `\u6D4B\u8BD5\u5148\u884C\uFF08D8\uFF09\uFF1A${gate.reason}` };
-    return { allow: true, reason: `${codeOwner.id} \u8BA4\u9886\u4E86\u5B83\uFF0C\u6279\u51C6\u4E0E\u5931\u8D25\u8BB0\u5F55\u4FF1\u5728` };
-  }
+  if (codeOwner) return { allow: true, reason: `${codeOwner.id} \u8BA4\u9886\u4E86\u5B83\uFF08code.file \u70B9\u540D\uFF09` };
   return {
     allow: false,
     reason: doing.length === 0 ? "\u6CA1\u6709\u4EFB\u4F55\u60F3\u6CD5\u5728\u8FDB\u884C\u4E2D\uFF0C\u4EA7\u54C1\u6587\u4EF6\u9ED8\u8BA4\u4E0D\u53EF\u5199\uFF08D16\uFF09\u2014\u2014 \u5148 set <id> doing\u3002" : `\u6CA1\u6709\u8FDB\u884C\u4E2D\u7684\u60F3\u6CD5\u8BA4\u9886 ${rel}\uFF08D16\uFF09\u2014\u2014 \u8DEF\u5F84\u7F3A\u53E3\u5E94\u8BE5\u5728\u8BA1\u5212\u91CC\u8865\uFF08code.file / verify.test_files\uFF09\uFF0C\u4E0D\u662F\u5728\u5B9E\u73B0\u65F6\u5F53\u81EA\u7531\u533A\u3002`
@@ -8493,13 +8512,8 @@ function chainedCommandRefusal(idea, command) {
   if (!isChainedCommand(command)) return null;
   return `${idea.id}\u300C${idea.name}\u300D\u7684 verify.command \u91CC\u4E32\u4E86\u7B2C\u4E8C\u6761\u547D\u4EE4\uFF08\u5206\u53F7/\u4E0E\u53F7/\u7BA1\u9053/\u91CD\u5B9A\u5411/\u6362\u884C/\u547D\u4EE4\u66FF\u6362\uFF09\u2014\u2014\u300C${command.slice(0, 80)}\u300D\u3002\u9A8C\u8BC1\u547D\u4EE4\u662F\u88AB\u539F\u6837\u4EA4\u7ED9 shell \u8DD1\u7684\uFF0C\u6240\u4EE5\u5B83\u53EA\u80FD\u662F\u4E00\u6761\u547D\u4EE4\uFF08D21/D28\uFF09\uFF1A\u628A\u56FE\u91CC\u8FD9\u6761\u6539\u6210\u5355\u6761\u547D\u4EE4\uFF0C\u591A\u6B65\u9A8C\u8BC1\u62C6\u6210\u591A\u4E2A\u60F3\u6CD5\u6216\u5199\u8FDB\u811A\u672C\u518D\u7531\u4EBA\u8FC7\u76EE\u3002`;
 }
-function verifyCommandRefusal(projectDir, graph, idea, command) {
-  const chained = chainedCommandRefusal(idea, command);
-  if (chained) return chained;
-  if (!validApproval(projectDir, graph, "plan", idea.id)) {
-    return `${idea.id}\u300C${idea.name}\u300D\u7684\u8BA1\u5212\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF0C\u4E0D\u8DD1\u5B83\u7684 verify.command\uFF08D7\uFF09\u2014\u2014\u547D\u4EE4\u662F\u56FE\u91CC\u7684\u6563\u6587\uFF0C\u6CA1\u4EBA\u8FC7\u76EE\u5C31\u7B49\u4E8E\u8BA9 agent \u81EA\u5DF1\u5199\u4E00\u6761\u547D\u4EE4\u518D\u81EA\u5DF1\u6267\u884C\u3002\u5148 \`request-approval --node ${idea.id}\`\uFF0C\u8BF7\u4EBA\u56DE\u4E00\u53E5\u300C\u6279\u51C6 CC-\u2026\u300D\uFF1B\u6539\u8FC7 how/code/verify \u4E4B\u540E\u6279\u51C6\u4F1A\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8BF7\u3002`;
-  }
-  return null;
+function verifyCommandRefusal(_projectDir, _graph, idea, command) {
+  return chainedCommandRefusal(idea, command);
 }
 function runCheck(projectDir, graph, id, phase, opts = {}) {
   const idea = byId(graph).get(id);
@@ -8508,10 +8522,6 @@ function runCheck(projectDir, graph, id, phase, opts = {}) {
   if (!command) throw new Error(`${id} \u6CA1\u6709 verify.command \u2014\u2014 \u4EBA\u5DE5\u9A8C\u6536\u7684\u60F3\u6CD5\u7528 manual-check \u5173\u5361`);
   const refusal = verifyCommandRefusal(projectDir, graph, idea, command);
   if (refusal) throw new Error(refusal);
-  if (phase === "green") {
-    const gate = redGateReady(projectDir, graph, id);
-    if (!gate.ready) throw new Error(`\u5148\u8FC7 RED \u95E8\u518D\u8DD1 green\uFF1A${gate.reason}`);
-  }
   const missing = missingExecutable(projectDir, command);
   const run = missing ? null : spawnSync(command, {
     shell: true,
@@ -8757,9 +8767,6 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
     if (unmet) throw new Error(`${id}: cannot be doing \u2014 ${unmet}`);
     const clash = fileClash(idea, graph);
     if (clash) throw new Error(`${id}: cannot be doing \u2014 ${clash}`);
-    if (projectDir && !validApproval(projectDir, graph, "plan", id)) {
-      throw new Error(`${id}: cannot be doing \u2014 \u8BA1\u5212\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6 \u2014\u2014 request-approval --node ${id}\uFF0C\u8BF7\u4EBA\u770B\u8FC7\u8FD9\u4E2A\u60F3\u6CD5\u7684\u516B\u95EE\uFF0C\u518D\u6574\u6761\u6D88\u606F\u56DE\u590D\u53E3\u4EE4\uFF08D7/D17\uFF09`);
-    }
   }
   if (status === "done") {
     if (!idea.code?.length) throw new Error(`${id}: cannot be done without \`code\` \u2014 say where it lives`);
@@ -8770,6 +8777,8 @@ function setStatus(doc, graph, id, status, entry, projectDir) {
     if (projectDir && idea.verify.command && !greenCurrent(projectDir, graph, id)) {
       throw new Error(`${id}: \u5B8C\u6210\u524D\u5FC5\u987B\u6709\u5F53\u524D\u6709\u6548\u7684 GREEN \u2014\u2014 run-check ${id} --phase green\uFF08\u5B9E\u73B0\u6BCF\u6539\u4E00\u6B21\u3001\u6D4B\u8BD5\u6BCF\u53D8\u4E00\u6B21\u90FD\u8981\u91CD\u8DD1\uFF09`);
     }
+    const openKids = childrenUnfinished(idea, graph);
+    if (openKids) throw new Error(`${id}: cannot be done \u2014 ${openKids}`);
   }
   doc.setIn(["ideas", index, "status"], status);
   const log = (idea.log ?? []).concat({
@@ -8865,12 +8874,6 @@ function applyChanges(source, envelope, today, projectDir) {
         return {
           ok: false,
           reason: `${op.id}: \u7F51\u9875\u6539\u4E0D\u51FA done \u2014\u2014 \u5B8C\u6210\u8981\u6709\u5F53\u524D\u6709\u6548\u7684 GREEN \u8BC1\u636E\uFF08D20\uFF09\uFF1A\u5148 run-check ${op.id} --phase green\uFF0C\u518D set ${op.id} done\uFF0C\u6574\u4F53\u62D2\u7EDD`
-        };
-      }
-      if (op.to === "doing" && !projectDir) {
-        return {
-          ok: false,
-          reason: `${op.id}: \u8FD9\u6B21\u5199\u56DE\u4E0D\u77E5\u9053\u9879\u76EE\u76EE\u5F55\u5728\u54EA\u513F\uFF0C\u8BFB\u4E0D\u5230\u6279\u51C6\u56DE\u6267\uFF0Cdoing \u4E00\u5F8B\u4E0D\u7ED9\uFF08D17\uFF09\uFF1A\u6539\u6210 apply --project <\u9879\u76EE\u76EE\u5F55>\uFF0C\u6216\u8005\u8D70\u547D\u4EE4\u884C set ${op.id} doing\uFF0C\u6574\u4F53\u62D2\u7EDD`
         };
       }
       try {
@@ -9035,11 +9038,11 @@ var MERMAID_SOURCE_FN = `function buildMermaidSource(g) {
   };
   var out = [
     "flowchart TD",
-    "classDef done fill:#14532d,stroke:#86efac,color:#f0fdf4;",
-    "classDef doing fill:#1e3a8a,stroke:#93c5fd,color:#eff6ff;",
-    "classDef todo fill:#334155,stroke:#94a3b8,color:#f1f5f9,stroke-dasharray:5 3;",
-    "classDef blocked fill:#7c2d12,stroke:#fdba74,color:#fff7ed,stroke-dasharray:2 2;",
-    "classDef endpoint fill:#581c87,stroke:#d8b4fe,color:#faf5ff,stroke-width:3px;"
+    "classDef done fill:#e1eee4,stroke:#7c9b83,color:#356548;",
+    "classDef doing fill:#e2edf2,stroke:#8aa9b9,color:#37617b;",
+    "classDef todo fill:#f0f2ed,stroke:#a4afa2,color:#52604f,stroke-dasharray:5 3;",
+    "classDef blocked fill:#f5ead9,stroke:#c2a477,color:#855a26,stroke-dasharray:2 2;",
+    "classDef endpoint fill:#eee6f1,stroke:#b49bbd,color:#765286,stroke-width:3px;"
   ];
   for (var a = 0; a < ideas.length; a++) {
     out.push(mid(ideas[a].id) + '["' + wrap(String(ideas[a].name || ideas[a].id).replace(/["()<>]/g, "")) + '"]');
@@ -9175,7 +9178,7 @@ function render(g, source = "", projectDir = "", token = "") {
   const map = byId(g);
   const ends = new Set(g.endpoints ?? []);
   const cls = (i) => ends.has(i.id) ? "endpoint" : i.status ?? "todo";
-  const parentKey = (i) => i.parent && map.has(i.parent) ? i.parent : "";
+  const parentKey = (i) => filedUnder(map, i);
   const ordered = topoOrder(g);
   const kidsOf = (owner) => ordered.filter((i) => parentKey(i) === owner);
   const descendants = (owner) => kidsOf(owner).flatMap((k) => [k, ...descendants(k.id)]);
@@ -9188,8 +9191,9 @@ function render(g, source = "", projectDir = "", token = "") {
   const verifyOf = (i) => {
     const v = i.verify;
     if (!v) return NONE;
-    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}`;
-    const sign = v.signed_off ? "" : `<button class="sign-open" data-sign="${attr(i.id)}" data-manual="${attr(v.manual)}">\u4EBA\u5DE5\u7B7E\u5B57</button>`;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}${testFilesOf(v)}${v.signed_off ? `<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${esc(v.signed_off)}</span>` : ""}`;
+    const openKids = childrenUnfinished(i, g);
+    const sign = !awaitingSignature(i) ? "" : openKids ? `<button class="sign-open" disabled>\u4EBA\u5DE5\u7B7E\u5B57</button><span class="gate-why">${esc(openKids)}</span>` : `<button class="sign-open" data-sign="${attr(i.id)}" data-manual="${attr(v.manual)}">\u4EBA\u5DE5\u7B7E\u5B57</button>`;
     return `${esc(v.manual)}<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${v.signed_off ? esc(v.signed_off) : "\u672A\u7B7E"}</span>${sign}`;
   };
   const awaitingSignature = (i) => !!i.verify && !i.verify.command && !i.verify.signed_off;
@@ -9199,6 +9203,40 @@ function render(g, source = "", projectDir = "", token = "") {
 </details>`;
   const STATUS_ZH = { todo: "\u5F85\u529E", doing: "\u8FDB\u884C\u4E2D", done: "\u5DF2\u5B8C\u6210", blocked: "\u53D7\u963B" };
   const countsOf = (ideas) => STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(ideas).by[s]}`).join(" \xB7 ");
+  const pendingPanel = () => {
+    if (!projectDir) return "";
+    const files = [];
+    for (const dir of [pendingDir(projectDir), legacyPendingDir(projectDir)]) {
+      if (existsSync(dir)) for (const name of readdirSync(dir).sort()) files.push(join2(dir, name));
+    }
+    const rows = [];
+    for (const file of files) {
+      const name = file.slice(file.lastIndexOf(file.includes("\\") ? "\\" : "/") + 1);
+      let p;
+      try {
+        p = JSON.parse(readFileSync2(file, "utf8"));
+      } catch {
+        continue;
+      }
+      const code = String(p.challenge ?? name.replace(/\.json$/, ""));
+      const ids = Object.keys(p.snapshots ?? {});
+      const drifted = ids.length === 0 || ids.some((id) => {
+        try {
+          return approvalSnapshot(g, id) !== p.snapshots[id];
+        } catch {
+          return true;
+        }
+      });
+      const body = drifted ? "" : approvalLines(approvalProjection(g, ids)).join("\n");
+      rows.push(`<div class="pending-row${drifted ? " void" : ""}"><div class="pending-head"><code>${esc(code)}</code> \xB7 ${esc(String(p.gate ?? ""))} \xB7 ${ids.map((id) => `<a class="xlink" href="#${esc(id)}" data-goto="${esc(id)}">${esc(id)}</a>`).join(" ")}${drifted ? '<span class="badge">\u5DF2\u4F5C\u5E9F</span><span class="wl-note">\u88AB\u6279\u7684\u5185\u5BB9\u5728\u8BF7\u6C42\u4E4B\u540E\u6539\u8FC7\u4E86\uFF0C\u8FD9\u4E2A\u53E3\u4EE4\u56DE\u4E86\u4E5F\u4F1A\u88AB\u62D2 \u2014\u2014 \u91CD\u65B0 request-approval</span>' : `<span class="wl-note">\u770B\u5B8C\u4E0B\u9762\u7684\u5168\u6587\uFF0C\u628A\u8FD9\u4E00\u53E5\u6574\u6761\u56DE\u5230\u5BF9\u8BDD\u91CC\uFF1A</span><code class="answer">\u6279\u51C6 ${esc(code)}</code>`}</div>${drifted ? "" : `<pre class="pending-text">${esc(body)}</pre>`}</div>`);
+    }
+    if (rows.length === 0) return "";
+    return `<details class="worklist pending"><summary>\u6B63\u5728\u7B49\u4F60\u6279 (${rows.length})</summary>
+  <p class="wl-note">\u8FD9\u4E00\u53E5\u53EA\u80FD\u7531\u4EBA\u5728\u5BF9\u8BDD\u91CC\u4EB2\u624B\u56DE\uFF0C\u9875\u9762\u4E0A\u70B9\u4EC0\u4E48\u90FD\u4E0D\u7B97\u6570\u3002</p>
+  ${rows.join("\n  ")}
+</details>`;
+  };
+  const pendingHtml = pendingPanel();
   const field = (i, name, label) => `
     <dt>${label}</dt><dd data-f="${name}"><span class="ro">${esc(i[name]) || NONE}</span
       ><textarea class="rw" data-idea="${attr(i.id)}" data-field="${name}" rows="3">${esc(i[name] ?? "")}</textarea></dd>`;
@@ -9213,10 +9251,11 @@ function render(g, source = "", projectDir = "", token = "") {
   <p class="edges"><b>\u5B83\u662F\u8FD9\u4E9B\u60F3\u6CD5\u7684\u524D\u7F6E</b> ${links(dependents(g, i.id))}</p>
   ${i.log?.length ? `<details class="log"><summary>\u4FEE\u6539\u8BB0\u5F55 (${i.log.length})</summary>${i.log.map((l) => `<div>${esc(l.date)}${l.by ? " \xB7 " + esc(l.by) : ""} \u2014 ${esc(l.note)}</div>`).join("")}</details>` : ""}
 </section>`;
+  const testFilesOf = (v) => v.test_files?.length ? `<br><span class="testfiles">\u6D4B\u8BD5\u6587\u4EF6\uFF1A${v.test_files.map((f) => `<code>${esc(f)}</code>`).join("\u3001")}</span>` : "";
   const verifyPlain = (i) => {
     const v = i.verify;
     if (!v) return NONE;
-    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}`;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` \u2192 ${esc(v.pass)}` : ""}${testFilesOf(v)}${v.signed_off ? `<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${esc(v.signed_off)}</span>` : ""}`;
     return `${esc(v.manual)}<br><span class="signoff">\u4EBA\u5DE5\u7B7E\u5B57\uFF1A${v.signed_off ? esc(v.signed_off) : "\u672A\u7B7E"}</span>`;
   };
   const briefDetail = (i) => `<div class="brief-detail"><dl>
@@ -9239,6 +9278,7 @@ ${briefDetail(i)}</details>`;
     return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
 ${owner ? card(owner) : ""}
 ${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} \xB7 \u70B9\u51FB\u56FE\u4E0A\u7684\u8282\u70B9\uFF0C\u5B9A\u4F4D\u5230\u4E0B\u9762\u5BF9\u5E94\u7684\u90A3\u4E00\u884C\uFF1B\u70B9\u884C\u672C\u8EAB\u5C55\u5F00\uFF0C\u70B9\u300C\u8FDB\u5165\u300D\u624D\u6362\u9875</p>
+${owner ? "" : pendingHtml}
 ${worklist("\u5F85\u4EBA\u5DE5\u9A8C\u8BC1", scope.filter(awaitingSignature).map((i) => ({
       id: i.id,
       name: i.name,
@@ -9258,19 +9298,19 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body { font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; margin:0 auto; max-width:1060px;
-    padding:28px 22px 80px; background:#0b0f14; color:#e6edf3; }
+    padding:28px 22px 80px; background:#f7f6f2; color:#293d36; }
   h1 { margin:0 0 6px; font-size:22px; }
-  .overview { color:#93a1b0; margin:0 0 18px; }
-  .overview-more { color:#7d8896; font-size:13px; margin:-10px 0 18px; }
+  .overview { color:#63746a; margin:0 0 18px; }
+  .overview-more { color:#63746a; font-size:13px; margin:-10px 0 18px; }
   .overview-more summary { cursor:pointer; }
   .overview-more p { margin:6px 0 0; }
-  .legend { font-size:13px; color:#7d8896; margin:0 0 4px; }
+  .legend { font-size:13px; color:#63746a; margin:0 0 4px; }
   .sw { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin:0 5px 0 12px; }
   .sw:first-child { margin-left:0; }
-  .graph { background:#0d1117; border:1px solid #1f2933; border-radius:10px; margin:14px 0 26px; position:relative; }
+  .graph { background:#ffffff; border:1px solid #dce2d9; border-radius:10px; margin:14px 0 26px; position:relative; }
   /* Pan/zoom: the viewport clips, the canvas is what gets transformed. */
   .viewport { overflow:hidden; height:min(72vh,760px); touch-action:none; cursor:grab; border-radius:10px; }
   .viewport.dragging { cursor:grabbing; }
@@ -9279,36 +9319,36 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   .canvas { transform-origin:0 0; will-change:transform; display:inline-block; padding:0; line-height:0; }
   .canvas svg { max-width:none !important; display:block; }
   .graph-tools { position:absolute; top:10px; right:10px; z-index:2; display:flex; gap:4px; align-items:center;
-    background:#0d1117cc; border:1px solid #1f2933; border-radius:8px; padding:4px 6px; backdrop-filter:blur(4px); }
+    background:#ffffffee; border:1px solid #dce2d9; border-radius:8px; padding:4px 6px; backdrop-filter:blur(4px); }
   .graph-tools button { width:26px; height:24px; font-size:13px; line-height:1; cursor:pointer;
-    background:#161b22; color:#c3ced9; border:1px solid #232c36; border-radius:5px; padding:0; }
-  .graph-tools button:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#293d36; border:1px solid #dce2d9; border-radius:5px; padding:0; }
+  .graph-tools button:hover { border-color:#356b58; color:#356b58; }
   .graph-tools button.wide { width:auto; padding:0 8px; font-size:12px; }
-  .zoom-level { font-size:11px; color:#7d8896; min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
-  .graph-hint { font-size:11px; color:#5c6773; padding:0 14px 10px; }
-  h2 { border-bottom:1px solid #1f2933; padding-bottom:7px; font-size:17px; margin-top:34px; }
-  .idea { border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
+  .zoom-level { font-size:11px; color:#63746a; min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
+  .graph-hint { font-size:11px; color:#63746a; padding:0 14px 10px; }
+  h2 { border-bottom:1px solid #dce2d9; padding-bottom:7px; font-size:17px; margin-top:34px; }
+  .idea { border:1px solid #dce2d9; border-left:4px solid #ccdacd; border-radius:9px;
     padding:14px 18px; margin:12px 0; scroll-margin-top:14px; }
-  .idea.done { border-left-color:#14532d; } .idea.doing { border-left-color:#1e3a8a; }
-  .idea.blocked { border-left-color:#7c2d12; } .idea.endpoint { border-left-color:#581c87; }
+  .idea.done { border-left-color:#e1eee4; } .idea.doing { border-left-color:#e2edf2; }
+  .idea.blocked { border-left-color:#f5ead9; } .idea.endpoint { border-left-color:#eee6f1; }
   .idea h3 { margin:0 0 10px; font-size:16px; }
   .idea.flash { animation: flash 1.2s ease-out; }
-  @keyframes flash { from { background:#1d4ed855; } to { background:transparent; } }
-  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#1f2933; color:#93a1b0;
+  @keyframes flash { from { background:#e0ebe4; } to { background:transparent; } }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#dce2d9; color:#63746a;
     font-weight:normal; margin-left:8px; }
-  .badge.end { background:#581c87; color:#faf5ff; }
-  .iid { float:right; font-size:12px; color:#5c6773; font-weight:normal; }
+  .badge.end { background:#eee6f1; color:#faf5ff; }
+  .iid { float:right; font-size:12px; color:#63746a; font-weight:normal; }
   dl { margin:0; display:grid; grid-template-columns:max-content 1fr; gap:5px 18px; }
-  dt { color:#7d8896; white-space:nowrap; } dd { margin:0; }
-  code { background:#161b22; border-radius:4px; padding:1px 6px; font-size:13px; }
-  .none { color:#4b5563; }
-  .signoff { font-size:12px; color:#7d8896; }
+  dt { color:#63746a; white-space:nowrap; } dd { margin:0; }
+  code { background:#f0f2ed; border-radius:4px; padding:1px 6px; font-size:13px; }
+  .none { color:#63746a; }
+  .signoff { font-size:12px; color:#63746a; }
   .edges { margin:11px 0 0; font-size:13px; }
-  .edges b { color:#7d8896; font-weight:normal; margin-right:4px; }
-  .xlink { display:inline-block; background:#161b22; border:1px solid #1f2933; border-radius:5px;
-    padding:1px 8px; margin:2px 4px 2px 0; color:#7dd3fc; text-decoration:none; font-size:12px; }
-  .xlink:hover { border-color:#7dd3fc; }
-  .log { margin:10px 0 0; font-size:12px; color:#7d8896; }
+  .edges b { color:#63746a; font-weight:normal; margin-right:4px; }
+  .xlink { display:inline-block; background:#f0f2ed; border:1px solid #dce2d9; border-radius:5px;
+    padding:1px 8px; margin:2px 4px 2px 0; color:#356b58; text-decoration:none; font-size:12px; }
+  .xlink:hover { border-color:#356b58; }
+  .log { margin:10px 0 0; font-size:12px; color:#63746a; }
   .log summary { cursor:pointer; } .log div { margin:4px 0 0 14px; }
 
   /* \u2500\u2500 editing \u2500\u2500 read view and write view swap; only one is ever displayed. */
@@ -9316,58 +9356,64 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
   .idea.editing .ro { display:none; }
   .idea.editing .rw { display:inline-block; }
   .idea.editing dd .rw { display:block; }
-  textarea.rw, input.rw, select.rw { width:100%; font:inherit; font-size:14px; color:#e6edf3;
-    background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; resize:vertical; }
+  textarea.rw, input.rw, select.rw { width:100%; font:inherit; font-size:14px; color:#293d36;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; resize:vertical; }
   input.rw { width:auto; min-width:min(24em,100%); font-size:16px; }
   select.rw { width:auto; font-size:12px; padding:2px 6px; }
-  textarea.rw:focus, input.rw:focus, select.rw:focus { outline:none; border-color:#7dd3fc; }
+  textarea.rw:focus, input.rw:focus, select.rw:focus { outline:none; border-color:#356b58; }
   .edit-toggle { margin-left:8px; font:inherit; font-size:11px; cursor:pointer; padding:2px 9px;
-    background:#161b22; color:#93a1b0; border:1px solid #232c36; border-radius:10px; }
-  .edit-toggle:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-radius:10px; }
+  .edit-toggle:hover { border-color:#356b58; color:#356b58; }
   /* \u6539\u8FC7\u7684\u5730\u65B9\u8981\u770B\u5F97\u89C1 \u2014\u2014 \u63D0\u4EA4\u4E4B\u524D\uFF0C\u8FD9\u662F\u552F\u4E00\u7684\u300C\u54EA\u91CC\u52A8\u8FC7\u300D\u7684\u7EBF\u7D22\u3002 */
-  .dirty > .rw, h3.dirty .rw { border-color:#eab308; background:#1c1917; }
-  dd.dirty::after { content:"\u5DF2\u6539"; font-size:11px; color:#eab308; margin-left:6px; }
-  .idea.dirty { border-left-color:#eab308; }
-  #draft-banner, #restore { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
+  .dirty > .rw, h3.dirty .rw { border-color:#855a26; background:#f5ead9; }
+  dd.dirty::after { content:"\u5DF2\u6539"; font-size:11px; color:#855a26; margin-left:6px; }
+  .idea.dirty { border-left-color:#855a26; }
+  #draft-banner, #restore { border:1px solid #d7d8bc; background:#f5ead9; color:#855a26;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
-  #restore { border-color:#4c1d95; background:#16121f; color:#ddd6fe; }
+  #restore { border-color:#d8c9df; background:#eee6f1; color:#765286; }
   #restore-list div { display:flex; gap:9px; align-items:center; margin:7px 0 0; }
   #restore-list span { flex:1; color:#a5a2b8; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #restore button, #draft-banner button { font:inherit; font-size:11px; cursor:pointer; padding:2px 9px;
-    background:#161b22; color:#c3ced9; border:1px solid #232c36; border-radius:10px; }
-  #restore button:hover, #draft-banner button:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#293d36; border:1px solid #dce2d9; border-radius:10px; }
+  #restore button:hover, #draft-banner button:hover { border-color:#356b58; color:#356b58; }
 
   /* \u2500\u2500 structure editing \u2500\u2500 edges, new ideas, pending deletions. */
   .chip { display:inline-flex; align-items:center; gap:2px; margin:2px 4px 2px 0; }
   .chip .xlink { margin:0; border-top-right-radius:0; border-bottom-right-radius:0; }
   .cut { font:inherit; font-size:11px; line-height:1; cursor:pointer; padding:2px 6px;
-    background:#161b22; color:#7d8896; border:1px solid #1f2933; border-left:0;
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-left:0;
     border-radius:0 5px 5px 0; }
-  .cut:hover { color:#fca5a5; border-color:#7f1d1d; }
-  select.rw-edge { font:inherit; font-size:11px; margin-left:6px; padding:2px 6px; color:#93a1b0;
-    background:#0d1117; border:1px solid #232c36; border-radius:10px; cursor:pointer; }
-  select.rw-edge:hover { border-color:#7dd3fc; color:#7dd3fc; }
+  .cut:hover { color:#9a4a40; border-color:#9a4a40; }
+  select.rw-edge { font:inherit; font-size:11px; margin-left:6px; padding:2px 6px; color:#63746a;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:10px; cursor:pointer; }
+  select.rw-edge:hover { border-color:#356b58; color:#356b58; }
   #new-idea { font:inherit; font-size:12px; cursor:pointer; padding:3px 11px; margin-left:10px;
-    background:#161b22; color:#93a1b0; border:1px solid #232c36; border-radius:11px; vertical-align:2px; }
-  #new-idea:hover { border-color:#7dd3fc; color:#7dd3fc; }
-  .edit-toggle.danger:hover { border-color:#fca5a5; color:#fca5a5; }
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-radius:11px; vertical-align:2px; }
+  #new-idea:hover { border-color:#356b58; color:#356b58; }
+  .edit-toggle.danger:hover { border-color:#9a4a40; color:#9a4a40; }
   /* \u5F85\u5220\u662F\u6807\u8BB0\uFF0C\u4E0D\u662F\u6D88\u5931 \u2014\u2014 \u4EBA\u8981\u80FD\u770B\u89C1\u81EA\u5DF1\u5220\u4E86\u4EC0\u4E48\uFF0C\u5E76\u4E14\u6539\u4E3B\u610F\u3002 */
-  .idea.removing { opacity:.55; border-left-color:#7f1d1d; }
+  .idea.removing { opacity:.55; border-left-color:#9a4a40; }
   .idea.removing h3 > .ro, .idea.removing h3 > .rw { text-decoration:line-through; }
   .idea.incomplete { border-left-color:#a16207; }
   .idea.incomplete::before { content:"\u524D\u4E09\u95EE\u8FD8\u6CA1\u586B\u9F50\uFF0C\u63D0\u4EA4\u65F6\u4E0D\u4F1A\u5E26\u4E0A\u5B83"; display:block;
-    font-size:11px; color:#eab308; margin:0 0 6px; }
+    font-size:11px; color:#855a26; margin:0 0 6px; }
   /* \u2500\u2500 worklists under the diagram \u2500\u2500 */
-  .worklist { border:1px solid #1f2933; background:#0d1117; border-radius:9px;
+  .worklist { border:1px solid #dce2d9; background:#ffffff; border-radius:9px;
     padding:9px 14px; margin:0 0 12px; font-size:13px; }
-  .worklist > summary { cursor:pointer; color:#93a1b0; }
-  .worklist > summary:hover { color:#7dd3fc; }
+  .worklist > summary { cursor:pointer; color:#63746a; }
+  .worklist > summary:hover { color:#356b58; }
+  .pending-row { margin:10px 0 0; padding-top:8px; border-top:1px solid #dce2d9; }
+  .pending-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .pending-head .answer { user-select:all; color:#356b58; }
+  .pending-row.void .badge { background:#e4cbc7; color:#9a4a40; }
+  .pending-text { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df;
+    white-space:pre-wrap; font:inherit; max-height:60vh; overflow:auto; }
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
-  .wl-note { color:#7d8896; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#7d8896; }
-  .crumbs a { color:#7dd3fc; text-decoration:none; }
-  .crumbs a.here { color:#e6edf3; font-weight:600; }
+  .wl-note { color:#63746a; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#63746a; }
+  .crumbs a { color:#356b58; text-decoration:none; }
+  .crumbs a.here { color:#293d36; font-weight:600; }
   .crumbs button { margin-left:auto; }
   .page[hidden] { display:none; }
   /* I-117: a row is a collapsible. The frame sits on the details element, the
@@ -9377,59 +9423,128 @@ ${worklist("\u8FDB\u884C\u4E2D", scope.filter((i) => i.status === "doing").map((
      (No backticks in this block: the whole style sheet lives inside a template
      string; and this comment ships in the page, so it must not spell that
      value out either \u2014 a test greps the output for it.) */
-  .brief-row { margin:0 0 8px; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
-    background:#0d1117; scroll-margin-top:14px; }
-  .brief-row:hover { border-color:#7dd3fc; }
-  .brief-row.done { border-left-color:#22c55e; } .brief-row.doing { border-left-color:#3b82f6; }
-  .brief-row.blocked { border-left-color:#f97316; } .brief-row.endpoint { border-left-color:#a855f7; }
+  .brief-row { margin:0 0 8px; border:1px solid #dce2d9; border-left:4px solid #ccdacd; border-radius:9px;
+    background:#ffffff; scroll-margin-top:14px; }
+  .brief-row:hover { border-color:#356b58; }
+  .brief-row.done { border-left-color:#527d63; } .brief-row.doing { border-left-color:#648aa0; }
+  .brief-row.blocked { border-left-color:#b68748; } .brief-row.endpoint { border-left-color:#9b80a5; }
   .brief-row.flash { animation: flash 1.2s ease-out; }
-  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#e6edf3; cursor:pointer; list-style:none; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#293d36; cursor:pointer; list-style:none; }
   .brief::-webkit-details-marker { display:none; }
-  .brief::before { content:"\u25B8"; flex:none; color:#5c6773; font-size:12px; }
+  .brief::before { content:"\u25B8"; flex:none; color:#63746a; font-size:12px; }
   .brief-row[open] > .brief::before { content:"\u25BE"; }
   .brief .bname { font-weight:600; flex:none; }
-  .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; text-decoration:none; }
+  .brief .blurb { flex:1; color:#63746a; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .brief .enter { flex:none; color:#356b58; font-size:13px; text-decoration:none; }
   .brief .enter:hover { text-decoration:underline; }
-  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #1f2933; font-size:13px; color:#c3ced9; }
+  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #dce2d9; font-size:13px; color:#293d36; }
   .brief-detail dl { margin-top:8px; }
-  .brief-log { margin:10px 0 0; font-size:12px; color:#7d8896; }
-  .brief-log b { color:#7d8896; font-weight:normal; margin-right:6px; }
+  .brief-log { margin:10px 0 0; font-size:12px; color:#63746a; }
+  .brief-log b { color:#63746a; font-weight:normal; margin-right:6px; }
   .brief-log div { margin:4px 0 0 14px; }
 
-  #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
+  #offline-note { border:1px solid #d7d8bc; background:#f5ead9; color:#855a26;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
 
   /* \u2500\u2500 submitting \u2500\u2500 */
   #submit { font:inherit; font-size:11px; cursor:pointer; padding:2px 11px; margin-left:10px;
-    background:#14532d; color:#f0fdf4; border:1px solid #166534; border-radius:10px; }
-  #submit:hover:not(:disabled) { border-color:#86efac; }
-  #submit:disabled { background:#161b22; color:#4b5563; border-color:#232c36; cursor:default; }
-  #submit-panel { border:1px solid #1f3a2a; background:#0f1a14; color:#d7e6dc;
+    background:#e1eee4; color:#f0fdf4; border:1px solid #527d63; border-radius:10px; }
+  #submit:hover:not(:disabled) { border-color:#356548; }
+  #submit:disabled { background:#f0f2ed; color:#63746a; border-color:#dce2d9; cursor:default; }
+  #submit-panel { border:1px solid #cbdccf; background:#e1eee4; color:#356548;
     border-radius:9px; padding:12px 16px; margin:0 0 14px; font-size:13px; }
   #submit-panel ul { margin:8px 0; padding-left:20px; }
-  #submit-panel li { margin:2px 0; color:#a7c4b5; }
+  #submit-panel li { margin:2px 0; color:#356548; }
   #submit-panel button { font:inherit; font-size:12px; cursor:pointer; padding:3px 12px; margin-top:8px;
-    background:#14532d; color:#f0fdf4; border:1px solid #166534; border-radius:10px; }
-  #submit-panel button:hover { border-color:#86efac; }
+    background:#e1eee4; color:#f0fdf4; border:1px solid #527d63; border-radius:10px; }
+  #submit-panel button:hover { border-color:#356548; }
   #submit-panel textarea { width:100%; margin-top:8px; font-family:ui-monospace,monospace; font-size:11px;
-    color:#e6edf3; background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; }
+    color:#293d36; background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; }
   #submit-panel code { font-size:12px; }
 
   /* \u2500\u2500 signing a manual check \u2500\u2500 */
   .sign-open { font:inherit; font-size:11px; cursor:pointer; padding:2px 9px; margin-left:8px;
-    background:#161b22; color:#c084fc; border:1px solid #3b2a52; border-radius:10px; }
-  .sign-open:hover { border-color:#c084fc; }
-  #sign-panel { border:1px solid #3b2a52; background:#150f1c; color:#e2d9ee;
+    background:#f0f2ed; color:#765286; border:1px solid #d8c9df; border-radius:10px; }
+  .sign-open:hover:not(:disabled) { border-color:#765286; }
+  /* I-135: greyed, not gone \u2014 the same shape as #submit:disabled, so "you may
+     not do this yet" always looks the same on this page. */
+  .sign-open:disabled { background:#f0f2ed; color:#63746a; border-color:#dce2d9; cursor:default; }
+  .gate-why { font-size:12px; color:#63746a; margin-left:8px; }
+  #sign-panel { border:1px solid #d8c9df; background:#eee6f1; color:#765286;
     border-radius:9px; padding:12px 16px; margin:0 0 14px; font-size:13px; }
-  #sign-panel .what { color:#c9b8dd; margin:6px 0 10px; padding-left:10px; border-left:2px solid #3b2a52; }
-  #sign-panel label { display:block; margin:8px 0 3px; font-size:12px; color:#a89bb8; }
-  #sign-panel input, #sign-panel textarea { width:100%; font:inherit; font-size:13px; color:#e6edf3;
-    background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; }
+  #sign-panel .what { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df; }
+  #sign-panel label { display:block; margin:8px 0 3px; font-size:12px; color:#765286; }
+  #sign-panel input, #sign-panel textarea { width:100%; font:inherit; font-size:13px; color:#293d36;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; }
   #sign-panel button { font:inherit; font-size:12px; cursor:pointer; padding:3px 12px; margin-top:10px;
-    background:#4c1d95; color:#f5f3ff; border:1px solid #6d28d9; border-radius:10px; }
-  #sign-panel button:hover { border-color:#c084fc; }
-  #sign-panel .warn { color:#fca5a5; font-size:12px; margin-top:6px; }
+    background:#d8c9df; color:#f5f3ff; border:1px solid #d8c9df; border-radius:10px; }
+  #sign-panel button:hover { border-color:#765286; }
+  #sign-panel .warn { color:#9a4a40; font-size:12px; margin-top:6px; }
+  /* Graph workspace: quiet surfaces, readable hierarchy, native controls. */
+  body { max-width:1320px; padding:32px 48px 80px; background:#f7f6f2;
+    color:#293d36; font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+  body::before { content:"COMPANION / IDEA WORKSPACE"; display:block; margin-bottom:28px;
+    color:#63746a; font-size:11px; font-weight:600; letter-spacing:2.4px; }
+  h1 { font-size:clamp(26px,3vw,38px); font-weight:600; letter-spacing:-1px; line-height:1.3; margin-bottom:14px; }
+  .overview { max-width:850px; font-size:15px; line-height:1.9; color:#63746a; margin-bottom:18px; }
+  .overview-more { margin:0 0 24px; color:#63746a; }
+  .overview-more p { max-width:850px; line-height:1.9; }
+  .legend { color:#63746a; font-size:12px; line-height:1.9; }
+  .sw { width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 3px #344b3a0c; }
+  .crumbs { margin:20px 0 0; padding:14px 0; border-top:1px solid #dce2d9; gap:12px; }
+  .crumbs a { color:#356b58; }
+  #new-idea { padding:8px 14px; border-radius:8px; background:#356b58; color:#ffffff;
+    border-color:#356b58; font-weight:600; white-space:nowrap; }
+  #new-idea:hover { background:#285441; color:#ffffff; }
+  .graph { margin:0 0 12px; border:1px solid #dce2d9; border-radius:16px; overflow:hidden;
+    background-color:#ffffff; background-image:radial-gradient(#dce2d9 1px,transparent 1px);
+    background-size:24px 24px; box-shadow:0 16px 48px #344b3a0c; }
+  .viewport { height:clamp(300px,48vh,560px); border-radius:16px; }
+  .graph-tools { top:16px; right:16px; padding:6px; gap:6px; background:#ffffffee;
+    border-color:#dce2d9; border-radius:10px; box-shadow:0 4px 16px #344b3a0c; }
+  .graph-tools button { width:32px; height:32px; border-color:#dce2d9; border-radius:6px; background:#f0f2ed; }
+  .graph-tools button.wide { padding:0 12px; }
+  .zoom-level { color:#63746a; padding:0 6px; }
+  .graph-hint { color:#63746a; text-align:right; padding:0; margin:0 0 28px; }
+  h2 { display:flex; align-items:baseline; gap:14px; border:0; margin:30px 0 16px; font-size:19px; }
+  h2 .legend { font-size:12px; font-weight:400; }
+  .worklist { padding:13px 18px; background:#ffffff; border-color:#dce2d9; border-radius:10px; }
+  .worklist > summary { color:#63746a; }
+  .brief-row { margin-bottom:12px; border-color:#dce2d9; border-left-width:3px;
+    border-radius:12px; background:#ffffff; transition:background .15s,border-color .15s; }
+  .brief-row:hover { background:#f0f2ed; border-color:#ccdacd; }
+  .brief { padding:20px; align-items:center; gap:14px; flex-wrap:wrap; }
+  .brief .bname { font-size:15px; max-width:100%; overflow-wrap:anywhere; flex-shrink:1; }
+  .brief .blurb { min-width:160px; color:#63746a; }
+  .brief .enter { color:#356b58; padding:5px 10px; border-radius:6px; background:#e9f0e8; margin-left:auto; }
+  .badge { padding:3px 9px; font-size:11px; background:#dce2d9; color:#63746a; margin-left:0; white-space:nowrap; }
+  .done > .brief > .badge, .done > h3 > .badge { background:#e1eee4; color:#356548; }
+  .doing > .brief > .badge, .doing > h3 > .badge { background:#e2edf2; color:#37617b; }
+  .blocked > .brief > .badge, .blocked > h3 > .badge { background:#f5ead9; color:#855a26; }
+  .badge.end { background:#eee6f1; color:#765286; }
+  .brief-detail { padding:20px 26px; color:#293d36; border-color:#dce2d9; line-height:1.9; }
+  .idea { background:#ffffff; padding:26px; border-color:#dce2d9; border-radius:12px; }
+  .idea h3 { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:24px; font-size:20px; }
+  .iid { margin-left:auto; color:#63746a; font-family:ui-monospace,monospace; }
+  dl { grid-template-columns:minmax(110px,160px) minmax(0,1fr); gap:14px 24px; }
+  dt { color:#63746a; white-space:normal; font-size:13px; }
+  dd { overflow-wrap:anywhere; line-height:1.85; }
+  .none, .log, .brief-log, .signoff { color:#63746a; }
+  .edit-toggle { padding:5px 10px; border-radius:6px; margin-left:0; }
+  .edges { padding-top:12px; }
+  .xlink { background:#e9f0e8; border-color:#dce2d9; color:#356b58; padding:3px 9px; }
+  :focus-visible { outline:2px solid #356b58; outline-offset:4px; }
+  @media (max-width:640px) {
+    body { padding:22px 16px 48px; } body::before { margin-bottom:22px; font-size:10px; }
+    .brief { padding:16px; gap:10px; } .brief .blurb { flex-basis:100%; order:2; white-space:normal; }
+    .brief-detail, .idea { padding:18px; } dl { grid-template-columns:1fr; gap:5px; } dd { margin-bottom:14px; }
+    .graph-hint { text-align:left; } .wl-row { flex-wrap:wrap; } .wl-note { white-space:normal; }
+    .crumbs { flex-wrap:wrap; } #crumbs { overflow-wrap:anywhere; min-width:0; }
+  }
+  @media (prefers-reduced-motion:reduce) { .brief-row { transition:none; } .idea.flash, .brief-row.flash { animation:none; } }
+  #submit, #submit-panel button { background:#356b58; color:#fff; }
+  #sign-panel button { background:#765286; color:#fff; }
+  .badge.end { color:#765286; }
 </style></head><body>
 <h1 id="page-title">${esc(g.project ?? "idea graph")} \u2014 \u60F3\u6CD5\u56FE</h1>
 <p class="overview">${esc(overview[0] ?? "")}</p>${overview.length > 1 ? `
@@ -9997,6 +10112,15 @@ ${// One section per page, every idea's card exactly once (on its own page).
       // The draft is deliberately left alone. A write-back can still be refused
       // later, and the person's edits must not be the thing that gets destroyed.
       say("\u5DF2\u63D0\u4EA4\uFF0C\u5199\u56DE\u4E86 " + (done.changed || []).length + " \u5904\u6539\u52A8\u3002\u5237\u65B0\u9875\u9762\u5C31\u80FD\u770B\u5230\u65B0\u56FE\u3002");
+      // I-103: the server already sends the sign-off challenges back with the
+      // response; show them here instead of only on the terminal running serve.
+      if (done.signs && done.signs.length) {
+        const pre = document.createElement("pre");
+        pre.className = "pending-text";
+        pre.textContent = done.signs.join("\\n");
+        say("\u7B7E\u5B57\u8BF7\u6C42\u5DF2\u53D1\u51FA \u2014\u2014 \u4E0B\u9762\u8FD9\u6BB5\u53EA\u80FD\u7531\u4EBA\u5728\u5BF9\u8BDD\u91CC\u4EB2\u624B\u56DE\uFF1A").append(pre);
+      }
+      if (done.git) say("git\uFF1A" + done.git);
       const again = document.createElement("button");
       again.textContent = "\u5237\u65B0\u9875\u9762";
       again.addEventListener("click", () => { try { location.reload(); } catch (e) {} });
@@ -10079,7 +10203,7 @@ ${// One section per page, every idea's card exactly once (on its own page).
     layout = "elk";
   } catch (e) { console.warn("ELK layout unavailable, falling back to dagre", e); }
   mermaid.initialize({
-    startOnLoad: false, securityLevel: "loose", theme: "dark", layout,
+    startOnLoad: false, securityLevel: "loose", theme: "base", themeVariables: { background: "#ffffff", primaryColor: "#e9f0e8", primaryTextColor: "#293d36", lineColor: "#8b9e92", edgeLabelBackground: "#f7f6f2" }, layout,
     elk: { mergeEdges: true, nodePlacementStrategy: "LINEAR_SEGMENTS" },
     flowchart: { nodeSpacing: 30, rankSpacing: 55, curve: "basis", padding: 8 },
   });
@@ -10243,8 +10367,39 @@ function listenFrom(server, from, tries = 20) {
     attempt(from, tries);
   });
 }
+function gitRun(projectDir, args2) {
+  try {
+    return execFileSync("git", args2, { cwd: projectDir, encoding: "utf8", timeout: 3e4, stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    const e = error;
+    throw new Error(`git ${args2.join(" ")} \u5931\u8D25\uFF1A${(e.stderr || e.stdout || e.message || "").trim()}`);
+  }
+}
 async function serve(projectDir, file, opts = {}) {
   const token = randomBytes(16).toString("hex");
+  const approveSecret = env.AIDEV_APPROVE_SECRET ?? "";
+  let approveSeq = 0;
+  const pull = () => {
+    if (opts.gitSync) gitRun(projectDir, ["pull", "--ff-only", "--quiet"]);
+  };
+  const commitAndPush = (message) => {
+    if (!opts.gitSync) return void 0;
+    try {
+      const tracked = ["ideas/graph.yaml", "ideas/log.md", "ideas/approvals"].filter((rel) => existsSync(join2(projectDir, rel)));
+      gitRun(projectDir, ["add", "--", ...tracked]);
+      gitRun(projectDir, ["commit", "--quiet", "-m", message]);
+      gitRun(projectDir, ["push", "--quiet"]);
+      return void 0;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        appendFileSync(logFile(projectDir), `- ${(/* @__PURE__ */ new Date()).toISOString().replace("T", " ").slice(0, 16)}  serve \u63D0\u4EA4\u5931\u8D25\uFF1A${reason}
+`);
+      } catch {
+      }
+      return reason;
+    }
+  };
   const send = (res, code, body) => {
     const text2 = JSON.stringify(body);
     res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
@@ -10258,6 +10413,16 @@ async function serve(projectDir, file, opts = {}) {
         return;
       }
       if (req.method === "GET" && path === "/") {
+        try {
+          pull();
+        } catch (error) {
+          res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+          res.end(`\u62C9\u53D6\u5931\u8D25\uFF0C\u9875\u9762\u6CA1\u6709\u6E32\u67D3 \u2014\u2014 \u5148\u628A\u4ED3\u5E93\u7406\u987A\u518D\u5237\u65B0\u3002
+
+${error instanceof Error ? error.message : String(error)}
+`);
+          return;
+        }
         const text2 = readFileSync2(file, "utf8");
         const graph = (0, import_yaml.parseDocument)(text2).toJSON();
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -10286,7 +10451,35 @@ async function serve(projectDir, file, opts = {}) {
         const graph = (0, import_yaml.parseDocument)(result.text).toJSON();
         const signs = requestSignatures(projectDir, graph, result.signRequests ?? [], today);
         for (const line of signs) console.log(line);
-        send(res, 200, { ok: true, changed: result.changed, graph, signs });
+        const git = commitAndPush(`\u7F51\u9875\u5199\u56DE ${result.changed?.length ?? 0} \u5904\uFF08serve\uFF09`);
+        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...git ? { git } : {} });
+        return;
+      }
+      if (req.method === "POST" && path === "/approve") {
+        if (!approveSecret) {
+          send(res, 404, { ok: false, reason: "\u6CA1\u6709\u8FD9\u4E2A\u5730\u5740" });
+          return;
+        }
+        const body = await readJson(req);
+        const given = Buffer.from(String(body?.secret ?? ""));
+        const want = Buffer.from(approveSecret);
+        if (given.length !== want.length || !timingSafeEqual(given, want)) {
+          send(res, 403, { ok: false, reason: "\u51ED\u8BC1\u4E0D\u5BF9 \u2014\u2014 \u8FD9\u4E2A\u5165\u53E3\u53EA\u8BA4\u8D77\u670D\u52A1\u7684\u90A3\u4E2A\u5BBF\u4E3B" });
+          return;
+        }
+        approveSeq += 1;
+        const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+        const outcome = applyApproval(projectDir, String(body?.words ?? ""), {
+          date: today,
+          session_id: "serve",
+          turn_id: `approve-${approveSeq}`
+        });
+        if (!outcome) {
+          send(res, 200, { ok: false, reason: "\u8FD9\u4E0D\u662F\u4E00\u53E5\u53E3\u4EE4\u56DE\u590D \u2014\u2014 \u6574\u6761\u6D88\u606F\u53EA\u80FD\u662F\u300C\u6279\u51C6 CC-XXXXXXXX\u300D\u6216\u300C\u62D2\u7EDD CC-XXXXXXXX\u300D" });
+          return;
+        }
+        const git = outcome.ok ? commitAndPush(`${outcome.decision === "approved" ? "\u6279\u51C6" : "\u62D2\u7EDD"}\u56DE\u6267\uFF08serve \xB7 ${outcome.gate}\uFF09`) : void 0;
+        send(res, 200, { ...outcome, ...git ? { git } : {} });
         return;
       }
       send(res, 404, { ok: false, reason: "\u6CA1\u6709\u8FD9\u4E2A\u5730\u5740" });
@@ -10302,6 +10495,7 @@ async function serve(projectDir, file, opts = {}) {
     port,
     token,
     url,
+    approveOpen: approveSecret !== "",
     close: () => new Promise((done) => server.close(() => done()))
   };
 }
@@ -10357,7 +10551,7 @@ var SUBCOMMANDS = [
   ["allow", "<path>"],
   ["render", ""],
   ["apply", "[file]"],
-  ["serve", "[--port 4173] [--no-open]"],
+  ["serve", "[--port 4173] [--no-open] [--git-sync]"],
   ["request-approval", "--node I-002 [I-003 \u2026] [--gate plan|red-waiver|manual-check] [--by \u4EBA\u540D]"],
   ["run-check", "<id> --phase red|green [--timeout \u79D2]"]
 ];
@@ -10630,9 +10824,11 @@ ${block}`);
     case "serve": {
       serve(projectDir, file, {
         port: Number(flag(args2, "port")) || void 0,
-        open: !args2.includes("--no-open")
+        open: !args2.includes("--no-open"),
+        gitSync: args2.includes("--git-sync")
       }).then((live) => {
         console.log(`\u60F3\u6CD5\u56FE\u5F00\u5728 ${live.url}`);
+        if (live.approveOpen) console.log(`\u6279\u51C6\u5165\u53E3\u5DF2\u5F00\uFF08POST /approve\uFF0C\u51ED\u8BC1\u6765\u81EA\u73AF\u5883\u53D8\u91CF\uFF0C\u4E0D\u6253\u5370\uFF09\u3002`);
         console.log(`\u5728\u7F51\u9875\u4E0A\u6539\u5B8C\u70B9\u63D0\u4EA4\uFF0C\u6539\u52A8\u76F4\u63A5\u5199\u56DE ${relative2(projectDir, file)} \u2014\u2014 \u4E0D\u7528\u518D\u642C\u6587\u4EF6\u3002`);
         console.log(`\u6309 Ctrl-C \u7ED3\u675F\u3002`);
       }).catch((error) => {
@@ -11074,9 +11270,16 @@ var MUTATING_HEAD = new RegExp([
   // way the copy family above is; the cost, stated: a read-only `curl` that
   // prints a URL to stdout is refused with them — reading a URL is the agent's
   // own fetch tool's job, not a shell write's (D21).
-  String.raw`^(curl|wget|aria2c|scp|rsync|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)(\.exe)?\b`
+  // `scp` stood on this list until I-144 and is deliberately gone. What it was
+  // doing here was true — `scp remote:/tmp/a.ts src/a.ts` lands a file exactly as
+  // `cp` does — and the cost is accepted rather than denied: on this machine
+  // copying files to and from a cluster is the ordinary way work gets done, and a
+  // guardrail that refuses it every day to stop an attack nobody has mounted is
+  // paying its cost in the wrong currency. `rsync` stays: the owner's decision
+  // named scp and only scp, and widening it is theirs to make, not this line's.
+  String.raw`^(curl|wget|aria2c|rsync|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)(\.exe)?\b`
 ].join("|"), "i");
-var DOWNLOADER_HEAD = /^(curl|wget|aria2c|scp|rsync|iwr|irm|Invoke-)/i;
+var DOWNLOADER_HEAD = /^(curl|wget|aria2c|rsync|iwr|irm|Invoke-)/i;
 var GIT_COMMIT_HEAD = /^git(\.exe)?\b.*\bcommit$/i;
 var REDIRECT = /(?:^|[^<])(<>|>{1,2})/;
 var NON_FILE_REDIRECT = /\d*>{1,2}&(?:\d+|-)|\d*>{1,2}[ \t]*(?:\/dev\/null|NUL|\$null)\b/gi;
@@ -11186,6 +11389,27 @@ var LOOKING_HEAD = new RegExp([
   String.raw`^(diff|cmp|delta|code|git|md5sum|sha1sum|sha256sum|sha512sum|shasum|cksum)$`,
   String.raw`^(basename|dirname|realpath|readlink|start|open|xdg-open|explorer|Invoke-Item|ii)$`
 ].join("|"), "i");
+function mentionedLedger(projectDir, part) {
+  const line = part.replaceAll("\\", "/");
+  const lower = line.toLowerCase();
+  const p = paths(projectDir);
+  const ledger = [
+    [p.approved, "\u6279\u51C6\u56DE\u6267"],
+    [p.worklist, "\u626B\u63CF\u6E05\u5355"],
+    [p.done, "\u5DF2\u8BFB\u8BB0\u5F55"],
+    [p.html, "\u751F\u6210\u7684\u7F51\u9875"],
+    [p.graph, "\u60F3\u6CD5\u56FE"],
+    [p.runtime, "\u8FD0\u884C\u671F\u8BC1\u636E"]
+  ];
+  for (const [file, label] of ledger) {
+    const needle = relTo(projectDir, file).replaceAll("\\", "/");
+    const at = lower.indexOf(needle.toLowerCase());
+    if (at < 0) continue;
+    if (/[A-Za-z0-9_.\-]/.test(line[at + needle.length] ?? "")) continue;
+    return [label, needle];
+  }
+  return null;
+}
 function protectedTargetRefusal(command, projectDir) {
   const hits = [];
   for (const part of shellCommands(command)) {
@@ -11196,6 +11420,8 @@ function protectedTargetRefusal(command, projectDir) {
       const label2 = protectedTarget(projectDir, token2);
       if (label2) hits.push([label2, token2]);
     }
+    const mentioned = mentionedLedger(projectDir, part);
+    if (mentioned) hits.push(mentioned);
   }
   for (const hit of command.matchAll(REDIRECT_TARGET)) {
     const label2 = protectedTarget(projectDir, hit[1]);
@@ -11207,15 +11433,6 @@ function protectedTargetRefusal(command, projectDir) {
 }
 var INTERPRETER_NAME = String.raw`(python[0-9.]*|py|node|nodejs|deno|bun|ruby|perl|tsx|ts-node|bash|sh|zsh|pwsh|powershell|iex|Invoke-Expression)`;
 var LAUNCHER = String.raw`((sudo|npx|bunx|command|env|exec|time|nohup)([ \t]+-\S+)*[ \t]+)*`;
-var COMMAND_HEAD = String.raw`(^|[;&|(\r\n\`])[\s;&|(]*`;
-var CODE_FLAG = String.raw`-{1,2}(c(ommand)?|e(val)?|enc(odedcommand)?|ec|p(rint)?|f(ile)?)\b`;
-var INTERPRETER = new RegExp([
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s+(-\S+\s+)*${CODE_FLAG}`,
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s+(-\S+\s+)*\S+\.(py|js|mjs|cjs|ts|mts|cts|tsx|jsx|rb|pl|sh|bash|zsh|ps1|psm1|bat|cmd)\b`,
-  String.raw`${COMMAND_HEAD}${LAUNCHER}${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)*[^-\s;&|<>]`,
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s*<`,
-  String.raw`\|[ \t]*${LAUNCHER}${INTERPRETER_NAME}(\.exe)?\b`
-].join("|"), "i");
 var COMPANION_SUBCOMMANDS = SUBCOMMANDS.map(([name]) => name);
 var HELP_FLAGS = ["help", "--help", "-h", "--version", "-v", "-V"];
 var scriptPath = (file) => String.raw`("(?:[^"\r\n]*[\\/])?${file}"|'(?:[^'\r\n]*[\\/])?${file}'|(?:\S*[\\/])?${file})`;
@@ -11246,12 +11463,6 @@ var ENGINE_PATHS = [
   "claude-companion/ideas.ts",
   "cursor-companion/ideas.ts"
 ];
-var INSTALL_PATHS = [
-  "companion/install.ts",
-  "companion/build.mjs",
-  "claude-companion/install.ts",
-  "cursor-companion/install.ts"
-];
 function atSanctionedPath(projectDir, token, sanctioned) {
   const bare = token.replace(/^["']|["']$/g, "");
   const rel = relTo(projectDir, bare);
@@ -11263,10 +11474,14 @@ var COMPANION_CLI = new RegExp(
   "i"
 );
 var SMUGGLED_TAIL = /[\r\n]|\$\(|`/;
-var ENGINE_FILE = String.raw`(companion\.mjs|companion\.js|companion\.py|companion[\\/](ideas|guard|cli)\.ts)`;
+var ENGINE_FILE = String.raw`(companion\.mjs|companion\.js|companion\.py|(?:claude-|cursor-)?companion[\\/](ideas|guard|cli)\.ts)`;
 var ENGINE_MENTION = new RegExp(ENGINE_FILE, "i");
 var ENGINE_INVOCATION = new RegExp(
   String.raw`^[\s(]*${LAUNCHER}(${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)*)?["']?(\S*[\\/])?${ENGINE_FILE}`,
+  "i"
+);
+var NESTED_ENGINE_INVOCATION = new RegExp(
+  String.raw`^[\s(]*${LAUNCHER}${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)+["']?[^\r\n]*?${ENGINE_FILE}`,
   "i"
 );
 var ENGINE_WRITE = new RegExp([
@@ -11283,40 +11498,26 @@ function engineScreen(command) {
     if (ENGINE_WRITE.test(part)) {
       return `\u8FD9\u4E00\u6BB5\u662F\u5728\u6539\u5F15\u64CE\u81EA\u5DF1\u7684\u6587\u4EF6\uFF0C\u4E0D\u662F\u5728\u770B\u5B83\uFF08D21/D26\uFF09\uFF1A\u300C${part.slice(0, 80)}\u300D\u3002\u5F15\u64CE\u548C\u5B88\u536B\u4E5F\u662F\u4EA7\u54C1\u4EE3\u7801\uFF0C\u8981\u6539\u5C31\u7528\u7F16\u8F91\u5DE5\u5177\u5199\uFF0C\u8BA9\u5B88\u536B\u6309\u60F3\u6CD5\u56FE\u5224\u4E00\u6B21\uFF1B\u53EA\u662F\u60F3\u770B\u5B83\uFF0C\u7528\u4EC0\u4E48\u529E\u6CD5\u90FD\u884C \u2014\u2014 cat / git diff / gc / sls / awk \u90FD\u4E0D\u62E6\u3002`;
     }
-    if (ENGINE_INVOCATION.test(part) || substitution) {
+    if (ENGINE_INVOCATION.test(part) || NESTED_ENGINE_INVOCATION.test(part) || substitution) {
       return `\u5F15\u64CE\u53EA\u80FD\u8FD9\u6837\u8C03\uFF1Anode/tsx/npx tsx <\u8DEF\u5F84> [<\u5B50\u547D\u4EE4>]\uFF0C\u5B50\u547D\u4EE4\u9650 ${COMPANION_SUBCOMMANDS.join(" ")}\uFF08\u53E6\u52A0 ${HELP_FLAGS.join(" / ")}\uFF1B\u4E00\u4E2A\u90FD\u4E0D\u5199\u5C31\u662F\u6253\u5370\u7528\u6CD5\uFF09\u3002\u540E\u9762\u53EF\u4EE5\u63A5\u4E00\u6BB5\u53EA\u8BFB\u7684\u7BA1\u9053\uFF08| head\u3001| less\u3001| Select-Object \u2026\uFF09\uFF0C\u4F46\u4E0D\u8BB8\u63A5\u7B2C\u4E8C\u6761\u547D\u4EE4\u3001\u91CD\u5B9A\u5411\u3001\u6362\u884C\u7EED\u884C\u6216\u547D\u4EE4\u66FF\u6362 \u2014\u2014 \u90A3\u4E9B\u62C6\u6210\u4E24\u6B21\u8C03\u7528\uFF08D28\uFF09\u3002\u624B\u5DE5\u8DD1 guard/hook \u5165\u53E3\u7B49\u4E8E\u81EA\u5DF1\u9020\u4E8B\u4EF6\u3001\u7ED9\u81EA\u5DF1\u7B7E\u6279\u51C6\uFF0C\u6C38\u8FDC\u4E0D\u653E\u884C\uFF08D26\uFF09\uFF1A\u300C${command.slice(0, 80)}\u300D`;
     }
   }
   return null;
 }
 var PIPED_RUNTIME = new RegExp(String.raw`^${LAUNCHER}${INTERPRETER_NAME}(\.exe)?\b`, "i");
-var inertStage = (stage, projectDir) => stage !== "" && !ENGINE_MENTION.test(stage) && mutatingShell(stage) === null && !INTERPRETER.test(stage) && !PIPED_RUNTIME.test(stage) && protectedTargetRefusal(stage, projectDir) === null;
-var SANCTIONED_SCRIPT = new RegExp(
-  String.raw`^(npx\s+tsx|node|tsx)\s+${scriptPath(String.raw`(?:companion[\\/](?:install\.ts|build\.mjs)|(?:claude|cursor)-companion[\\/]install\.ts)`)}(?:\s[^;&|<>\r\n]*)?$`,
-  "i"
-);
-function sanctionedScript(command, projectDir) {
-  const hit = SANCTIONED_SCRIPT.exec(command);
-  return hit !== null && atSanctionedPath(projectDir, hit[2], INSTALL_PATHS);
-}
+var inertStage = (stage, projectDir) => stage !== "" && !ENGINE_MENTION.test(stage) && mutatingShell(stage) === null && !PIPED_RUNTIME.test(stage) && protectedTargetRefusal(stage, projectDir) === null;
 function ruleShell(event, projectDir) {
   const command = (event.command ?? "").trim();
   if (!command) return OK;
-  let declared;
   try {
     const graph = loadGraphStrict(projectDir);
-    declared = graph.ideas.find((i) => i.status === "doing" && i.verify?.command?.trim() === command);
+    const declared = graph.ideas.find((i) => i.status === "doing" && i.verify?.command?.trim() === command);
     const chained = declared && chainedCommandRefusal(declared, command);
     if (chained) return { allow: false, reason: chained };
-    if (declared && validApproval(projectDir, graph, "plan", declared.id)) return OK;
+    if (declared) return OK;
   } catch {
   }
-  const verdict = screenShell(command, projectDir);
-  if (verdict.allow || !declared) return verdict;
-  return {
-    allow: false,
-    reason: `\u8FD9\u662F ${declared.id}\u300C${declared.name}\u300D\u5728\u56FE\u91CC\u58F0\u660E\u7684 verify.command\uFF08\u300C${command.slice(0, 80)}\u300D\uFF09\uFF0C\u62E6\u4E0B\u5B83\u7684\u4E0D\u662F\u547D\u4EE4\u672C\u8EAB\uFF0C\u662F\u8FD9\u4E2A\u60F3\u6CD5\u7684\u65B9\u6848\u8FD8\u6CA1\u6709\u5F53\u524D\u6709\u6548\u7684\u4EBA\u5DE5\u6279\u51C6\uFF08D7\uFF09\uFF1A\u53BB\u8981\u4E00\u6B21 \u2014\u2014 request-approval --node ${declared.id}\uFF0C\u4EBA\u56DE\u300C\u6279\u51C6\u300D\u4E4B\u540E\u8FD9\u6761\u547D\u4EE4\u5C31\u7167\u539F\u6837\u653E\u884C\u3002\uFF08\u6279\u51C6\u7ED1\u5728\u56FE\u7684\u5185\u5BB9\u4E0A\uFF1A\u4E4B\u540E\u518D\u6539 how / verify\uFF0C\u6279\u51C6\u4F5C\u5E9F\uFF0C\u8981\u91CD\u65B0\u8981\u3002\u82E5\u786E\u5B9E\u60F3\u6539\u547D\u4EE4\u672C\u8EAB\uFF0C\u5148\u6539\u56FE\u518D\u8981\u6279\u51C6\u3002\u539F\u672C\u6321\u4F4F\u5B83\u7684\u89C4\u5219\uFF1A${verdict.reason}\uFF09`
-  };
+  return screenShell(command, projectDir);
 }
 function screenShell(command, projectDir) {
   if (!SMUGGLED_TAIL.test(command)) {
@@ -11326,10 +11527,6 @@ function screenShell(command, projectDir) {
       if (engine2) {
         return atSanctionedPath(projectDir, engine2[2], ENGINE_PATHS) ? OK : { allow: false, reason: misplacedScript(engine2[2], ENGINE_PATHS) };
       }
-      const script = SANCTIONED_SCRIPT.exec(head);
-      if (script && mutatingShell(head) === null) {
-        return atSanctionedPath(projectDir, script[2], INSTALL_PATHS) ? OK : { allow: false, reason: misplacedScript(script[2], INSTALL_PATHS) };
-      }
     }
   }
   const engine = engineScreen(command);
@@ -11338,9 +11535,6 @@ function screenShell(command, projectDir) {
   if (protectedFile) return { allow: false, reason: protectedFile };
   const mutation = mutatingShell(command);
   if (mutation !== null) return { allow: false, reason: mutatingReason(command, mutation) };
-  if (INTERPRETER.test(command) && !(sanctionedScript(command, projectDir) && !SMUGGLED_TAIL.test(command))) {
-    return { allow: false, reason: `\u89E3\u91CA\u5668\uFF08python -c / node --eval / powershell -enc <base64> / python \u811A\u672C.py / bash \u6CA1\u6709\u6269\u5C55\u540D\u7684\u811A\u672C / deno run \u811A\u672C / \u7BA1\u9053\u53F3\u8FB9\u7684 \u2026 | bash \u2026\uFF09\u7ED5\u5F97\u8FC7\u8DEF\u5F84\u68C0\u67E5\uFF0C\u7EDF\u4E00\u8D70 run-check\uFF08D21\uFF09\u3002\u672C\u4ED3\u5E93\u81EA\u5DF1\u7684\u5B89\u88C5\u5668\u548C\u6253\u5305\u5165\u53E3\u9664\u5916\uFF1A${INSTALL_PATHS.join("\u3001")}\uFF08\u8DEF\u5F84\u91CC\u6709\u7A7A\u683C\u5C31\u7ED9\u5B83\u52A0\u4E00\u5BF9\u5F15\u53F7\uFF1B\u5FC5\u987B\u662F\u9879\u76EE\u91CC\u7684\u90A3\u4E00\u4EFD\uFF0C\u540C\u540D\u7684\u522B\u5904\u6587\u4EF6\u4E0D\u7B97\uFF09\u3002` };
-  }
   return OK;
 }
 function ruleStop(event, projectDir) {
@@ -11713,8 +11907,13 @@ function resolvePlatform(args2) {
 }
 async function readStdin() {
   const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(chunk);
-  return Buffer.concat(chunks).toString("utf8");
+  const timer = setTimeout(() => process.stdin.destroy(new Error("\u5B88\u536B stdin \u8BFB\u53D6\u8D85\u65F6")), 2e3);
+  try {
+    for await (const chunk of process.stdin) chunks.push(chunk);
+    return Buffer.concat(chunks).toString("utf8");
+  } finally {
+    clearTimeout(timer);
+  }
 }
 function runGuard(args2) {
   const platformArg = resolvePlatform(args2);
@@ -11729,7 +11928,8 @@ function runGuard(args2) {
     try {
       raw = JSON.parse(rawText || "{}");
     } catch {
-      process.exit(0);
+      if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "deny", user_message: "\u5B88\u536B stdin \u4E0D\u662F JSON" }));
+      process.exit(platformArg === "cursor" ? 0 : 2);
       return;
     }
     const projectDir = projectRoot(raw.cwd ?? process.cwd());
@@ -11765,6 +11965,7 @@ function runGuard(args2) {
     if (event.event === "post-write" && !guardOff) {
       const recorded = record(event, projectDir);
       if (recorded.warn) process.stderr.write(recorded.warn + "\n");
+      if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "allow" }));
       process.exit(0);
       return;
     }
@@ -11772,8 +11973,14 @@ function runGuard(args2) {
     const reply = encode(event, verdict);
     if (verdict.warn) process.stderr.write(verdict.warn + "\n");
     if (reply.stdout) process.stdout.write(reply.stdout);
+    else if (platformArg === "cursor") process.stdout.write("{}");
     if (reply.stderr && !verdict.warn) process.stderr.write(reply.stderr);
     process.exit(reply.exitCode);
+  }).catch((error) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "deny", user_message: reason }));
+    else process.stderr.write(reason + "\n");
+    process.exit(platformArg === "cursor" ? 0 : 2);
   });
 }
 if (process.argv[1]?.endsWith("guard.ts")) runGuard(process.argv.slice(2));

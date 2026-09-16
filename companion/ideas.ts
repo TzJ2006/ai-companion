@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, exi
 import { join, resolve, dirname, relative } from "node:path";
 import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { argv, exit, cwd, pid, platform, env } from "node:process";
 import { parseDocument, stringify, type Document } from "yaml";
 import { ENGINE_RELATIVE } from "./manifests.js";
@@ -47,6 +47,10 @@ const IDEAS_DIR = (projectDir: string) => join(resolve(projectDir), "ideas");
 export interface CanonicalPaths {
   graph: string; html: string; log: string;
   worklist: string; done: string; approved: string; runtime: string;
+  /** I-138: challenges (pending/) and receipts (receipts/) — tracked by git,
+   *  so a challenge minted on one machine can be answered on another and the
+   *  receipt travels back. Red/green evidence stays machine-local in runtime. */
+  approvals: string;
 }
 
 export function paths(projectDir: string): CanonicalPaths {
@@ -59,6 +63,7 @@ export function paths(projectDir: string): CanonicalPaths {
     done: join(ideas, ".scan-done"),
     approved: join(ideas, ".approved"),
     runtime: join(ideas, ".runtime"),
+    approvals: join(ideas, "approvals"),
   };
 }
 
@@ -765,6 +770,44 @@ export function needsUnmet(idea: Idea, graph: Graph): string | null {
   return unmet.length ? `waiting on ${unmet.join(", ")}` : null;
 }
 
+/**
+ * Where an idea is filed. A `parent` naming an idea the graph does not have is
+ * top level — the same rule the page draws by, so an idea never belongs to one
+ * owner in the browser and a different one at the gate. `check` reports the
+ * dangling id on its own; losing the idea would be the worse failure.
+ *
+ * The one copy of that rule: `render` reads it too, and the gate below is only
+ * equivalent to what a reader sees because both call this.
+ */
+const filedUnder = (map: Map<string, Idea>, idea: Idea): string =>
+  idea.parent && map.has(idea.parent) ? idea.parent : "";
+
+/** The ideas filed directly under `id`, in graph order. */
+export const childrenOf = (graph: Graph, id: string): Idea[] => {
+  const map = byId(graph);
+  return graph.ideas.filter((i) => filedUnder(map, i) === id);
+};
+
+/**
+ * Null when every DIRECT child is done; otherwise the ones that are not (I-135).
+ *
+ * Direct children only, deliberately: every level enforces this for itself, so
+ * the whole subtree is covered anyway, and the refusal gets to name something
+ * the reader can see on the page in front of them instead of a grandchild three
+ * clicks down. The two are equivalent only because `setStatus` is the one place
+ * that writes a status — if a second writer ever appears, this has to grow.
+ *
+ * "not done" rather than "is todo": a blocked child is this format's own record
+ * of an abandoned idea (keep the id, set blocked, write why). That is a record
+ * of work that did NOT happen, so it blocks its parent exactly as hard. The
+ * cost is real and was accepted when the rule was: an abandoned child holds its
+ * parent open until somebody removes it from the graph.
+ */
+export function childrenUnfinished(idea: Idea, graph: Graph): string | null {
+  const open = childrenOf(graph, idea.id).filter((c) => (c.status ?? "todo") !== "done");
+  return open.length ? `子想法还没完成：${open.map((c) => c.id).join(", ")}` : null;
+}
+
 /** Every file an idea claims to write: its code files plus its test files. */
 const claimedFiles = (idea: Idea): string[] => [
   ...(idea.code ?? []).map((c) => c.file).filter(Boolean),
@@ -935,8 +978,13 @@ export function approvalLines(entries: ApprovalEntry[]): string[] {
   return out;
 }
 
-const pendingDir = (projectDir: string) => join(paths(projectDir).runtime, "pending");
-const approvalsDir = (projectDir: string) => join(paths(projectDir).runtime, "approvals");
+const pendingDir = (projectDir: string) => join(paths(projectDir).approvals, "pending");
+const approvalsDir = (projectDir: string) => join(paths(projectDir).approvals, "receipts");
+// Where both lived before I-138 (machine-local, git-ignored). Read, never
+// written: a receipt already on disk keeps counting, a challenge already
+// minted stays answerable, and nothing is migrated.
+const legacyPendingDir = (projectDir: string) => join(paths(projectDir).runtime, "pending");
+const legacyApprovalsDir = (projectDir: string) => join(paths(projectDir).runtime, "approvals");
 
 export interface Challenge { challenge: string; gate: Gate; file: string }
 
@@ -954,6 +1002,11 @@ export function requestApproval(
       const idea = byId(graph).get(id);
       if (!idea?.verify?.manual) throw new Error(`${id} 的验证不是人工检查（manual）——manual-check 关卡只签人工验收`);
       if (idea.verify.signed_off) throw new Error(`${id} 已经有人签过字了，不能覆盖`);
+      // I-135: signing is how a manual-check idea is closed, so the completion
+      // gate stands here as well as on `set done`. Without it the parent gets a
+      // valid signature while everything under it is still open.
+      const openKids = childrenUnfinished(idea, graph);
+      if (openKids) throw new Error(`${id} 还不能提签字请求 —— ${openKids}`);
     }
   }
   const snapshots = Object.fromEntries(nodeIds.map((id) => [id, approvalSnapshot(graph, id)]));
@@ -985,8 +1038,9 @@ export function applyApproval(
   if (!m) return null;
   const decision = /^(批准|同意|APPROVE)$/i.test(m[1]) ? "approved" as const : "rejected" as const;
   const challenge = m[2].toUpperCase();
-  const file = join(pendingDir(projectDir), `${challenge}.json`);
-  if (!existsSync(file)) return { ok: false, reason: `口令 ${challenge} 不存在或已用过 —— 重新 request-approval` };
+  const file = [pendingDir(projectDir), legacyPendingDir(projectDir)]
+    .map((d) => join(d, `${challenge}.json`)).find((f) => existsSync(f));
+  if (!file) return { ok: false, reason: `口令 ${challenge} 不存在或已用过 —— 重新 request-approval` };
 
   const pending = JSON.parse(readFileSync(file, "utf8")) as
     { gate: Gate; snapshots?: Record<string, string>; by?: string };
@@ -1000,6 +1054,27 @@ export function applyApproval(
   if (ids.length === 0 || drifted) {
     rmFileQuietly(file);   // self-destruct on drift: a stale challenge must not linger answerable
     return { ok: false, reason: "被批的内容在请求之后被改过了，口令作废 —— 重新 request-approval" };
+  }
+
+  // I-135: the challenge was minted when the children were done; by the time the
+  // person answers they may not be. A child's status is not part of the parent's
+  // content digest, so the drift check above cannot see this — and THIS is the
+  // door that actually writes `signed_off`, the only one in the file. The
+  // challenge is destroyed rather than left lying around: a token that becomes
+  // answerable again when the world changes, with nobody re-reading what they
+  // are signing, is the thing one-time challenges exist to prevent.
+  if (decision === "approved" && pending.gate === "manual-check") {
+    for (const id of ids) {
+      const idea = byId(graph).get(id);
+      const openKids = idea && childrenUnfinished(idea, graph);
+      if (openKids) {
+        rmFileQuietly(file);
+        return {
+          ok: false,
+          reason: `${id} 签不上 —— ${openKids}。等子想法完成后重新 request-approval --gate manual-check --node ${id}`,
+        };
+      }
+    }
   }
 
   mkdirSync(approvalsDir(projectDir), { recursive: true });
@@ -1018,7 +1093,7 @@ export function applyApproval(
       const index = g.ideas.findIndex((i) => i.id === id);
       if (index < 0) continue;
       doc.setIn(["ideas", index, "verify", "signed_off"],
-        `${pending.by || "人"} ${meta.date} —— 经一次性口令 ${challenge} 批准；回执 ideas/.runtime/approvals/${challenge}.json`);
+        `${pending.by || "人"} ${meta.date} —— 经一次性口令 ${challenge} 批准；回执 ideas/approvals/receipts/${challenge}.json`);
     }
     save(graphPath(projectDir), doc);
   }
@@ -1033,15 +1108,16 @@ function rmFileQuietly(file: string): void {
  *  every call, never cached, and never expired by time or session: the only
  *  thing that retires an approval is a change to what was approved (D7). */
 export function validApproval(projectDir: string, graph: Graph, gate: Gate, nodeId: string): boolean {
-  const dirPath = approvalsDir(projectDir);
-  if (!existsSync(dirPath)) return false;
   let want: string;
   try { want = approvalSnapshot(graph, nodeId); } catch { return false; }
-  for (const name of readdirSync(dirPath)) {
-    try {
-      const r = JSON.parse(readFileSync(join(dirPath, name), "utf8"));
-      if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
-    } catch { /* an unreadable receipt proves nothing */ }
+  for (const dirPath of [approvalsDir(projectDir), legacyApprovalsDir(projectDir)]) {
+    if (!existsSync(dirPath)) continue;
+    for (const name of readdirSync(dirPath)) {
+      try {
+        const r = JSON.parse(readFileSync(join(dirPath, name), "utf8"));
+        if (r.decision === "approved" && r.gate === gate && r.snapshots?.[nodeId] === want) return true;
+      } catch { /* an unreadable receipt proves nothing */ }
+    }
   }
   return false;
 }
@@ -1227,9 +1303,10 @@ export function greenCurrent(projectDir: string, graph: Graph, id: string): bool
  * both the `allow` command and the guard, so they can never disagree:
  * evidence files are CLI-only (D24), legacy suffixed graphs are read-only
  * migration inputs (D10), the ledger stays writable, and a product file needs
- * a ready doing idea + current plan approval + fresh RED (D16/D7/D8). A
- * declared test file needs the first two but not the RED — D8 puts the failing
- * test before the evidence.
+ * exactly one thing: a doing idea that names it in `code.file` or
+ * `verify.test_files` (D16). 2026-09-16 (I-146): the plan-approval re-check
+ * (D7) and the RED gate (D8) came off this door — what a hook can machine-check
+ * against the eight answers is the paths of questions 6 and 7, nothing else.
  */
 export function decideProductWrite(projectDir: string, graph: Graph, filePath: string): { allow: boolean; reason: string } {
   const root = resolve(projectDir).replaceAll("\\", "/");
@@ -1249,7 +1326,10 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
   }
   const relLower = platform === "win32" ? rel.toLowerCase() : rel;
   if (relLower === "ideas/.runtime" || relLower.startsWith("ideas/.runtime/")) {
-    return { allow: false, reason: "ideas/.runtime/ 里是程序保管的证据（批准回执、测试红绿记录），只能由 CLI 产生（D24）。要留证据：run-check / request-approval。" };
+    return { allow: false, reason: "ideas/.runtime/ 里是程序保管的证据（测试红绿记录、旧的批准回执），只能由 CLI 产生（D24）。要留证据：run-check / request-approval。" };
+  }
+  if (relLower === "ideas/approvals" || relLower.startsWith("ideas/approvals/")) {
+    return { allow: false, reason: "ideas/approvals/ 里是一次性口令和批准回执，进 git 但只能由 CLI 和 hook 产生（D24，I-138）。要请批准：request-approval；回答只能由人在对话里回。" };
   }
   if (/^ideas\/graph\.[^/]+\.ya?ml$/i.test(rel)) {
     return { allow: false, reason: `${rel} 是迁移输入，迁移后只读（D10）—— 项目的图只有 ideas/graph.yaml 一份。要合并旧内容：migrate。` };
@@ -1259,33 +1339,17 @@ export function decideProductWrite(projectDir: string, graph: Graph, filePath: s
   }
 
   const doing = graph.ideas.filter((i) => i.status === "doing" && !isBuildReady(i));
-  const needsPlan = (idea: Idea) => ({
-    allow: false,
-    reason: `${idea.id}「${idea.name}」的计划还没有当前有效的人工批准 —— request-approval --node ${idea.id}，请人看过后整条消息回复口令（D7）。`,
-  });
 
-  // D8: the failing test IS the legal first move, so this branch asks for no
-  // RED — that is the whole point. But it still asks for the plan approval
-  // (D7/D17), because `verify.test_files` is graph PROSE and the graph rule
-  // protects only status and signed_off: without this, appending any path —
-  // the guard's own source, the engine, the host config — to some doing idea
-  // would hand the agent that file. The plan snapshot covers `verify`, so a
-  // current approval means a human saw exactly this list, and appending a path
-  // self-destructs it. It costs the sanctioned loop nothing: D17 already
-  // requires a plan approval before an idea can reach `doing` at all.
+  // 2026-09-16（I-146）：这道门只问认领。写时重查计划批准（D7）和 RED 门（D8）都拆了：
+  // 三道闸叠在同一次写上，加一行文档的成本和改守卫核心一样贵，而批准改一个字就作废，
+  // 人反复在重批同一个想法。守卫能机器判定的「写的东西和八问一致」只有第六、七问的
+  // 路径；其余六问由代理写完对照、人看网页复核。RED→GREEN 仍是 done 的条件（D20），
+  // 只是不再挡在实现之前。
   const testOwner = doing.find((i) => (i.verify?.test_files ?? []).some((f) => sameFile(f, rel)));
-  if (testOwner) {
-    if (!validApproval(projectDir, graph, "plan", testOwner.id)) return needsPlan(testOwner);
-    return { allow: true, reason: `${testOwner.id} 的测试文件 —— 先写会失败的测试正是第一步` };
-  }
+  if (testOwner) return { allow: true, reason: `${testOwner.id} 的测试文件（verify.test_files 点名）` };
 
   const codeOwner = doing.find((i) => (i.code ?? []).some((c) => c.file && sameFile(c.file, rel)));
-  if (codeOwner) {
-    if (!validApproval(projectDir, graph, "plan", codeOwner.id)) return needsPlan(codeOwner);
-    const gate = redGateReady(projectDir, graph, codeOwner.id);
-    if (!gate.ready) return { allow: false, reason: `测试先行（D8）：${gate.reason}` };
-    return { allow: true, reason: `${codeOwner.id} 认领了它，批准与失败记录俱在` };
-  }
+  if (codeOwner) return { allow: true, reason: `${codeOwner.id} 认领了它（code.file 点名）` };
 
   return {
     allow: false,
@@ -1326,33 +1390,21 @@ export function chainedCommandRefusal(idea: Pick<Idea, "id" | "name">, command: 
 }
 
 /**
- * The two conditions the guard applies to a declared verify command, asked
- * again at the engine's own point of execution. `run-check` spawns
- * `idea.verify.command` through a shell and sits on the guard's engine
- * allowlist, while verify.command is graph PROSE the project deliberately
- * leaves editable — so without this, the exact payload the guard refuses to an
- * agent's face runs when routed through the engine instead (D7/D21/D28).
+ * The one condition the guard applies to a declared verify command, asked
+ * again at the engine's own point of execution: it must BE one command
+ * (D21/D28). `run-check` spawns `idea.verify.command` through a shell and sits
+ * on the guard's engine allowlist, so the chain screen has to live here too.
+ * 2026-09-16 (I-146): the plan-approval condition came off — a single command
+ * an agent could equally type into Bash buys it nothing by being in the graph.
  * Returns the refusal to show the human, or null to proceed.
  */
-function verifyCommandRefusal(projectDir: string, graph: Graph, idea: Idea, command: string): string | null {
-  // D21/D28: a chain is a defect in the graph, not a permission question — no
-  // approval buys it, because what the human approved was one command.
-  const chained = chainedCommandRefusal(idea, command);
-  if (chained) return chained;
-  // D7: the plan snapshot covers `verify`, so editing the command destroys the
-  // approval — that self-destruct is the whole reason a graph-written command
-  // can be trusted enough to execute at all.
-  if (!validApproval(projectDir, graph, "plan", idea.id)) {
-    return `${idea.id}「${idea.name}」的计划没有当前有效的人工批准，不跑它的 verify.command（D7）——`
-      + `命令是图里的散文，没人过目就等于让 agent 自己写一条命令再自己执行。`
-      + `先 \`request-approval --node ${idea.id}\`，请人回一句「批准 CC-…」；改过 how/code/verify 之后批准会作废，要重新请。`;
-  }
-  return null;
+function verifyCommandRefusal(_projectDir: string, _graph: Graph, idea: Idea, command: string): string | null {
+  return chainedCommandRefusal(idea, command);
 }
 
 /**
- * Run the idea's verify command for real and record what happened. RED before
- * GREEN: the green phase refuses to run while the red gate is not ready.
+ * Run the idea's verify command for real and record what happened. Either
+ * phase runs on request; `done` still needs a current GREEN (D20).
  */
 export function runCheck(
   projectDir: string, graph: Graph, id: string, phase: "red" | "green",
@@ -1366,10 +1418,7 @@ export function runCheck(
   // existing evidence exactly as it was (D7/D21/D28).
   const refusal = verifyCommandRefusal(projectDir, graph, idea, command);
   if (refusal) throw new Error(refusal);
-  if (phase === "green") {
-    const gate = redGateReady(projectDir, graph, id);
-    if (!gate.ready) throw new Error(`先过 RED 门再跑 green：${gate.reason}`);
-  }
+  // 2026-09-16（I-146）：green 不再等 red。红记录仍可留、仍会记，只是不挡路。
 
   const missing = missingExecutable(projectDir, command);
   const run = missing ? null : spawnSync(command, {
@@ -1668,11 +1717,8 @@ const TRANSITIONS: Record<Status, Status[]> = {
 export function setStatus(
   doc: Document, graph: Graph, id: string, status: Status,
   entry: { by?: string; note?: string; date: string },
-  // With a projectDir the doing-gate also demands the two current approvals
-  // (D17) and the done-gate current GREEN evidence (D20).
-  // Without one nothing downstream re-checks it: `apply` writes the graph from
-  // Bash, where the guard never looks. So a caller that cannot supply one must
-  // refuse `doing` and `done` itself — see the status op in applyChanges.
+  // With a projectDir the done-gate also demands current GREEN evidence (D20).
+  // The doing-gate reads the graph only (D17, revised 2026-09-16 / I-146).
   projectDir?: string,
 ): void {
   const index = graph.ideas.findIndex((i) => i.id === id);
@@ -1691,15 +1737,8 @@ export function setStatus(
     if (unmet) throw new Error(`${id}: cannot be doing — ${unmet}`);
     const clash = fileClash(idea, graph);
     if (clash) throw new Error(`${id}: cannot be doing — ${clash}`);
-    // D17: D7's one regular stop point must be valid AT the transition — a
-    // human saw THIS idea's eight answers. Receipts live under the project dir,
-    // so a caller without one keeps the three checks above and nothing more
-    // (pure unit use). The gate is on ENTERING doing, not on `from`: todo →
-    // blocked → doing is in the transition table, and an approval a detour
-    // walks around is none.
-    if (projectDir && !validApproval(projectDir, graph, "plan", id)) {
-      throw new Error(`${id}: cannot be doing — 计划还没有当前有效的人工批准 —— request-approval --node ${id}，请人看过这个想法的八问，再整条消息回复口令（D7/D17）`);
-    }
+    // 2026-09-16（I-146）：进 doing 不再要人工批准。八问填齐、前置完成、路径不冲突，
+    // 三条都是图里的事实，够了；人想看计划，打开渲染出的网页看，不对就 set 回 todo。
   }
   if (status === "done") {
     if (!idea.code?.length) throw new Error(`${id}: cannot be done without \`code\` — say where it lives`);
@@ -1710,6 +1749,13 @@ export function setStatus(
     if (projectDir && idea.verify.command && !greenCurrent(projectDir, graph, id)) {
       throw new Error(`${id}: 完成前必须有当前有效的 GREEN —— run-check ${id} --phase green（实现每改一次、测试每变一次都要重跑）`);
     }
+    // I-135, the fifth door. A parent is not finished while anything filed under
+    // it is unfinished — containment implies it. This rule used to live as prose
+    // on the parents themselves ("all seven children are done"), which nobody
+    // counted and which went stale the moment somebody filed an eighth. Reads
+    // the graph and nothing else, so the pure unit path sees it too.
+    const openKids = childrenUnfinished(idea, graph);
+    if (openKids) throw new Error(`${id}: cannot be done — ${openKids}`);
   }
 
   doc.setIn(["ideas", index, "status"], status);
@@ -1889,17 +1935,6 @@ export function applyChanges(
           ok: false,
           reason: `${op.id}: 网页改不出 done —— 完成要有当前有效的 GREEN 证据（D20）：`
             + `先 run-check ${op.id} --phase green，再 set ${op.id} done，整体拒绝`,
-        };
-      }
-      // D17: `doing` is the status that unlocks writing product code, and its
-      // two approval gates live inside setStatus behind the project dir. A call
-      // without one walks straight past them, so a write-back that does not know
-      // where the receipts are refuses instead of quietly waving `doing` through.
-      if (op.to === "doing" && !projectDir) {
-        return {
-          ok: false,
-          reason: `${op.id}: 这次写回不知道项目目录在哪儿，读不到批准回执，doing 一律不给（D17）：`
-            + `改成 apply --project <项目目录>，或者走命令行 set ${op.id} doing，整体拒绝`,
         };
       }
       try {
@@ -2185,11 +2220,11 @@ const MERMAID_SOURCE_FN = `function buildMermaidSource(g) {
   };
   var out = [
     "flowchart TD",
-    "classDef done fill:#14532d,stroke:#86efac,color:#f0fdf4;",
-    "classDef doing fill:#1e3a8a,stroke:#93c5fd,color:#eff6ff;",
-    "classDef todo fill:#334155,stroke:#94a3b8,color:#f1f5f9,stroke-dasharray:5 3;",
-    "classDef blocked fill:#7c2d12,stroke:#fdba74,color:#fff7ed,stroke-dasharray:2 2;",
-    "classDef endpoint fill:#581c87,stroke:#d8b4fe,color:#faf5ff,stroke-width:3px;"
+    "classDef done fill:#e1eee4,stroke:#7c9b83,color:#356548;",
+    "classDef doing fill:#e2edf2,stroke:#8aa9b9,color:#37617b;",
+    "classDef todo fill:#f0f2ed,stroke:#a4afa2,color:#52604f,stroke-dasharray:5 3;",
+    "classDef blocked fill:#f5ead9,stroke:#c2a477,color:#855a26,stroke-dasharray:2 2;",
+    "classDef endpoint fill:#eee6f1,stroke:#b49bbd,color:#765286,stroke-width:3px;"
   ];
   for (var a = 0; a < ideas.length; a++) {
     out.push(mid(ideas[a].id) + '["' + wrap(String(ideas[a].name || ideas[a].id).replace(/["()<>]/g, "")) + '"]');
@@ -2372,7 +2407,7 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   // `#I-107` shows I-107's own card on top and its children below, drawn like
   // the home page draws the top level. A `parent` nobody has is treated as
   // top level here — the page must not lose an idea; `check` reports it.
-  const parentKey = (i: Idea) => (i.parent && map.has(i.parent) ? i.parent : "");
+  const parentKey = (i: Idea) => filedUnder(map, i);
   const ordered = topoOrder(g);                 // I-061: siblings stay in dependency order
   const kidsOf = (owner: string) => ordered.filter((i) => parentKey(i) === owner);
   const descendants = (owner: string): Idea[] => kidsOf(owner).flatMap((k) => [k, ...descendants(k.id)]);
@@ -2403,12 +2438,23 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   const verifyOf = (i: Idea) => {
     const v = i.verify;
     if (!v) return NONE;
-    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` → ${esc(v.pass)}` : ""}`;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` → ${esc(v.pass)}` : ""}${testFilesOf(v)}${
+      v.signed_off ? `<br><span class="signoff">人工签字：${esc(v.signed_off)}</span>` : ""}`;
     // The sign button appears only where a signature would mean something: a
     // manual check nobody has signed yet. `data-manual` carries the exact
     // sentence, so the panel can show what is being attested to.
-    const sign = v.signed_off ? "" :
-      `<button class="sign-open" data-sign="${attr(i.id)}" data-manual="${attr(v.manual)}">人工签字</button>`;
+    //
+    // I-135: while anything filed under this idea is unfinished, the button is
+    // greyed — and still there. A control that vanishes is the one complaint
+    // Jira and Redmine users file about this rule despite unrelated
+    // architectures: you cannot tell a rule from a broken page. It carries no
+    // `data-sign`, so the panel that opens on that attribute never opens; the
+    // reason sits next to it in words rather than in a tooltip nobody hovers.
+    const openKids = childrenUnfinished(i, g);
+    const sign = !awaitingSignature(i) ? ""
+      : openKids
+        ? `<button class="sign-open" disabled>人工签字</button><span class="gate-why">${esc(openKids)}</span>`
+        : `<button class="sign-open" data-sign="${attr(i.id)}" data-manual="${attr(v.manual)}">人工签字</button>`;
     return `${esc(v.manual)}<br><span class="signoff">人工签字：${
       v.signed_off ? esc(v.signed_off) : "未签"}</span>${sign}`;
   };
@@ -2453,6 +2499,46 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   const STATUS_ZH: Record<string, string> = { todo: "待办", doing: "进行中", done: "已完成", blocked: "受阻" };
   const countsOf = (ideas: Idea[]) => STATUSES.map((s) => `${STATUS_ZH[s]} ${tally(ideas).by[s]}`).join(" · ");
 
+  /**
+   * I-103: the challenges still waiting for an answer, on the home page only.
+   * Read from disk at render time (a live `serve` page; never the redraw file,
+   * which is a dead file that gets sent around — `projectDir` is empty there).
+   * Same three-layer defence as validApproval: no dir → nothing; a file that
+   * will not parse is skipped, not fatal. Content is RE-PROJECTED from the
+   * current graph: if it no longer matches the stored digest the challenge is
+   * shown as void, so nobody copies a token that `applyApproval` will refuse.
+   */
+  const pendingPanel = (): string => {
+    if (!projectDir) return "";
+    const files: string[] = [];
+    for (const dir of [pendingDir(projectDir), legacyPendingDir(projectDir)]) {
+      if (existsSync(dir)) for (const name of readdirSync(dir).sort()) files.push(join(dir, name));
+    }
+    const rows: string[] = [];
+    for (const file of files) {
+      const name = file.slice(file.lastIndexOf(file.includes("\\") ? "\\" : "/") + 1);
+      let p: { challenge?: string; gate?: string; snapshots?: Record<string, string> };
+      try { p = JSON.parse(readFileSync(file, "utf8")); } catch { continue; }
+      const code = String(p.challenge ?? name.replace(/\.json$/, ""));
+      const ids = Object.keys(p.snapshots ?? {});
+      const drifted = ids.length === 0 || ids.some((id) => {
+        try { return approvalSnapshot(g, id) !== p.snapshots![id]; } catch { return true; }
+      });
+      const body = drifted ? "" : approvalLines(approvalProjection(g, ids)).join("\n");
+      rows.push(`<div class="pending-row${drifted ? " void" : ""}"><div class="pending-head"><code>${esc(code)}</code> · ${
+        esc(String(p.gate ?? ""))} · ${ids.map((id) => `<a class="xlink" href="#${esc(id)}" data-goto="${esc(id)}">${esc(id)}</a>`).join(" ")}${
+        drifted ? '<span class="badge">已作废</span><span class="wl-note">被批的内容在请求之后改过了，这个口令回了也会被拒 —— 重新 request-approval</span>'
+          : `<span class="wl-note">看完下面的全文，把这一句整条回到对话里：</span><code class="answer">批准 ${esc(code)}</code>`}</div>${
+        drifted ? "" : `<pre class="pending-text">${esc(body)}</pre>`}</div>`);
+    }
+    if (rows.length === 0) return "";
+    return `<details class="worklist pending"><summary>正在等你批 (${rows.length})</summary>
+  <p class="wl-note">这一句只能由人在对话里亲手回，页面上点什么都不算数。</p>
+  ${rows.join("\n  ")}
+</details>`;
+  };
+  const pendingHtml = pendingPanel();
+
   // Every editable field ships twice: the prose a reader sees, and the input a
   // writer types into. CSS shows one or the other; no text is ever built from
   // HTML at runtime, which is what keeps a hostile idea name inert.
@@ -2483,10 +2569,16 @@ export function render(g: Graph, source = "", projectDir = "", token = ""): stri
   // the child's own page and nowhere else: the body carries no `id`, no
   // `data-idea` and no `section.idea`, so editing, drafts and signing — all of
   // which find elements by id — never see a second copy.
+  // I-103: the two web faces list `test_files` (the terminal always has, via
+  // verifyText) and a command idea that carries a signature shows it — before,
+  // the early return on `command` hid both.
+  const testFilesOf = (v: Verify) => v.test_files?.length
+    ? `<br><span class="testfiles">测试文件：${v.test_files.map((f) => `<code>${esc(f)}</code>`).join("、")}</span>` : "";
   const verifyPlain = (i: Idea) => {
     const v = i.verify;
     if (!v) return NONE;
-    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` → ${esc(v.pass)}` : ""}`;
+    if (v.command) return `<code>${esc(v.command)}</code>${v.pass ? ` → ${esc(v.pass)}` : ""}${testFilesOf(v)}${
+      v.signed_off ? `<br><span class="signoff">人工签字：${esc(v.signed_off)}</span>` : ""}`;
     return `${esc(v.manual)}<br><span class="signoff">人工签字：${v.signed_off ? esc(v.signed_off) : "未签"}</span>`;
   };
   const briefDetail = (i: Idea) => `<div class="brief-detail"><dl>
@@ -2516,6 +2608,7 @@ ${briefDetail(i)}</details>`;
     return `<section class="page" id="page-${esc(owner ? owner.id : "root")}" hidden>
 ${owner ? card(owner) : ""}
 ${kids.length === 0 && owner ? "" : `<p class="legend">${esc(countsOf(scope))} · 点击图上的节点，定位到下面对应的那一行；点行本身展开，点「进入」才换页</p>
+${owner ? "" : pendingHtml}
 ${worklist("待人工验证", scope.filter(awaitingSignature).map((i) => ({
   id: i.id, name: i.name, note: i.verify?.manual ?? "",
 })))}
@@ -2544,19 +2637,19 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(g.project ?? "idea graph")} — 想法图</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body { font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; margin:0 auto; max-width:1060px;
-    padding:28px 22px 80px; background:#0b0f14; color:#e6edf3; }
+    padding:28px 22px 80px; background:#f7f6f2; color:#293d36; }
   h1 { margin:0 0 6px; font-size:22px; }
-  .overview { color:#93a1b0; margin:0 0 18px; }
-  .overview-more { color:#7d8896; font-size:13px; margin:-10px 0 18px; }
+  .overview { color:#63746a; margin:0 0 18px; }
+  .overview-more { color:#63746a; font-size:13px; margin:-10px 0 18px; }
   .overview-more summary { cursor:pointer; }
   .overview-more p { margin:6px 0 0; }
-  .legend { font-size:13px; color:#7d8896; margin:0 0 4px; }
+  .legend { font-size:13px; color:#63746a; margin:0 0 4px; }
   .sw { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin:0 5px 0 12px; }
   .sw:first-child { margin-left:0; }
-  .graph { background:#0d1117; border:1px solid #1f2933; border-radius:10px; margin:14px 0 26px; position:relative; }
+  .graph { background:#ffffff; border:1px solid #dce2d9; border-radius:10px; margin:14px 0 26px; position:relative; }
   /* Pan/zoom: the viewport clips, the canvas is what gets transformed. */
   .viewport { overflow:hidden; height:min(72vh,760px); touch-action:none; cursor:grab; border-radius:10px; }
   .viewport.dragging { cursor:grabbing; }
@@ -2565,36 +2658,36 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   .canvas { transform-origin:0 0; will-change:transform; display:inline-block; padding:0; line-height:0; }
   .canvas svg { max-width:none !important; display:block; }
   .graph-tools { position:absolute; top:10px; right:10px; z-index:2; display:flex; gap:4px; align-items:center;
-    background:#0d1117cc; border:1px solid #1f2933; border-radius:8px; padding:4px 6px; backdrop-filter:blur(4px); }
+    background:#ffffffee; border:1px solid #dce2d9; border-radius:8px; padding:4px 6px; backdrop-filter:blur(4px); }
   .graph-tools button { width:26px; height:24px; font-size:13px; line-height:1; cursor:pointer;
-    background:#161b22; color:#c3ced9; border:1px solid #232c36; border-radius:5px; padding:0; }
-  .graph-tools button:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#293d36; border:1px solid #dce2d9; border-radius:5px; padding:0; }
+  .graph-tools button:hover { border-color:#356b58; color:#356b58; }
   .graph-tools button.wide { width:auto; padding:0 8px; font-size:12px; }
-  .zoom-level { font-size:11px; color:#7d8896; min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
-  .graph-hint { font-size:11px; color:#5c6773; padding:0 14px 10px; }
-  h2 { border-bottom:1px solid #1f2933; padding-bottom:7px; font-size:17px; margin-top:34px; }
-  .idea { border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
+  .zoom-level { font-size:11px; color:#63746a; min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
+  .graph-hint { font-size:11px; color:#63746a; padding:0 14px 10px; }
+  h2 { border-bottom:1px solid #dce2d9; padding-bottom:7px; font-size:17px; margin-top:34px; }
+  .idea { border:1px solid #dce2d9; border-left:4px solid #ccdacd; border-radius:9px;
     padding:14px 18px; margin:12px 0; scroll-margin-top:14px; }
-  .idea.done { border-left-color:#14532d; } .idea.doing { border-left-color:#1e3a8a; }
-  .idea.blocked { border-left-color:#7c2d12; } .idea.endpoint { border-left-color:#581c87; }
+  .idea.done { border-left-color:#e1eee4; } .idea.doing { border-left-color:#e2edf2; }
+  .idea.blocked { border-left-color:#f5ead9; } .idea.endpoint { border-left-color:#eee6f1; }
   .idea h3 { margin:0 0 10px; font-size:16px; }
   .idea.flash { animation: flash 1.2s ease-out; }
-  @keyframes flash { from { background:#1d4ed855; } to { background:transparent; } }
-  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#1f2933; color:#93a1b0;
+  @keyframes flash { from { background:#e0ebe4; } to { background:transparent; } }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:#dce2d9; color:#63746a;
     font-weight:normal; margin-left:8px; }
-  .badge.end { background:#581c87; color:#faf5ff; }
-  .iid { float:right; font-size:12px; color:#5c6773; font-weight:normal; }
+  .badge.end { background:#eee6f1; color:#faf5ff; }
+  .iid { float:right; font-size:12px; color:#63746a; font-weight:normal; }
   dl { margin:0; display:grid; grid-template-columns:max-content 1fr; gap:5px 18px; }
-  dt { color:#7d8896; white-space:nowrap; } dd { margin:0; }
-  code { background:#161b22; border-radius:4px; padding:1px 6px; font-size:13px; }
-  .none { color:#4b5563; }
-  .signoff { font-size:12px; color:#7d8896; }
+  dt { color:#63746a; white-space:nowrap; } dd { margin:0; }
+  code { background:#f0f2ed; border-radius:4px; padding:1px 6px; font-size:13px; }
+  .none { color:#63746a; }
+  .signoff { font-size:12px; color:#63746a; }
   .edges { margin:11px 0 0; font-size:13px; }
-  .edges b { color:#7d8896; font-weight:normal; margin-right:4px; }
-  .xlink { display:inline-block; background:#161b22; border:1px solid #1f2933; border-radius:5px;
-    padding:1px 8px; margin:2px 4px 2px 0; color:#7dd3fc; text-decoration:none; font-size:12px; }
-  .xlink:hover { border-color:#7dd3fc; }
-  .log { margin:10px 0 0; font-size:12px; color:#7d8896; }
+  .edges b { color:#63746a; font-weight:normal; margin-right:4px; }
+  .xlink { display:inline-block; background:#f0f2ed; border:1px solid #dce2d9; border-radius:5px;
+    padding:1px 8px; margin:2px 4px 2px 0; color:#356b58; text-decoration:none; font-size:12px; }
+  .xlink:hover { border-color:#356b58; }
+  .log { margin:10px 0 0; font-size:12px; color:#63746a; }
   .log summary { cursor:pointer; } .log div { margin:4px 0 0 14px; }
 
   /* ── editing ── read view and write view swap; only one is ever displayed. */
@@ -2602,58 +2695,64 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
   .idea.editing .ro { display:none; }
   .idea.editing .rw { display:inline-block; }
   .idea.editing dd .rw { display:block; }
-  textarea.rw, input.rw, select.rw { width:100%; font:inherit; font-size:14px; color:#e6edf3;
-    background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; resize:vertical; }
+  textarea.rw, input.rw, select.rw { width:100%; font:inherit; font-size:14px; color:#293d36;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; resize:vertical; }
   input.rw { width:auto; min-width:min(24em,100%); font-size:16px; }
   select.rw { width:auto; font-size:12px; padding:2px 6px; }
-  textarea.rw:focus, input.rw:focus, select.rw:focus { outline:none; border-color:#7dd3fc; }
+  textarea.rw:focus, input.rw:focus, select.rw:focus { outline:none; border-color:#356b58; }
   .edit-toggle { margin-left:8px; font:inherit; font-size:11px; cursor:pointer; padding:2px 9px;
-    background:#161b22; color:#93a1b0; border:1px solid #232c36; border-radius:10px; }
-  .edit-toggle:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-radius:10px; }
+  .edit-toggle:hover { border-color:#356b58; color:#356b58; }
   /* 改过的地方要看得见 —— 提交之前，这是唯一的「哪里动过」的线索。 */
-  .dirty > .rw, h3.dirty .rw { border-color:#eab308; background:#1c1917; }
-  dd.dirty::after { content:"已改"; font-size:11px; color:#eab308; margin-left:6px; }
-  .idea.dirty { border-left-color:#eab308; }
-  #draft-banner, #restore { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
+  .dirty > .rw, h3.dirty .rw { border-color:#855a26; background:#f5ead9; }
+  dd.dirty::after { content:"已改"; font-size:11px; color:#855a26; margin-left:6px; }
+  .idea.dirty { border-left-color:#855a26; }
+  #draft-banner, #restore { border:1px solid #d7d8bc; background:#f5ead9; color:#855a26;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
-  #restore { border-color:#4c1d95; background:#16121f; color:#ddd6fe; }
+  #restore { border-color:#d8c9df; background:#eee6f1; color:#765286; }
   #restore-list div { display:flex; gap:9px; align-items:center; margin:7px 0 0; }
   #restore-list span { flex:1; color:#a5a2b8; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #restore button, #draft-banner button { font:inherit; font-size:11px; cursor:pointer; padding:2px 9px;
-    background:#161b22; color:#c3ced9; border:1px solid #232c36; border-radius:10px; }
-  #restore button:hover, #draft-banner button:hover { border-color:#7dd3fc; color:#7dd3fc; }
+    background:#f0f2ed; color:#293d36; border:1px solid #dce2d9; border-radius:10px; }
+  #restore button:hover, #draft-banner button:hover { border-color:#356b58; color:#356b58; }
 
   /* ── structure editing ── edges, new ideas, pending deletions. */
   .chip { display:inline-flex; align-items:center; gap:2px; margin:2px 4px 2px 0; }
   .chip .xlink { margin:0; border-top-right-radius:0; border-bottom-right-radius:0; }
   .cut { font:inherit; font-size:11px; line-height:1; cursor:pointer; padding:2px 6px;
-    background:#161b22; color:#7d8896; border:1px solid #1f2933; border-left:0;
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-left:0;
     border-radius:0 5px 5px 0; }
-  .cut:hover { color:#fca5a5; border-color:#7f1d1d; }
-  select.rw-edge { font:inherit; font-size:11px; margin-left:6px; padding:2px 6px; color:#93a1b0;
-    background:#0d1117; border:1px solid #232c36; border-radius:10px; cursor:pointer; }
-  select.rw-edge:hover { border-color:#7dd3fc; color:#7dd3fc; }
+  .cut:hover { color:#9a4a40; border-color:#9a4a40; }
+  select.rw-edge { font:inherit; font-size:11px; margin-left:6px; padding:2px 6px; color:#63746a;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:10px; cursor:pointer; }
+  select.rw-edge:hover { border-color:#356b58; color:#356b58; }
   #new-idea { font:inherit; font-size:12px; cursor:pointer; padding:3px 11px; margin-left:10px;
-    background:#161b22; color:#93a1b0; border:1px solid #232c36; border-radius:11px; vertical-align:2px; }
-  #new-idea:hover { border-color:#7dd3fc; color:#7dd3fc; }
-  .edit-toggle.danger:hover { border-color:#fca5a5; color:#fca5a5; }
+    background:#f0f2ed; color:#63746a; border:1px solid #dce2d9; border-radius:11px; vertical-align:2px; }
+  #new-idea:hover { border-color:#356b58; color:#356b58; }
+  .edit-toggle.danger:hover { border-color:#9a4a40; color:#9a4a40; }
   /* 待删是标记，不是消失 —— 人要能看见自己删了什么，并且改主意。 */
-  .idea.removing { opacity:.55; border-left-color:#7f1d1d; }
+  .idea.removing { opacity:.55; border-left-color:#9a4a40; }
   .idea.removing h3 > .ro, .idea.removing h3 > .rw { text-decoration:line-through; }
   .idea.incomplete { border-left-color:#a16207; }
   .idea.incomplete::before { content:"前三问还没填齐，提交时不会带上它"; display:block;
-    font-size:11px; color:#eab308; margin:0 0 6px; }
+    font-size:11px; color:#855a26; margin:0 0 6px; }
   /* ── worklists under the diagram ── */
-  .worklist { border:1px solid #1f2933; background:#0d1117; border-radius:9px;
+  .worklist { border:1px solid #dce2d9; background:#ffffff; border-radius:9px;
     padding:9px 14px; margin:0 0 12px; font-size:13px; }
-  .worklist > summary { cursor:pointer; color:#93a1b0; }
-  .worklist > summary:hover { color:#7dd3fc; }
+  .worklist > summary { cursor:pointer; color:#63746a; }
+  .worklist > summary:hover { color:#356b58; }
+  .pending-row { margin:10px 0 0; padding-top:8px; border-top:1px solid #dce2d9; }
+  .pending-head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .pending-head .answer { user-select:all; color:#356b58; }
+  .pending-row.void .badge { background:#e4cbc7; color:#9a4a40; }
+  .pending-text { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df;
+    white-space:pre-wrap; font:inherit; max-height:60vh; overflow:auto; }
   .wl-row { display:flex; gap:10px; align-items:baseline; margin:7px 0 0; }
   .wl-row .xlink { margin:0; flex:none; }
-  .wl-note { color:#7d8896; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#7d8896; }
-  .crumbs a { color:#7dd3fc; text-decoration:none; }
-  .crumbs a.here { color:#e6edf3; font-weight:600; }
+  .wl-note { color:#63746a; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .crumbs { display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 12px; color:#63746a; }
+  .crumbs a { color:#356b58; text-decoration:none; }
+  .crumbs a.here { color:#293d36; font-weight:600; }
   .crumbs button { margin-left:auto; }
   .page[hidden] { display:none; }
   /* I-117: a row is a collapsible. The frame sits on the details element, the
@@ -2663,59 +2762,128 @@ ${worklist("进行中", scope.filter((i) => i.status === "doing").map((i) => {
      (No backticks in this block: the whole style sheet lives inside a template
      string; and this comment ships in the page, so it must not spell that
      value out either — a test greps the output for it.) */
-  .brief-row { margin:0 0 8px; border:1px solid #1f2933; border-left:4px solid #475569; border-radius:9px;
-    background:#0d1117; scroll-margin-top:14px; }
-  .brief-row:hover { border-color:#7dd3fc; }
-  .brief-row.done { border-left-color:#22c55e; } .brief-row.doing { border-left-color:#3b82f6; }
-  .brief-row.blocked { border-left-color:#f97316; } .brief-row.endpoint { border-left-color:#a855f7; }
+  .brief-row { margin:0 0 8px; border:1px solid #dce2d9; border-left:4px solid #ccdacd; border-radius:9px;
+    background:#ffffff; scroll-margin-top:14px; }
+  .brief-row:hover { border-color:#356b58; }
+  .brief-row.done { border-left-color:#527d63; } .brief-row.doing { border-left-color:#648aa0; }
+  .brief-row.blocked { border-left-color:#b68748; } .brief-row.endpoint { border-left-color:#9b80a5; }
   .brief-row.flash { animation: flash 1.2s ease-out; }
-  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#e6edf3; cursor:pointer; list-style:none; }
+  .brief { display:flex; gap:10px; align-items:baseline; padding:9px 14px; color:#293d36; cursor:pointer; list-style:none; }
   .brief::-webkit-details-marker { display:none; }
-  .brief::before { content:"▸"; flex:none; color:#5c6773; font-size:12px; }
+  .brief::before { content:"▸"; flex:none; color:#63746a; font-size:12px; }
   .brief-row[open] > .brief::before { content:"▾"; }
   .brief .bname { font-weight:600; flex:none; }
-  .brief .blurb { flex:1; color:#7d8896; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .brief .enter { flex:none; color:#7dd3fc; font-size:13px; text-decoration:none; }
+  .brief .blurb { flex:1; color:#63746a; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .brief .enter { flex:none; color:#356b58; font-size:13px; text-decoration:none; }
   .brief .enter:hover { text-decoration:underline; }
-  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #1f2933; font-size:13px; color:#c3ced9; }
+  .brief-detail { padding:2px 18px 12px 30px; border-top:1px solid #dce2d9; font-size:13px; color:#293d36; }
   .brief-detail dl { margin-top:8px; }
-  .brief-log { margin:10px 0 0; font-size:12px; color:#7d8896; }
-  .brief-log b { color:#7d8896; font-weight:normal; margin-right:6px; }
+  .brief-log { margin:10px 0 0; font-size:12px; color:#63746a; }
+  .brief-log b { color:#63746a; font-weight:normal; margin-right:6px; }
   .brief-log div { margin:4px 0 0 14px; }
 
-  #offline-note { border:1px solid #3f3f18; background:#1c1917; color:#fde68a;
+  #offline-note { border:1px solid #d7d8bc; background:#f5ead9; color:#855a26;
     border-radius:9px; padding:10px 14px; margin:0 0 14px; font-size:13px; }
 
   /* ── submitting ── */
   #submit { font:inherit; font-size:11px; cursor:pointer; padding:2px 11px; margin-left:10px;
-    background:#14532d; color:#f0fdf4; border:1px solid #166534; border-radius:10px; }
-  #submit:hover:not(:disabled) { border-color:#86efac; }
-  #submit:disabled { background:#161b22; color:#4b5563; border-color:#232c36; cursor:default; }
-  #submit-panel { border:1px solid #1f3a2a; background:#0f1a14; color:#d7e6dc;
+    background:#e1eee4; color:#f0fdf4; border:1px solid #527d63; border-radius:10px; }
+  #submit:hover:not(:disabled) { border-color:#356548; }
+  #submit:disabled { background:#f0f2ed; color:#63746a; border-color:#dce2d9; cursor:default; }
+  #submit-panel { border:1px solid #cbdccf; background:#e1eee4; color:#356548;
     border-radius:9px; padding:12px 16px; margin:0 0 14px; font-size:13px; }
   #submit-panel ul { margin:8px 0; padding-left:20px; }
-  #submit-panel li { margin:2px 0; color:#a7c4b5; }
+  #submit-panel li { margin:2px 0; color:#356548; }
   #submit-panel button { font:inherit; font-size:12px; cursor:pointer; padding:3px 12px; margin-top:8px;
-    background:#14532d; color:#f0fdf4; border:1px solid #166534; border-radius:10px; }
-  #submit-panel button:hover { border-color:#86efac; }
+    background:#e1eee4; color:#f0fdf4; border:1px solid #527d63; border-radius:10px; }
+  #submit-panel button:hover { border-color:#356548; }
   #submit-panel textarea { width:100%; margin-top:8px; font-family:ui-monospace,monospace; font-size:11px;
-    color:#e6edf3; background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; }
+    color:#293d36; background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; }
   #submit-panel code { font-size:12px; }
 
   /* ── signing a manual check ── */
   .sign-open { font:inherit; font-size:11px; cursor:pointer; padding:2px 9px; margin-left:8px;
-    background:#161b22; color:#c084fc; border:1px solid #3b2a52; border-radius:10px; }
-  .sign-open:hover { border-color:#c084fc; }
-  #sign-panel { border:1px solid #3b2a52; background:#150f1c; color:#e2d9ee;
+    background:#f0f2ed; color:#765286; border:1px solid #d8c9df; border-radius:10px; }
+  .sign-open:hover:not(:disabled) { border-color:#765286; }
+  /* I-135: greyed, not gone — the same shape as #submit:disabled, so "you may
+     not do this yet" always looks the same on this page. */
+  .sign-open:disabled { background:#f0f2ed; color:#63746a; border-color:#dce2d9; cursor:default; }
+  .gate-why { font-size:12px; color:#63746a; margin-left:8px; }
+  #sign-panel { border:1px solid #d8c9df; background:#eee6f1; color:#765286;
     border-radius:9px; padding:12px 16px; margin:0 0 14px; font-size:13px; }
-  #sign-panel .what { color:#c9b8dd; margin:6px 0 10px; padding-left:10px; border-left:2px solid #3b2a52; }
-  #sign-panel label { display:block; margin:8px 0 3px; font-size:12px; color:#a89bb8; }
-  #sign-panel input, #sign-panel textarea { width:100%; font:inherit; font-size:13px; color:#e6edf3;
-    background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:6px 8px; }
+  #sign-panel .what { color:#765286; margin:6px 0 10px; padding-left:10px; border-left:2px solid #d8c9df; }
+  #sign-panel label { display:block; margin:8px 0 3px; font-size:12px; color:#765286; }
+  #sign-panel input, #sign-panel textarea { width:100%; font:inherit; font-size:13px; color:#293d36;
+    background:#ffffff; border:1px solid #dce2d9; border-radius:6px; padding:6px 8px; }
   #sign-panel button { font:inherit; font-size:12px; cursor:pointer; padding:3px 12px; margin-top:10px;
-    background:#4c1d95; color:#f5f3ff; border:1px solid #6d28d9; border-radius:10px; }
-  #sign-panel button:hover { border-color:#c084fc; }
-  #sign-panel .warn { color:#fca5a5; font-size:12px; margin-top:6px; }
+    background:#d8c9df; color:#f5f3ff; border:1px solid #d8c9df; border-radius:10px; }
+  #sign-panel button:hover { border-color:#765286; }
+  #sign-panel .warn { color:#9a4a40; font-size:12px; margin-top:6px; }
+  /* Graph workspace: quiet surfaces, readable hierarchy, native controls. */
+  body { max-width:1320px; padding:32px 48px 80px; background:#f7f6f2;
+    color:#293d36; font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+  body::before { content:"COMPANION / IDEA WORKSPACE"; display:block; margin-bottom:28px;
+    color:#63746a; font-size:11px; font-weight:600; letter-spacing:2.4px; }
+  h1 { font-size:clamp(26px,3vw,38px); font-weight:600; letter-spacing:-1px; line-height:1.3; margin-bottom:14px; }
+  .overview { max-width:850px; font-size:15px; line-height:1.9; color:#63746a; margin-bottom:18px; }
+  .overview-more { margin:0 0 24px; color:#63746a; }
+  .overview-more p { max-width:850px; line-height:1.9; }
+  .legend { color:#63746a; font-size:12px; line-height:1.9; }
+  .sw { width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 3px #344b3a0c; }
+  .crumbs { margin:20px 0 0; padding:14px 0; border-top:1px solid #dce2d9; gap:12px; }
+  .crumbs a { color:#356b58; }
+  #new-idea { padding:8px 14px; border-radius:8px; background:#356b58; color:#ffffff;
+    border-color:#356b58; font-weight:600; white-space:nowrap; }
+  #new-idea:hover { background:#285441; color:#ffffff; }
+  .graph { margin:0 0 12px; border:1px solid #dce2d9; border-radius:16px; overflow:hidden;
+    background-color:#ffffff; background-image:radial-gradient(#dce2d9 1px,transparent 1px);
+    background-size:24px 24px; box-shadow:0 16px 48px #344b3a0c; }
+  .viewport { height:clamp(300px,48vh,560px); border-radius:16px; }
+  .graph-tools { top:16px; right:16px; padding:6px; gap:6px; background:#ffffffee;
+    border-color:#dce2d9; border-radius:10px; box-shadow:0 4px 16px #344b3a0c; }
+  .graph-tools button { width:32px; height:32px; border-color:#dce2d9; border-radius:6px; background:#f0f2ed; }
+  .graph-tools button.wide { padding:0 12px; }
+  .zoom-level { color:#63746a; padding:0 6px; }
+  .graph-hint { color:#63746a; text-align:right; padding:0; margin:0 0 28px; }
+  h2 { display:flex; align-items:baseline; gap:14px; border:0; margin:30px 0 16px; font-size:19px; }
+  h2 .legend { font-size:12px; font-weight:400; }
+  .worklist { padding:13px 18px; background:#ffffff; border-color:#dce2d9; border-radius:10px; }
+  .worklist > summary { color:#63746a; }
+  .brief-row { margin-bottom:12px; border-color:#dce2d9; border-left-width:3px;
+    border-radius:12px; background:#ffffff; transition:background .15s,border-color .15s; }
+  .brief-row:hover { background:#f0f2ed; border-color:#ccdacd; }
+  .brief { padding:20px; align-items:center; gap:14px; flex-wrap:wrap; }
+  .brief .bname { font-size:15px; max-width:100%; overflow-wrap:anywhere; flex-shrink:1; }
+  .brief .blurb { min-width:160px; color:#63746a; }
+  .brief .enter { color:#356b58; padding:5px 10px; border-radius:6px; background:#e9f0e8; margin-left:auto; }
+  .badge { padding:3px 9px; font-size:11px; background:#dce2d9; color:#63746a; margin-left:0; white-space:nowrap; }
+  .done > .brief > .badge, .done > h3 > .badge { background:#e1eee4; color:#356548; }
+  .doing > .brief > .badge, .doing > h3 > .badge { background:#e2edf2; color:#37617b; }
+  .blocked > .brief > .badge, .blocked > h3 > .badge { background:#f5ead9; color:#855a26; }
+  .badge.end { background:#eee6f1; color:#765286; }
+  .brief-detail { padding:20px 26px; color:#293d36; border-color:#dce2d9; line-height:1.9; }
+  .idea { background:#ffffff; padding:26px; border-color:#dce2d9; border-radius:12px; }
+  .idea h3 { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:24px; font-size:20px; }
+  .iid { margin-left:auto; color:#63746a; font-family:ui-monospace,monospace; }
+  dl { grid-template-columns:minmax(110px,160px) minmax(0,1fr); gap:14px 24px; }
+  dt { color:#63746a; white-space:normal; font-size:13px; }
+  dd { overflow-wrap:anywhere; line-height:1.85; }
+  .none, .log, .brief-log, .signoff { color:#63746a; }
+  .edit-toggle { padding:5px 10px; border-radius:6px; margin-left:0; }
+  .edges { padding-top:12px; }
+  .xlink { background:#e9f0e8; border-color:#dce2d9; color:#356b58; padding:3px 9px; }
+  :focus-visible { outline:2px solid #356b58; outline-offset:4px; }
+  @media (max-width:640px) {
+    body { padding:22px 16px 48px; } body::before { margin-bottom:22px; font-size:10px; }
+    .brief { padding:16px; gap:10px; } .brief .blurb { flex-basis:100%; order:2; white-space:normal; }
+    .brief-detail, .idea { padding:18px; } dl { grid-template-columns:1fr; gap:5px; } dd { margin-bottom:14px; }
+    .graph-hint { text-align:left; } .wl-row { flex-wrap:wrap; } .wl-note { white-space:normal; }
+    .crumbs { flex-wrap:wrap; } #crumbs { overflow-wrap:anywhere; min-width:0; }
+  }
+  @media (prefers-reduced-motion:reduce) { .brief-row { transition:none; } .idea.flash, .brief-row.flash { animation:none; } }
+  #submit, #submit-panel button { background:#356b58; color:#fff; }
+  #sign-panel button { background:#765286; color:#fff; }
+  .badge.end { color:#765286; }
 </style></head><body>
 <h1 id="page-title">${esc(g.project ?? "idea graph")} — 想法图</h1>
 <p class="overview">${esc(overview[0] ?? "")}</p>${overview.length > 1 ? `
@@ -3286,6 +3454,15 @@ ${
       // The draft is deliberately left alone. A write-back can still be refused
       // later, and the person's edits must not be the thing that gets destroyed.
       say("已提交，写回了 " + (done.changed || []).length + " 处改动。刷新页面就能看到新图。");
+      // I-103: the server already sends the sign-off challenges back with the
+      // response; show them here instead of only on the terminal running serve.
+      if (done.signs && done.signs.length) {
+        const pre = document.createElement("pre");
+        pre.className = "pending-text";
+        pre.textContent = done.signs.join("\\n");
+        say("签字请求已发出 —— 下面这段只能由人在对话里亲手回：").append(pre);
+      }
+      if (done.git) say("git：" + done.git);
       const again = document.createElement("button");
       again.textContent = "刷新页面";
       again.addEventListener("click", () => { try { location.reload(); } catch (e) {} });
@@ -3368,7 +3545,7 @@ ${
     layout = "elk";
   } catch (e) { console.warn("ELK layout unavailable, falling back to dagre", e); }
   mermaid.initialize({
-    startOnLoad: false, securityLevel: "loose", theme: "dark", layout,
+    startOnLoad: false, securityLevel: "loose", theme: "base", themeVariables: { background: "#ffffff", primaryColor: "#e9f0e8", primaryTextColor: "#293d36", lineColor: "#8b9e92", edgeLabelBackground: "#f7f6f2" }, layout,
     elk: { mergeEdges: true, nodePlacementStrategy: "LINEAR_SEGMENTS" },
     flowchart: { nodeSpacing: 30, rankSpacing: 55, curve: "basis", padding: 8 },
   });
@@ -3511,6 +3688,8 @@ export interface Serving {
   port: number;
   token: string;
   url: string;
+  /** I-139: whether POST /approve is open, i.e. AIDEV_APPROVE_SECRET was set. */
+  approveOpen: boolean;
   close(): Promise<void>;
 }
 
@@ -3553,11 +3732,45 @@ function listenFrom(server: Server, from: number, tries = 20): Promise<number> {
   });
 }
 
+/** One git command in the project, stdout back, stderr in the thrown error
+ *  (I-137). execFileSync, not a library: three commands do not earn a
+ *  dependency in the single-file bundle (D28). */
+export function gitRun(projectDir: string, args: string[]): string {
+  try {
+    return execFileSync("git", args, { cwd: projectDir, encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] });
+  } catch (error) {
+    const e = error as { stderr?: string; stdout?: string; message?: string };
+    throw new Error(`git ${args.join(" ")} 失败：${(e.stderr || e.stdout || e.message || "").trim()}`);
+  }
+}
+
 export async function serve(
   projectDir: string, file: string,
-  opts: { port?: number; open?: boolean } = {},
+  opts: { port?: number; open?: boolean; gitSync?: boolean } = {},
 ): Promise<Serving> {
   const token = randomBytes(16).toString("hex");
+  // I-139: read once at start; never printed, never rendered.
+  const approveSecret = env.AIDEV_APPROVE_SECRET ?? "";
+  let approveSeq = 0;
+  // I-137: with the switch on, the page is always rendered from what the
+  // remote has, and every write leaves as a commit. Failures are shown, never
+  // swallowed; the file on disk is never rolled back.
+  const pull = () => { if (opts.gitSync) gitRun(projectDir, ["pull", "--ff-only", "--quiet"]); };
+  const commitAndPush = (message: string): string | undefined => {
+    if (!opts.gitSync) return undefined;
+    try {
+      const tracked = ["ideas/graph.yaml", "ideas/log.md", "ideas/approvals"]
+        .filter((rel) => existsSync(join(projectDir, rel)));
+      gitRun(projectDir, ["add", "--", ...tracked]);
+      gitRun(projectDir, ["commit", "--quiet", "-m", message]);
+      gitRun(projectDir, ["push", "--quiet"]);
+      return undefined;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      try { appendFileSync(logFile(projectDir), `- ${new Date().toISOString().replace("T", " ").slice(0, 16)}  serve 提交失败：${reason}\n`); } catch { /* logging never fails a save */ }
+      return reason;
+    }
+  };
   const send = (res: { writeHead(c: number, h: Record<string, string>): void; end(b?: string): void },
                 code: number, body: unknown) => {
     const text = JSON.stringify(body);
@@ -3574,6 +3787,11 @@ export async function serve(
       if (req.method === "GET" && path === "/") {
         // Rendered on the spot, every time. There is no generated page on disk
         // in this mode, so there is nothing that can go stale.
+        try { pull(); } catch (error) {
+          res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+          res.end(`拉取失败，页面没有渲染 —— 先把仓库理顺再刷新。\n\n${error instanceof Error ? error.message : String(error)}\n`);
+          return;
+        }
         const text = readFileSync(file, "utf8");
         const graph = parseDocument(text).toJSON() as Graph;
         res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -3605,7 +3823,37 @@ export async function serve(
         // one-time challenge in the agent's chat — printed here, where they are.
         const signs = requestSignatures(projectDir, graph, result.signRequests ?? [], today);
         for (const line of signs) console.log(line);
-        send(res, 200, { ok: true, changed: result.changed, graph, signs });
+        const git = commitAndPush(`网页写回 ${result.changed?.length ?? 0} 处（serve）`);
+        send(res, 200, { ok: true, changed: result.changed, graph, signs, ...(git ? { git } : {}) });
+        return;
+      }
+
+      // I-139 / D36: the out-of-band exception. A host with its own login
+      // forwards the person's literal reply together with a credential it was
+      // handed in the environment. The credential never reaches the page, the
+      // log, or stdout; without it (or with a wrong one) nothing is consumed.
+      // The reply itself goes through applyApproval — the same regex, drift
+      // check and one-time file as the chat path; nothing is relaxed here.
+      if (req.method === "POST" && path === "/approve") {
+        if (!approveSecret) { send(res, 404, { ok: false, reason: "没有这个地址" }); return; }
+        const body = (await readJson(req)) as { secret?: string; words?: string } | null;
+        const given = Buffer.from(String(body?.secret ?? ""));
+        const want = Buffer.from(approveSecret);
+        if (given.length !== want.length || !timingSafeEqual(given, want)) {
+          send(res, 403, { ok: false, reason: "凭证不对 —— 这个入口只认起服务的那个宿主" });
+          return;
+        }
+        approveSeq += 1;
+        const today = new Date().toISOString().slice(0, 10);
+        const outcome = applyApproval(projectDir, String(body?.words ?? ""), {
+          date: today, session_id: "serve", turn_id: `approve-${approveSeq}`,
+        });
+        if (!outcome) {
+          send(res, 200, { ok: false, reason: "这不是一句口令回复 —— 整条消息只能是「批准 CC-XXXXXXXX」或「拒绝 CC-XXXXXXXX」" });
+          return;
+        }
+        const git = outcome.ok ? commitAndPush(`${outcome.decision === "approved" ? "批准" : "拒绝"}回执（serve · ${outcome.gate}）`) : undefined;
+        send(res, 200, { ...outcome, ...(git ? { git } : {}) });
         return;
       }
 
@@ -3620,7 +3868,7 @@ export async function serve(
   if (opts.open) openBrowser(url);
 
   return {
-    host: HOST, port, token, url,
+    host: HOST, port, token, url, approveOpen: approveSecret !== "",
     close: () => new Promise<void>((done) => server.close(() => done())),
   };
 }
@@ -3697,7 +3945,7 @@ export const SUBCOMMANDS: [name: string, args: string][] = [
   ["allow", "<path>"],
   ["render", ""],
   ["apply", "[file]"],
-  ["serve", "[--port 4173] [--no-open]"],
+  ["serve", "[--port 4173] [--no-open] [--git-sync]"],
   ["request-approval", "--node I-002 [I-003 …] [--gate plan|red-waiver|manual-check] [--by 人名]"],
   ["run-check", "<id> --phase red|green [--timeout 秒]"],
 ];
@@ -3999,8 +4247,10 @@ export function main(args: string[]): number {
       serve(projectDir, file, {
         port: Number(flag(args, "port")) || undefined,
         open: !args.includes("--no-open"),
+        gitSync: args.includes("--git-sync"),
       }).then((live) => {
         console.log(`想法图开在 ${live.url}`);
+        if (live.approveOpen) console.log(`批准入口已开（POST /approve，凭证来自环境变量，不打印）。`);
         console.log(`在网页上改完点提交，改动直接写回 ${relative(projectDir, file)} —— 不用再搬文件。`);
         console.log(`按 Ctrl-C 结束。`);
       }).catch((error) => {

@@ -38,7 +38,7 @@ ideas:
     code:
       - file: src/a.ts
     verify:
-      command: "node checker.cjs"
+      command: "curl -sS http://localhost:4173/health"
       test_files: [ tests/a.test.txt ]
       pass: "exit 0"
 `;
@@ -199,11 +199,14 @@ ideas:
   });
 
   // ── (5) 缺的是批准，不是这条命令有毛病 ──────────────────────────────────
-  it("(5) a declared verify command refused for want of an approval says so", () => {
-    const v = decide(shell("node checker.cjs"), dir);
-    expect(v.allow).toBe(false);
-    expect(v.reason, "理由里得有那个想法的编号").toMatch(/I-001/);
-    expect(v.reason, "理由里得说清缺的是方案批准").toMatch(/request-approval --node/);
-    expect(v.reason).toMatch(/D7/);
+  // 图里声明的命令换成了一条打本地服务健康检查的 curl：I-144 之后 `node checker.cjs`
+  // 已经没有任何一道闸拦它，而一条本来就放行的命令问不出「拒绝理由说得对不对」；curl
+  // 在下载器族里，仍是单条命令（带重定向会先撞上「串了第二条命令」那条，问的就不是这
+  // 件事了）。性质本身没变：还有闸拦着的命令靠人批过的计划才放行，拒绝时要说缺的是
+  // 批准（D7），不是数落那条命令。
+  // 2026-09-16（I-146）：声明的单命令不再等批准，直接放行。
+  it("(5) a declared verify command passes without an approval", () => {
+    const v = decide(shell("curl -sS http://localhost:4173/health"), dir);
+    expect(v.allow, v.reason).toBe(true);
   });
 });

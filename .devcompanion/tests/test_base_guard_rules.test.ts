@@ -95,34 +95,17 @@ ideas:
     expect(v.allow).toBe(true);
   });
 
-  it("but the test file is not a free path either — no approval, no write", () => {
+  // 2026-09-16（I-146）：写文件只问认领（D16）。批准和 RED 两道都拆了。
+  it("the declared test file is writable with no approval on file", () => {
     const v = decide(ev({ paths: [join(dir, "tests", "a.test.txt")] }), dir);
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/批准/);
+    expect(v.allow, v.reason).toBe(true);
   });
 
-  it("implementation without a plan approval is denied, and the reason says so", () => {
-    // A RED can no longer be recorded with no approval on the table: run-check
-    // refuses to spawn verify.command until the plan has been approved (D7/D21
-    // — the command is graph prose, so nobody's eyes on it means the agent
-    // wrote its own command and then ran it). So the honest way to hold a RED
-    // with no LIVE approval is the plan snapshot's self-destruct: approve, run
-    // red, then edit `how` — the snapshot the receipt was signed against no
-    // longer matches, and the write gate is back to asking for approval even
-    // though the failing-test evidence is still sitting there.
-    approvePlan();
-    recordRed();
+  it("implementation is writable with no approval and no RED; editing `how` changes nothing", () => {
+    expect(decide(ev({ paths: [join(dir, "src", "a.ts")] }), dir).allow).toBe(true);
     writeFileSync(graphPath(dir), yaml.replace("how: H", "how: 改了实现思路"));
     const v = decide(ev({ paths: [join(dir, "src", "a.ts")] }), dir);
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/批准|plan/);
-  });
-
-  it("implementation with approval but no RED is denied", () => {
-    approvePlan();
-    const v = decide(ev({ paths: [join(dir, "src", "a.ts")] }), dir);
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/RED|red|失败/);
+    expect(v.allow, v.reason).toBe(true);
   });
 
   it("approval + RED opens the gate", () => {
@@ -202,17 +185,28 @@ ideas:
 
   // ── shell 旁路（D21） ────────────────────────────────────────────────────
 
-  it("shell mutations are denied: redirects, in-place edits, one-liner interpreters, git rewrites", () => {
+  // I-144 起，解释器一行流不在这张名单上了 —— 拦的是写文件动词、重定向、就地替换、
+  // 会改工作树的 git 子命令和包管理器，不是「把代码交给运行时」这件事本身。
+  it("shell mutations are denied: redirects, in-place edits, git rewrites, package managers", () => {
     for (const command of [
       "echo hacked > src/a.ts",
       "sed -i 's/a/b/' src/a.ts",
-      `python -c "open('x','w').write('1')"`,
-      "node -e \"require('fs').writeFileSync('x','1')\"",
+      "cp /tmp/evil src/a.ts",
       "git checkout -- .",
       "npm install left-pad",
     ]) {
       const v = decide(ev({ event: "shell", command, paths: [] }), dir);
       expect(v.allow, command).toBe(false);
+    }
+  });
+
+  it("…while a one-liner interpreter is no longer refused for being one (I-144)", () => {
+    for (const command of [
+      `python -c "print(1)"`,
+      `node -e "console.log(1)"`,
+    ]) {
+      const v = decide(ev({ event: "shell", command, paths: [] }), dir);
+      expect(v.allow, `${command} —— ${v.reason ?? ""}`).toBe(true);
     }
   });
 

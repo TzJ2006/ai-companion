@@ -98,18 +98,9 @@ ideas:
   it("decideProductWrite answers all three layers, and the guard's verdict is the same function", () => {
     const file = join(dir, "src", "a.ts");
 
-    const unapproved = decideProductWrite(dir, loadGraph(), file);
-    expect(unapproved.allow).toBe(false);
-    expect(unapproved.reason).toMatch(/批准|plan/);
-
-    const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-001"]);
-    applyApproval(dir, `批准 ${challenge}`, meta);
-    const noRed = decideProductWrite(dir, loadGraph(), file);
-    expect(noRed.allow).toBe(false);
-    expect(noRed.reason).toMatch(/RED|red|失败/);
-
-    runCheck(dir, loadGraph(), "I-001", "red");
+    // 2026-09-16（I-146）：批准和 RED 两层都拆了，剩下认领这一层（D16）。
     expect(decideProductWrite(dir, loadGraph(), file).allow).toBe(true);
+    expect(decideProductWrite(dir, loadGraph(), join(dir, "src", "unclaimed.ts")).allow).toBe(false);
 
     // 守卫对同一文件的判决与 decideProductWrite 同源同答案
     for (const target of [file, join(dir, "src", "unclaimed.ts")]) {
@@ -129,9 +120,8 @@ ideas:
     expect(decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt")).allow).toBe(true);
   });
 
-  it("an unapproved plan does not make its test paths writable", () => {
+  it("a doing idea's declared test path is writable with no approval on file", () => {
     const v = decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt"));
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/批准/);
+    expect(v.allow, v.reason).toBe(true);
   });
 });

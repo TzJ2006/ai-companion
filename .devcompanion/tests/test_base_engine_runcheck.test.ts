@@ -104,27 +104,12 @@ ideas:
 
   // ── 条件二：没有当前有效的计划批准就不跑（D7） ────────────────────────────
 
-  it("without a current plan approval the declared command is never handed to a shell", { timeout: 60_000 }, () => {
+  // 2026-09-16（I-146）：run-check 不再要计划批准 —— 一条单命令，代理在 Bash 里本来就能
+  // 敲，写进图里不多不少。留下的唯一条件是「必须是一条命令」（D21/D28），下面那组测的就是它。
+  it("without any plan approval the declared single command runs", { timeout: 60_000 }, () => {
     const g = plant("node checker.cjs");
-    expect(() => runCheck(dir, g, "I-001", "red")).toThrow(/批准/);
-    expect(ran()).toBe(false);
-  });
-
-  it("editing verify.command after the approval voids it — the new command never runs", { timeout: 60_000 }, () => {
-    plant("node checker.cjs");
-    approvePlan();
-    const swapped = plant("node payload.cjs");         // 图一改，刚拿到的批准就作废
-    expect(() => runCheck(dir, swapped, "I-001", "red")).toThrow(/批准/);
-    expect(pwned()).toBe(false);
-  });
-
-  it("a command smuggled in through an in-memory graph the human never saw is refused", { timeout: 60_000 }, () => {
-    plant("node checker.cjs");
-    approvePlan();
-    const doctored = load(graphPath(dir)).graph;       // 盘上是批过的，内存里换掉
-    doctored.ideas.find((i) => i.id === "I-001")!.verify!.command = "node payload.cjs";
-    expect(() => runCheck(dir, doctored, "I-001", "red")).toThrow(/批准/);
-    expect(pwned()).toBe(false);
+    expect(() => runCheck(dir, g, "I-001", "red")).not.toThrow();
+    expect(ran()).toBe(true);
   });
 
   // ── 正路一步没少：批过的 doing 想法照常产出红绿证据 ───────────────────────

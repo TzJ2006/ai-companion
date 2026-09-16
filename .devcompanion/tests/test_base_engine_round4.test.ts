@@ -78,26 +78,23 @@ ideas:
 
   // ── the hole ─────────────────────────────────────────────────────────────
 
-  it("appending an arbitrary path to a doing idea's test_files does not make it writable", () => {
-    approvePlan();                                  // 人看过 test_files: [ tests/a.test.txt ]
+  // 2026-09-16（I-146）：认领就是写的许可 —— 路径先写进图（D16），写进去了就能写。
+  // 守卫能拿八问来核对的只有第六、七问的路径；批准这道门已经拆了。
+  it("a path appended to a doing idea's test_files becomes writable, and the guard agrees", () => {
     expect(decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt")).allow).toBe(true);
+    expect(decideProductWrite(dir, loadGraph(), join(dir, "companion", "guard.ts")).allow).toBe(false);
 
-    appendTestFile("companion/guard.ts");           // agent 自己往清单里加了一条
+    appendTestFile("companion/guard.ts");
 
     const v = decideProductWrite(dir, loadGraph(), join(dir, "companion", "guard.ts"));
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/批准|plan/);
-    // 守卫这道门给出同一个答案（它调的就是这个函数）。
-    expect(decide(ev({ paths: [join(dir, "companion", "guard.ts")] }), dir).allow).toBe(false);
-
-    // 追加动作本身作废了那次批准 —— 这正是让这条分支安全的机制，不是副作用。
-    expect(decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt")).allow).toBe(false);
+    expect(v.allow, v.reason).toBe(true);
+    expect(decide(ev({ paths: [join(dir, "companion", "guard.ts")] }), dir).allow).toBe(true);
+    expect(decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt")).allow).toBe(true);
   });
 
-  it("no plan approval at all: even the idea's own declared test file is refused, with the way out", () => {
+  it("no plan approval at all: the idea's own declared test file is writable", () => {
     const v = decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt"));
-    expect(v.allow).toBe(false);
-    expect(v.reason).toMatch(/request-approval --node I-001/);
+    expect(v.allow, v.reason).toBe(true);
   });
 
   it("re-approving the amended plan is the only way in — and then a human really saw the path", () => {
@@ -108,14 +105,14 @@ ideas:
 
   // ── the sanctioned loop must still work ──────────────────────────────────
 
-  it("the first move still works: approved doing idea, no RED anywhere, test file writable", () => {
-    approvePlan();
-    // 没跑过 run-check：证据目录里空空如也，D8 要的就是这个顺序。
+  it("no approval, no RED anywhere: both the test file and the implementation file are writable", () => {
     const v = decideProductWrite(dir, loadGraph(), join(dir, "tests", "a.test.txt"));
     expect(v.allow, v.reason).toBe(true);
     expect(decide(ev({ paths: [join(dir, "tests", "a.test.txt")] }), dir).allow).toBe(true);
-    // 实现文件仍然要等一次真实的 RED —— 这条分支没有被顺手放开。
-    expect(decideProductWrite(dir, loadGraph(), join(dir, "src", "a.ts")).allow).toBe(false);
+    // 2026-09-16（I-146）：实现文件不再等 RED —— 先红后绿是 ccbuild 的建议，done 才查绿（D20）。
+    expect(decideProductWrite(dir, loadGraph(), join(dir, "src", "a.ts")).allow).toBe(true);
+    // 没人认领的文件照旧拒（D16）。
+    expect(decideProductWrite(dir, loadGraph(), join(dir, "src", "unclaimed.ts")).allow).toBe(false);
   });
 
   it("does not over-block: the ledger stays writable and an ordinary graph edit still passes", () => {

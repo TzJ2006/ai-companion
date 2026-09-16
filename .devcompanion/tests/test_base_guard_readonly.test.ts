@@ -14,8 +14,9 @@ import { decide, type NormalizedEvent } from "../../companion/guard.js";
 //       由 MUTATING_SHELL / INTERPRETER 接着管（D21/D26/D28）。
 //   (b) INTERPRETER：加宽成「点了脚本文件名的解释器一律拒」之后，本仓库自己的
 //       安装器和打包入口也没了 —— cli.ts 只派发 guard 和引擎 main，install 不是
-//       引擎子命令，于是 agent 再也装不了、查不了安装新旧、也重打不了产物。这两个
-//       入口是项目认可的工具，按精确路径放行；别的脚本还是别的脚本（D21/D28）。
+//       引擎子命令，于是 agent 再也装不了、查不了安装新旧、也重打不了产物。
+//       （I-144 把整道解释器墙拆了，所以这一条后来是靠「根本没有墙」成立的，不再靠
+//       一份豁免名单；下面的用例照着改了，并把这次放宽本身也锁进测试。）
 describe("companion guard read-only engine inspection (B3c-a)", () => {
   let dir: string;
   const dirs: string[] = [];
@@ -168,7 +169,11 @@ ideas:
     }
   });
 
-  it("a script that is not the sanctioned installer or build is still denied", () => {
+  // I-144 起这条性质没有了，而且是故意的：安装器豁免之所以存在，只因为解释器墙会把
+  // 它们一起拦下；墙拆了，豁免就没有对象，「被认可的脚本」和「别的脚本」不再有区别 ——
+  // 两边都是跑一个脚本，两边都放行。留着这个用例（改成锁放行）是为了让这次放宽在测试
+  // 里留下痕迹，而不是悄悄消失。
+  it("a script is just a script now — the installer exemption has no object left (I-144)", () => {
     for (const command of [
       "npx tsx scripts/install.ts D:/GitHub/some-repo",
       "node scripts/build.mjs",
@@ -176,23 +181,43 @@ ideas:
       "npx tsx scripts/patch.ts",
       "python scripts/patch.py",
       "bash scripts/fix.sh",
-      // B7：认的是项目里那一个文件，不是叫这个名字的文件。别的检出里那一份，
-      // 以及攻击者自己写进可写目录的同名文件，都不是这个项目的安装器。
       "node D:/GitHub/ai-companion/companion/build.mjs",
       "npx tsx ideas/companion/install.ts --status",
     ]) {
       const v = decide(shell(command), dir);
-      expect(v.allow, command).toBe(false);
+      expect(v.allow, `${command} —— ${v.reason ?? ""}`).toBe(true);
     }
   });
 
-  it("a smuggled tail on a sanctioned entry point is still denied", () => {
+  // 偷渡的尾巴仍然被拦，但 I-144 起拦它的是尾巴自己干了什么，不再是「它挂在一个被
+  // 认可的入口后面」：命中账本、命中 hook 入口、命中重定向的照拒；尾巴只是另跑一个
+  // 脚本的，跟着放行 —— 那和把那条脚本单独送进来是同一件事，没有理由两样待遇。
+  it("a smuggled tail is still denied for what the tail itself does", () => {
     for (const command of [
-      "node companion/build.mjs\nnpx tsx scripts/patch.ts",
-      "node companion/build.mjs $(cat ideas/.approved)",
       "npx tsx companion/install.ts --status | node companion/dist/companion.mjs guard --platform=claude",
       "npx tsx companion/install.ts --status > ideas/.approved",
+    ]) {
+      const v = decide(shell(command), dir);
+      expect(v.allow, command).toBe(false);
+    }
+    for (const command of [
+      "node companion/build.mjs\nnpx tsx scripts/patch.ts",
       "node companion/build.mjs && bash scripts/fix.sh",
+      // 命令替换也跟着放行了：它以前被拒只因为挨着一个「被认可的入口」，而那份名单
+      // 已经没有了。注意拒它的那条理由本来就不是「读账本」—— `$(cat ideas/.approved)`
+      // 是读，不是写；真要往账本里写，账本屏幕照旧拦（见下一条）。
+      "node companion/build.mjs $(cat ideas/.approved)",
+    ]) {
+      const v = decide(shell(command), dir);
+      expect(v.allow, `${command} —— ${v.reason ?? ""}`).toBe(true);
+    }
+  });
+
+  // 「代价止于此」的那一条：入口豁免没了，但真往账本里写，无论前面站着谁都照拦。
+  it("writing the ledger is still refused, whatever entry point stands in front", () => {
+    for (const command of [
+      `node companion/build.mjs && node -e "require('fs').writeFileSync('ideas/.approved','forged')"`,
+      `bash -c "cp /tmp/forged ideas/.approved"`,
     ]) {
       const v = decide(shell(command), dir);
       expect(v.allow, command).toBe(false);

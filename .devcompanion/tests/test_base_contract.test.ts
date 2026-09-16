@@ -355,7 +355,7 @@ describe("companion three-host contract table (H6)", () => {
         : { hook_event_name: "UserPromptSubmit", prompt, cwd: d, session_id: "s", turn_id: "t" };
       const outcome = handlePrompt(normalize(raw), d);
       expect(outcome, host).toEqual({ ok: true, decision: "approved", gate: "plan" });
-      expect(existsSync(join(paths(d).runtime, "approvals", `${challenge}.json`)), host).toBe(true);
+      expect(existsSync(join(paths(d).approvals, "receipts", `${challenge}.json`)), host).toBe(true);
     }
   });
 });
