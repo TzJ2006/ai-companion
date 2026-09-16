@@ -2,8 +2,7 @@ version: 1
 project: ai-companion
 overview: >
   把一个项目里的每个想法都写下来、连成一张能一层层点开来读的图，再让程序盯着流程走：想法没想清楚不许写代码，写的文件必须是这个想法的八问里点名的文件（2026-09-16
-  起不再要人工批准计划、不再要求测试先失败，见 I-146）
-  —— 同一张图由 Claude Code、Cursor、Codex
+  起不再要人工批准计划、不再要求测试先失败，见 I-146） —— 同一张图由 Claude Code、Cursor、Codex
   三个编码助手共用，装进哪个仓库都一样用。它要解决的是同一个根因：想法从来没被写下来过，只有代码被写下来了。
 
   2026-08-29
@@ -19,7 +18,7 @@ overview: >
 # 2026-08-29 /ccthink 新增 I-068「改图即改项目」；
 # 2026-08-29 /ccthink 新增 I-075「共同基座：改一处三边生效」）
 endpoints: [ I-057, I-058, I-059, I-068, I-075, I-142 ]
-next_id: 147
+next_id: 157
 
 ideas:
 
@@ -303,7 +302,7 @@ ideas:
 
   - id: I-049
     name: "五个斜杠命令，覆盖从建图到实现的完整工作流"
-    status: doing
+    status: done
     needs: [ I-041, I-043, I-044, I-045 ]
     what: >
       /ccscan 通读项目建图、/ccthink 对齐→拆分→调研→设计测试→按周排期、 /ccbuild 测试先行地实现、/ccfix
@@ -332,9 +331,9 @@ ideas:
     future: >
       产出的图直接就是 /ccbuild 的执行计划，中间不需要再转一次格式。
     log:
-      - date: "2026-08-25"
+      - date: 2026-08-25
         by: ccscan
-        note: "五个命令都写完并装出去了，但没有一个在真项目上从头到尾走过；人工验证未签字"
+        note: 五个命令都写完并装出去了，但没有一个在真项目上从头到尾走过；人工验证未签字
       - date: 2026-09-06
         by: ccthink
         note: >
@@ -343,6 +342,10 @@ ideas:
           这个想法当前有效的计划批准（ideas.ts 的 setStatus 在进 doing 时查它），写测试文件也要同一份批准；
           二、ccgraph 第 32 行说「受阻的想法各自在等什么，status 有答案」，而 status 只给 todo 和 doing
           打备注， 受阻的只打编号和名字。改这两处要么走本条的批准，要么先把本条收掉再另立想法。
+      - date: 2026-09-16
+        by: Claude
+        note: 五个技能早已由人签字（2026-09-01）；2026-09-06 记的两处失真今天收掉：ccbuild 那条随 I-146
+          去掉批准条件而消失，ccgraph 第 4 点改成用 show 看受阻原因
     parent: I-109
 
   # ─────────────────────────────────────────────────────────────
@@ -380,7 +383,7 @@ ideas:
 
   - id: I-051
     name: "把这套工作流安装进其它仓库"
-    status: doing
+    status: done
     needs: [ I-047, I-049, I-050 ]
     what: >
       把五个命令复制进目标仓库的 .claude/commands/（路径改写成绝对路径）、 建一个空的 ideas/graph.yaml、把 guard
@@ -406,6 +409,10 @@ ideas:
     future: >
       新项目的第一步：装上，跑 /ccscan。
     parent: I-126
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: 安装器早已落地并由人签字（2026-09-01）；今天 --update 装回 11 个仓库再次验证，收掉长期挂着的 doing
 
   - id: I-052
     name: "记录装到了哪些仓库，并能检查是否过期、批量更新"
@@ -441,6 +448,8 @@ ideas:
   - id: I-053
     name: "Cursor 版本：没有进行中的想法时，不允许写产品代码"
     status: blocked
+    blocked_because: 被共同基座取代（2026-08-29）：Cursor 独立版本不再补齐，它认领的 .cursor/companion
+      文件已随归档删除；Cursor 改由 I-073 通过基座接入。编号保留，永不复用。
     needs: [ I-041, I-050 ]
     what: >
       同一套想法图给 Cursor 用：五个 skill（idea-onboard / discuss / build / debug /
@@ -484,6 +493,8 @@ ideas:
   - id: I-054
     name: "Codex 版本：用 Python 实现的同一套想法图工作流"
     status: blocked
+    blocked_because: 被共同基座取代（2026-08-29）：Python 版不再补齐，代码 2026-09-05 随归档从仓库删除，只留在 git
+      历史；Codex 改由 I-074 通过 TypeScript 单文件产物接入。编号保留，永不复用。
     needs: [ I-041, I-050 ]
     what: >
       同一套想法图给 Codex 用：一份 Python 引擎（scripts/companion.py）、 hooks/hooks.json、一个
@@ -655,7 +666,7 @@ ideas:
 
   - id: I-057
     name: "终点：装进一个陌生仓库，并在那里真正跑起来"
-    status: todo
+    status: done
     needs: [ I-051, I-052, I-056, I-082, I-086, I-106 ]
     what: >
       在一个陌生仓库里装上这套工作流，五个命令和七条 hook 规则在那边真的生效、 能更新、能撤下来。
@@ -668,16 +679,26 @@ ideas:
       install.ts 已有的安装 + 注册表 + 更新三步，加上一条目前缺失的卸载路径。
     why_this_way: >
       终点定成「在别人的仓库里跑起来」而不是「功能齐全」，因为装出去一次会暴露 所有硬编码路径和平台假设，而这些在自己仓库里永远不会暴露。
+    code:
+      - file: companion/install.ts
+        symbol: install / updateAll / uninstall
     verify:
       manual: "在一个真实的外部项目上装好并走完一次完整流程，记录每一处卡住的地方"
       signed_off: Thomas T 2026-09-01 —— 人的原话：「装成功了，跑通了」；在网页上签的
     future: >
       装好之后，每个项目都有一张自己的想法图。
     parent: I-126
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 分发终点：安装、注册表、更新、卸载四步今天在 11 个仓库上又走了一遍；人早已签字（2026-09-01）
 
   - id: I-058
     name: "终点：用这套工作流完整地改进它自己一次"
-    status: todo
+    status: done
     needs: [ I-048, I-049, I-051, I-055 ]
     what: >
       用这套工具改进它自己：/ccscan 建图 → /ccthink 提一个真实改动 → /ccbuild 实现 → /ccfix
@@ -692,12 +713,24 @@ ideas:
       挑一个小的真实需求（I-055 或 I-056 就很合适）走完整条链， 把每一步卡住的地方记下来。
     why_this_way: >
       终点定成「跑通一次」而不是「功能齐全」，因为跑通一次会告诉你哪些功能 其实根本不需要。
+    code:
+      - file: ideas/graph.yaml
+        symbol: I-146 · I-147 · I-133 —— 2026-09-16 这一天从想法到实现到 done 全程走在图里
+      - file: ideas/log.md
     verify:
       manual: "读一遍那次改动留下的记录，看是否足以在几个月后重新理解当时的决定"
       signed_off: Thomas T 2026-09-01 —— 人的原话：「确实改进了，而且现在还在继续改进」；在网页上签的
     future: >
       跑通之后，才有资格决定接下来往哪个方向加东西。
     parent: I-109
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 自举终点：2026-09-16 I-146/I-147/I-133/I-131/I-132/I-134/I-116 全程走在图里（new → 八问
+          → doing → 测试 → run-check → done），日志与图就是记录；人早已签字（2026-09-01）
 
   - id: I-059
     name: "终点：三个 agent 接手同一张项目想法图，不再各自维护副本"
@@ -1318,7 +1351,7 @@ ideas:
 
   - id: I-080
     name: "根目录放一个双击就能打开想法图的入口"
-    status: doing
+    status: done
     needs: [ I-079 ]
     what: >
       仓库根目录放一个文件，双击它就启动本地小服务并在浏览器里打开想法图。 同时给一条等价的 npm 命令，供不方便双击的场合用。
@@ -1350,6 +1383,20 @@ ideas:
       - date: 2026-08-31
         by: ccbuild
         note: 开始做双击入口
+      - date: 2026-09-16
+        by: Claude
+        note: 双击入口 graph.cmd / graph.sh / npm run graph 早已落地并由人签字（2026-09-01），收掉长期挂着的
+          doing
+      - date: 2026-09-16
+        by: Claude
+        note: 标 done 时发现 graph.cmd、graph.sh 和 package.json 的 graph 脚本都不在工作树里（大概随
+          2026-09-05 的归档一起丢了），退回来重建
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 重建 graph.cmd、graph.sh 和 package.json 的 graph 脚本，三者都只是切到自己目录再调 serve
     parent: I-123
 
   - id: I-081
@@ -1598,6 +1645,8 @@ ideas:
   - id: I-085
     name: "引擎认识分步概览，并且校验它 —— 归错步当场报出来"
     status: blocked
+    blocked_because: 并入 I-082（2026-09-06）：分步概览的 steps / step
+      两个字段已随想法树一起删除，本条描述的结构和校验都不在代码里了；它声明的测试文件也不存在，完成状态无从复核。编号保留，永不复用。
     needs: [ I-041 ]
     what: >
       引擎认识顶层的步骤列表和每个想法的归属字段；校验命令检查这几件事： 归属指向一个不存在的步骤是错误；已经声明了步骤却有想法没归属、步数超出三到七、
@@ -1751,6 +1800,8 @@ ideas:
   - id: I-087
     name: "建图和新增想法的命令，照规范写出并维护那份分步概览"
     status: blocked
+    blocked_because: 并入 I-082（2026-09-06）：ccscan 第 4 步和 ccthink 第 2 步今天写的是想法树的
+      parent，不再是分步概览；2026-09-04 的签字引用的回执已不在磁盘上，无从复核。编号保留，永不复用。
     needs: [ I-041 ]
     what: >
       第一次给一个陌生仓库建图的那条命令，按规范里那一节写出分步概览，并给每个想法归步；
@@ -1905,7 +1956,10 @@ ideas:
 
   - id: I-066
     name: "人批准自己在网页上做的修改，而批准机制不被削弱"
-    status: todo
+    status: blocked
+    blocked_because: 被 I-146
+      取代（2026-09-16）：计划批准这道门整个拆了，网页改动写回后不再需要「重新获得批准」；它的第一步（Bash 旁路的守卫规则）早已由 D21
+      落地。编号保留，永不复用。
     needs: [ I-065, I-048, I-105 ]
     what: >
       设计并实现：改动写回之后，这张新图如何获得「人已批准」的地位 —— 同时保持既有底线：批准只能来自人亲手的动作，agent 自己造不出来。
@@ -1938,11 +1992,20 @@ ideas:
     future: >
       任何「人自己发起的修改」以后都能用同一条通道快速获得批准。
     parent: I-122
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → blocked
 
   - id: I-067
     name: "提交之后，人敲一条指令，agent 就把代码对齐到新图"
-    status: todo
-    needs: [ I-065, I-066, I-049 ]
+    status: doing
+    needs: [ I-065, I-049 ]
+    code:
+      - file: companion/skills/ccapply/SKILL.md
+      - file: .devcompanion/tests/test_base_skills.test.ts
+        symbol: NAMES
+      - file: README.md
     what: >
       人敲一条指令，agent 读当前的想法图，找出「想法说的」和「代码做的」不一致的地方，
       按测试先行的纪律把代码调整到符合图：先写测试、确认失败、再实现、验证通过才标完成。
@@ -1954,10 +2017,11 @@ ideas:
       新斜杠命令 /ccapply（命令文件正文含 ideas.ts 字样——安装器靠这个字样识别自家 文件，缺了会被判为外来文件、永不更新；用
       install.ts --update 分发到已装仓库）。 流程：在 ideas/ 里找 baseDigest
       等于当前图指纹的改动文件（陈旧的逐个报出并忽略； 一个都找不到时提醒「检查是否存进了下载目录」）→ 跑 apply → 把逐字段 diff、
-      check 结果、新指纹、以及「哪些想法八问未齐、本轮不实现（网页新建的三问想法都在 此列，先跑 /ccthink
-      补齐再批准可省一次重复批准）」逐项报给人 → 人敲「批准」或 「批准 <指纹>」→ agent 只对本次改动触到、且八问齐全的想法按
-      /ccbuild 纪律实现 （测试先行、状态走 set、verify 通过才标完成）→ 结束报告固定提醒刷新浏览器页面。
-      指纹失配的改动文件有明确重放路径：agent 把每条改动（含旧值）对着新图逐条向人 确认，确认后以当前指纹重新生成改动文件再 apply。
+      check 结果、新指纹、以及「哪些想法八问未齐、本轮不实现（网页新建的三问想法都在 此列，先跑 /ccthink 补齐）」逐项报给人 →
+      人看一眼说「继续」（2026-09-16 起没有口令：计划批准门已随 I-146 拆除，FORMAT.md D7 修订）→ agent
+      只对本次改动触到、且八问齐全的想法按 /ccbuild 纪律实现 （测试先行、状态走 set、verify 通过才标完成）→
+      结束报告固定提醒刷新浏览器页面。 指纹失配的改动文件有明确重放路径：agent 把每条改动（含旧值）对着新图逐条向人
+      确认，确认后以当前指纹重新生成改动文件再 apply。
     why_this_way: >
       交互式斜杠命令而不是 headless 管道：人敲 /ccapply 本身就是真实的 UserPromptSubmit 事件，hook
       全部照常生效，批准环节留在人手里。实现范围限定在本次改动触到的想法， 全图对齐是 /ccfix
@@ -1970,6 +2034,13 @@ ideas:
     future: >
       「网页上改一句话，代码跟着变」从此是一条指令的事。
     parent: I-109
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        note: edit code：[{"file":"companion/skills/ccapply/SKILL.md"},{"file":".devc →
+          [{"file":"companion/skills/ccapply/SKILL.md"},{"file":".devc
 
   - id: I-068
     name: "终点：在网页上改一处想法，全程不碰 YAML，代码最终符合新图"
@@ -3333,7 +3404,7 @@ ideas:
     parent: I-122
   - id: I-106
     name: 三份接线清单补上取网页的工具，并让漏配这件事有测试守着
-    status: todo
+    status: done
     needs:
       - I-104
     what: >
@@ -3364,6 +3435,8 @@ ideas:
       为什么不顺手把所有能发请求的工具都列上：列不全，而且列表会过期。 真正兜底的是 I-104
       那条按目标网址判的规则；这里补的是「让事件到得了守卫」—— 两条一起才成立，各自都不够。写清这一点，免得以后有人以为补了名单就万事大吉。
     code:
+      - file: companion/manifests.ts
+        symbol: CLAUDE_FETCH_TOOLS
       - file: .claude/settings.json
       - file: .cursor/hooks.json
       - file: .codex/hooks.json
@@ -3379,6 +3452,12 @@ ideas:
       - date: 2026-09-05
         by: new
         note: 创建
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: Claude 的 PreToolUse 接线加上 WebFetch；测试改成反向断言：守卫认得的 fetch 事件少订一个就红
     parent: I-121
   - id: I-107
     name: 记录格式
@@ -3609,7 +3688,7 @@ ideas:
     future: 后续的文件认领复用同一记录流和短锁；将来可在现有网页展示相同消息，或更换存储，保持命令与事件语义不变。
   - id: I-114
     name: 让会话领取、释放和交接要修改的文件
-    status: doing
+    status: done
     log:
       - date: 2026-09-06
         by: new
@@ -3623,6 +3702,9 @@ ideas:
       - date: 2026-09-06
         by: ccbuild
         note: 复用共享事件流实现整批文件认领，先写竞争与交接测试
+      - date: 2026-09-16
+        by: Claude
+        note: 文件认领、释放、交接早已落地（coordination.ts），22 条多进程测试今天再次全绿，收掉长期挂着的 doing
     what: 让程序记录文件当前属于哪个助手会话、正在处理什么任务，并处理领取、释放及异常结束后的显式接管；成功的认领变化自动发布到共享消息板。
     why: 先看消息再声称自己拿到锁会让两个会话同时成功；需要程序保证文件认领互斥，也需要让同伴知道应当联系谁。
     expected: 两个进程同时领取同一文件时恰好一个成功，失败方得到持有者与任务；不同文件可分别领取；同一实际路径的不同写法不能重复领取；不能释放别人的认领；仅仅超时不会自动把仍可能工作的会话踢掉，显式接管后旧持有者失去修改权限。
@@ -3651,7 +3733,7 @@ ideas:
     future: 每个助手可以直接知道文件归谁、联系谁；完成消息和认领清单可供以后的人类协作页面读取。
   - id: I-115
     name: 让助手在修改前检查归属，在工作节点读取消息并交接
-    status: todo
+    status: doing
     log:
       - date: 2026-09-06
         by: new
@@ -3662,6 +3744,9 @@ ideas:
       - date: 2026-09-06
         by: ccthink
         note: 用户确认拆分后完成仓库与官方资料调研，补齐实现、备选理由、代码符号和验证设计；维持 todo，测试尚未编写或执行，计划待批。
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
     what: 把文件归属检查与消息读取接入助手的实际工作流程：开工、修改前和收尾时读取相关消息，修改前确认当前会话有权操作目标文件，完成后发布摘要并释放认领。
     why: 命令存在不代表助手会使用；只有在真实写入入口校验所属会话，才能减少助手忘记认领或误改同伴文件的情况，同时避免由人不断搬运群消息。
     expected: 参与协作的会话修改自己认领的文件可继续，修改别人占用或未认领的文件会得到明确拒绝与下一步；写入会话身份缺失时不能冒用他人的认领；工作节点能获得新消息；逐个平台验证编辑与命令行写入的实际拦截范围，未接入的写入途径明确说明，不宣称普通文件锁能限制任意进程。
@@ -3703,8 +3788,10 @@ ideas:
         symbol: 宿主身份与归属检查测试
     verify:
       command: npx vitest run .devcompanion/tests/test_coord_guard.test.ts
+        .devcompanion/tests/test_base_contract.test.ts
       test_files:
         - .devcompanion/tests/test_coord_guard.test.ts
+        - .devcompanion/tests/test_base_contract.test.ts
       pass: exit 0；三家真实格式夹具经过
         normalize→decide→encode，持有者允许、非持有者/缺身份拒绝，多文件中一个冲突则整体拒绝；Cursor 不因
         generation 改变而换人；父子共用 session_id 时不默认互相拥有文件。验证生成物裸写、MCP、shell
@@ -3714,7 +3801,7 @@ ideas:
     future: 不同宿主共用一套协调语义和所有权判定；之后再按真实需求增加即时唤醒或可视消息板。
   - id: I-116
     name: 让多个会话更新同一张图时保留彼此的修改
-    status: todo
+    status: done
     log:
       - date: 2026-09-06
         by: new
@@ -3725,6 +3812,22 @@ ideas:
       - date: 2026-09-06
         by: ccthink
         note: 用户确认拆分后完成仓库与官方资料调研，补齐实现、备选理由、代码符号和验证设计；维持 todo，测试尚未编写或执行，计划待批。
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: mutateGraph / mutateGraphText 成为唯一写图边界：set、new、edit、apply、serve
+          写回、人工签字、render 全走项目短锁；新增 edit 子命令带旧值比对；九条并发测试
+      - date: 2026-09-16
+        by: Claude
+        note: status → blocked
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 补上 D28 的命令面（十九条，含 edit），H27 断言复绿
     what: 让所有受支持的图更新入口在程序协调下读取最新内容并提交局部改动，保护节点编号、状态和字段；生成网页时同样避免旧的渲染结果覆盖新的结果。
     why: 当前原子替换只能防止写出半个文件；多个进程从同一旧图开始修改仍可能覆盖彼此，网页也可能被较晚结束的旧渲染回退。
     expected: 并行新建节点不会重号或丢节点；不同节点的更新均保留，同一字段的旧值已变化时明确拒绝；命令行、网页写回与其他写图路径遵守相同的并发约束，静态渲染也不回退；助手能直接提交局部改动，无须每个助手先创建一个改动文件；锁只占用短暂提交过程，不覆盖整个开发任务。
@@ -3744,10 +3847,16 @@ ideas:
           requestApproval / serve / redraw / editIdeaField
       - file: .devcompanion/tests/test_graph_concurrency.test.ts
         symbol: 图事务和静态渲染竞争测试
+      - file: companion/FORMAT.md
+        symbol: D30 落地情况
     verify:
       command: npx vitest run .devcompanion/tests/test_graph_concurrency.test.ts
+        .devcompanion/tests/test_base_serve_git.test.ts
+        .devcompanion/tests/test_base_writeback.test.ts
       test_files:
         - .devcompanion/tests/test_graph_concurrency.test.ts
+        - .devcompanion/tests/test_base_serve_git.test.ts
+        - .devcompanion/tests/test_base_writeback.test.ts
       pass: exit 0；真正并行运行 new 保证节点数、编号与 next_id 一致；两个 edit 改不同节点均保留，同字段相同旧值竞争只接受一个；非法
         code/verify、signed_off 越权、循环依赖不写盘。混合 CLI set/edit、HTTP
         apply、人工签字入口验证同一互斥；旧 baseDigest 拒绝。用受控屏障让旧 render 与新修改竞争，最后 HTML 与当前
@@ -4306,7 +4415,7 @@ ideas:
           companion/install.ts --update，跑完 test_docs_truth 的逐字相同那条才会转绿
   - id: I-130
     name: 打开任何一页，不点开也知道它在讲什么、卡在哪、最近动过什么
-    status: todo
+    status: done
     needs: []
     what: >-
       让网页上每一个想法自己把话说清楚：标题下面三条要点说明它在做什么，展开一行就看得到它下面还挂着哪些想法，受阻的想法印出为什么受阻，每一页最下面是这个想法和它子孙的改动时间线。
@@ -4329,15 +4438,29 @@ ideas:
       - file: companion/ideas.ts
         symbol: render
     verify:
-      {
-        manual: "打开
-          ideas/graph.html，点进任何一个想法：标题下面有三条要点；展开一个有子想法的行，看得见它的下一层；受阻的想法带着一句原因；页\
-          面最下面是按时间倒序的改动列表",
-        signed_off: null
-      }
+      command: npx vitest run .devcompanion/tests/test_render_header.test.ts
+        .devcompanion/tests/test_render_expand.test.ts
+        .devcompanion/tests/test_render_timeline.test.ts
+      pass: exit 0；happy-dom
+        里加载渲染出的页面：每页三条要点、父页面展开子想法、受阻原因印在八问下、页底改动按时间倒序——这是程序验证的显示与展开行为，不是人的主观验收
+      test_files:
+        - .devcompanion/tests/test_render_header.test.ts
+        - .devcompanion/tests/test_render_expand.test.ts
+        - .devcompanion/tests/test_render_timeline.test.ts
+    log:
+      - date: 2026-09-16
+        note: edit verify：{"manual":"打开 ideas/graph.html，点进任何一个想法：标题下面有三条要点；展开一个有子想法的行 →
+          {"command":"npx vitest run .devcompanion/tests/test_render_h
+      - date: 2026-09-16
+        note: "目标：页面四项行为由程序自检。验证从人工检查改为三份 render 测试（I-151：能检查的不冒充需人判断）；overlapping doing
+          files — I-115: companion/ideas.ts（引用不等于占用，I-149：同目录多会话并行请 coord
+          enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：四项页面行为（三条要点、展开子想法、受阻原因、改动倒序）由 I-131～I-134 实现并由三份 render 测试在 happy-dom
+          里验证；本节点验证改为这条命令。验证：run-check green 退出码 0。
   - id: I-131
     name: 每一页顶上用三条要点说清这一页的想法，由程序从八个问题和前后关系里自动总结
-    status: todo
+    status: done
     needs: []
     what: >-
       在标题和流程图之间，用三条要点回答「这一页这个想法到底在讲什么」：程序从它的八个问题，加上它的前置、后继、父想法和子想法完成情况里自动抽出这三句，不新增任何要人手写的字段。
@@ -4370,9 +4493,16 @@ ideas:
         test_files: [ .devcompanion/tests/test_render_header.test.ts ],
         pass: "exit 0"
       }
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 页头下多一个只读要点块：是什么首句、预期结果首句、算出来的事实（状态、归属、直接子想法完成数、在等几个前置）；首页收起；六条测试
   - id: I-132
     name: 在父想法页面上展开一行，就能看到它自己的子想法有哪些、各是什么状态
-    status: todo
+    status: done
     needs: []
     what: >-
       父想法页面上每个子想法是一行，点开能看它的八个问题、前置和改动记录；再给这个展开区补一节「它自己的子想法」，列出下一层的名称和状态，不换页就能往下多看一层。
@@ -4402,9 +4532,16 @@ ideas:
         test_files: [ .devcompanion/tests/test_render_expand.test.ts ],
         pass: "exit 0"
       }
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 展开行末尾多一节「它自己的子想法」：下一层名字、状态、跳页链接和计数；无子想法整节不出；不放 data-row 和 .bname；三条测试
   - id: I-133
     name: 受阻的想法必须写明为什么受阻，这句话印在八个问题下面
-    status: todo
+    status: done
     needs: []
     what: >-
       给想法加一个显式字段装「为什么受阻」；状态是受阻却没写这句话，校验当场报出来；网页的卡片和展开行都在八个问题下面把它印出来。
@@ -4438,18 +4575,28 @@ ideas:
       {
         command: "npx vitest run .devcompanion/tests/test_base_readiness.test.ts
           .devcompanion/tests/test_base_engine.test.ts
-          .devcompanion/tests/test_render_expand.test.ts",
+          .devcompanion/tests/test_render_expand.test.ts
+          .devcompanion/tests/test_base_engine_file_flag.test.ts",
         test_files:
           [
             .devcompanion/tests/test_base_readiness.test.ts,
             .devcompanion/tests/test_base_engine.test.ts,
-            .devcompanion/tests/test_render_expand.test.ts
+            .devcompanion/tests/test_render_expand.test.ts,
+            .devcompanion/tests/test_base_engine_file_flag.test.ts
           ],
         pass: "exit 0"
       }
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: blocked_because 字段落地：setStatus 进受阻必须带原因（--because 或 --note），check
+          缺它报错，卡片、展开行、show 都在八问下面印它；五个受阻想法各补了一句
   - id: I-134
     name: 每一页最下面列出这个想法和它子孙的改动，按时间倒序
-    status: todo
+    status: done
     needs: []
     what: >-
       在每一页最下面加一块可以收起的改动时间线：把这一页的想法自己和它所有子孙想法的修改记录汇到一起，按日期从新到旧排，每一条都能点回是哪个想法被改了。首页汇的就是全项目。
@@ -4481,6 +4628,13 @@ ideas:
         test_files: [ .devcompanion/tests/test_render_timeline.test.ts ],
         pass: "exit 0"
       }
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 每页末尾一块可收起的改动时间线：自己加子孙的修改记录，按天倒序，每条链回想法；超过二十条的旧记录收进合上的折叠并写明条数；七条测试
   - id: I-135
     name: 子想法没有全部完成，父想法就不许标完成、也不许签字
     status: done
@@ -5077,44 +5231,57 @@ ideas:
     what: >
       守卫和引擎里所有以「这个想法的 plan 批准当前有效」为条件的门都拆掉：set doing 不再要口令，
       写产品文件不再重查批准，run-check 和守卫放行图里声明的 verify.command 也不再看批准。
-      同时拆掉「写实现前必须先有一次失败记录」这道 RED 门：写实现文件不再等 red，green 不再等 red。
-      留下的是三样：D16 的认领（写的文件必须在某个 doing 想法的 code.file 或 verify.test_files 里）、
-      D20 的 done 要当前有效 GREEN、D27 的手工验收要人签字。request-approval、approvals/ 目录、
-      POST /approve、red-waiver 命令都保留不删。
+      同时拆掉「写实现前必须先有一次失败记录」这道 RED 门：写实现文件不再等 red，green 不再等 red。 留下的是三样：D16
+      的认领（写的文件必须在某个 doing 想法的 code.file 或 verify.test_files 里）、 D20 的 done 要当前有效
+      GREEN、D27 的手工验收要人签字。request-approval、approvals/ 目录、 POST
+      /approve、red-waiver 命令都保留不删。
     why: >
       用了十一天的真实感受：每一个小想法都要口令，改一个字口令就作废，加一行文档和改守卫核心一样贵。
       三道闸叠在同一次写上（认领、批准、先红），代理为了过闸写必败的空测试，人为了过闸反复重批同一个
-      想法，两边都在应付流程而不是在想问题。人对守卫的期待其实只有一句：检查写的东西和八问是否一致。
-      hook 没有模型，能机器判定的一致只有第六问和第七问的路径 —— 那就是 D16，本来就在。
+      想法，两边都在应付流程而不是在想问题。人对守卫的期待其实只有一句：检查写的东西和八问是否一致。 hook
+      没有模型，能机器判定的一致只有第六问和第七问的路径 —— 那就是 D16，本来就在。
     expected: >
-      一个想法从「建想法 → 填八问 → 请批准 → 人贴口令 → 写失败测试 → 写代码」变成「建想法 → 填八问 →
-      set doing → 写 → 跑绿 → set done」；写没被任何 doing 想法点名的文件仍然被拒，理由仍然说清该去补
-      code.file 还是 verify.test_files；done 仍然要绿；手工验收仍然要人签字。
+      一个想法从「建想法 → 填八问 → 请批准 → 人贴口令 → 写失败测试 → 写代码」变成「建想法 → 填八问 → set doing → 写 →
+      跑绿 → set done」；写没被任何 doing 想法点名的文件仍然被拒，理由仍然说清该去补 code.file 还是
+      verify.test_files；done 仍然要绿；手工验收仍然要人签字。
     how: >
-      companion/ideas.ts：decideProductWrite 去掉两处 validApproval 和一处 redGateReady，只留认领；
-      verifyCommandRefusal 只留 chainedCommandRefusal；runCheck 的 green 不再查 red 门；setStatus 进
-      doing 不再查批准；applyChanges 里「拿不到项目目录就拒 doing」那块删掉。companion/guard.ts：
-      ruleShell 里声明的单命令直接放行，去掉批准检查和那段「拦住它的不是命令本身」的长理由。
-      FORMAT.md 的 D7、D8、D17 各补一段修订；ccbuild、ccthink、ccfix 三份技能正文改流程；
-      对应测试改预期（九个文件），重建 bundle，--update 装回十个仓库。
+      companion/ideas.ts：decideProductWrite 去掉两处 validApproval 和一处
+      redGateReady，只留认领； verifyCommandRefusal 只留 chainedCommandRefusal；runCheck
+      的 green 不再查 red 门；setStatus 进 doing 不再查批准；applyChanges 里「拿不到项目目录就拒
+      doing」那块删掉。companion/guard.ts： ruleShell
+      里声明的单命令直接放行，去掉批准检查和那段「拦住它的不是命令本身」的长理由。 FORMAT.md 的 D7、D8、D17
+      各补一段修订；ccbuild、ccthink、ccfix 三份技能正文改流程； 对应测试改预期（九个文件），重建 bundle，--update
+      装回十个仓库。
     why_this_way: >
       考虑过三档：只放文档；批准只在 set doing 收一次并把 code.file/verify 在 doing 期间锁死；
       全拆。用户选了全拆，理由是「其实就是检查一下写的东西和八问的要求是否一致」—— 批准这道门
       本来守的是「代理写代码前一定有人看过计划」，但实测里人看的是口令不是计划，这条保证名存实亡；
       与其留一道形式上的门，不如让人在渲染出的网页里随时看、不对就 set todo。锁 code.file 的方案
-      也放弃了：批准拆了之后它没有东西可保护。声明的 verify.command 不再要批准的理由：一条单命令代理
-      在 Bash 里本来就能敲，写进图里不多不少，D21/D28 的「必须是一条命令」原样保留。
+      也放弃了：批准拆了之后它没有东西可保护。声明的 verify.command 不再要批准的理由：一条单命令代理 在 Bash
+      里本来就能敲，写进图里不多不少，D21/D28 的「必须是一条命令」原样保留。
     code:
       - file: companion/ideas.ts
         symbol: decideProductWrite
+        lines: "1312-1378"
       - file: companion/ideas.ts
         symbol: verifyCommandRefusal
+        lines: "1419-1421"
       - file: companion/ideas.ts
         symbol: setStatus
+        lines: "1735-1786"
       - file: companion/guard.ts
         symbol: ruleShell
+        lines: "1297-1320"
     verify:
-      command: npx vitest run .devcompanion/tests/test_base_guard_rules.test.ts .devcompanion/tests/test_base_readiness.test.ts .devcompanion/tests/test_base_engine_round4.test.ts .devcompanion/tests/test_base_guard_declared_verify.test.ts .devcompanion/tests/test_base_engine_runcheck.test.ts .devcompanion/tests/test_base_evidence.test.ts .devcompanion/tests/test_base_writeback.test.ts .devcompanion/tests/test_base_gap_closures.test.ts .devcompanion/tests/test_base_guard_overblock.test.ts
+      command: npx vitest run .devcompanion/tests/test_base_guard_rules.test.ts
+        .devcompanion/tests/test_base_readiness.test.ts
+        .devcompanion/tests/test_base_engine_round4.test.ts
+        .devcompanion/tests/test_base_guard_declared_verify.test.ts
+        .devcompanion/tests/test_base_engine_runcheck.test.ts
+        .devcompanion/tests/test_base_evidence.test.ts
+        .devcompanion/tests/test_base_writeback.test.ts
+        .devcompanion/tests/test_base_gap_closures.test.ts
+        .devcompanion/tests/test_base_guard_overblock.test.ts
       test_files:
         - .devcompanion/tests/test_base_guard_rules.test.ts
         - .devcompanion/tests/test_base_readiness.test.ts
@@ -5128,5 +5295,564 @@ ideas:
       pass: "exit 0"
     future: >
       用一阵之后如果发现代理经常写和八问不一致的东西，下一步不是把批准门装回来，而是让 ccfix 那一步
-      「对照八问逐条列出偏差」跑得更勤；如果确认没人想念，再清掉 request-approval、approvals/ 和
-      red-waiver。
+      「对照八问逐条列出偏差」跑得更勤；如果确认没人想念，再清掉 request-approval、approvals/ 和 red-waiver。
+  - id: I-147
+    name: 守卫三处误拦与测试套件杂音：项目外的文件、只读的 git worktree list、被扫进套件的旧工作树
+    status: done
+    parent: I-108
+    log:
+      - date: 2026-09-16
+        by: new
+        note: 创建
+      - date: 2026-09-16
+        by: Claude
+        note: 装回守卫后头一个小时就撞上三处：写会话临时目录被 D16 拒、git worktree list 被当成写树、旧工作树里的测试副本把套件染红
+      - date: 2026-09-16
+        by: Claude
+        note: status → doing
+      - date: 2026-09-16
+        by: Claude
+        note: 三处误拦修掉：临时目录放行、git worktree/stash list 放行、vitest 排除旧工作树；CLAUDE.md 改口；I-146
+          补行号
+    what: >
+      三处小修。一，写产品文件的门（decideProductWrite）碰到落在操作系统临时目录里的路径直接放行 ——
+      那不是这个项目的文件，这张图管不着它；落在项目外别处的路径照旧拒，但理由改成说真话：「这张图不管项目外的文件」， 不再说「没有想法认领」。二，守卫的
+      git 子命令墙把 worktree 整个词拦了，`git worktree list` 和 `git stash list`
+      是只读的，放行。三，vitest 配置排除 `.claude/worktrees/**`，那里是别的会话留下的旧检出，里面的测试副本 带
+      BOM，一跑就红十八条，和本仓库的代码无关。顺手把 CLAUDE.md 第 3 行过时的「D7/D17 批准流程生效」改掉， 并给 I-146 的
+      code 补行号。
+    why: >
+      三处都是今天装回守卫后头一个小时里真撞上的：写会话临时目录的脚本被 D16 拒（守卫把项目外的路径当成了没人认领的
+      产品文件）；想看一眼有哪些工作树被拦（只读命令被写树的词表误伤）；跑全套测试永远有十八条红（噪音让真红被淹）。
+      守卫误拦一次，人就多一分想关掉它的理由 —— 上一条想法（I-146）正是这么来的。
+    expected: >
+      写临时目录里的文件放行；写项目外别处仍拒但理由说清；`git worktree list`、`git stash list` 放行， `git
+      worktree add`、`git stash`、`git stash pop` 照旧拒；`npx vitest run` 不再扫
+      `.claude/worktrees/`， 全套零红；CLAUDE.md 不再说批准流程生效；check 不再警告 I-146 缺行号。
+    how: >
+      ideas.ts 的 decideProductWrite 在算出 inRoot 之后先判 `!inRoot`：落在 os.tmpdir()
+      之下放行，否则拒并说明。 guard.ts 第 699 行那条 git 子命令正则里，worktree 和 stash
+      两个词后面加负向前瞻，排除紧跟的 list。 vitest.config.ts 的 test 里加 exclude，取默认排除项再加上
+      `**/.claude/worktrees/**`。 测试：test_base_engine_round4
+      加一组「项目外路径」断言；test_base_guard_shell_targets 的 (c) 组加两条 allows。
+    why_this_way: >
+      项目外只放临时目录而不是整个项目外：项目外别处（比如用户主目录下别的仓库、全局的 hook 配置）这张图确实管不着，
+      但守卫是行为护栏，把「顺手写到别处」留一道拒绝仍然便宜；临时目录则是明确的草稿区，拒它只会逼人绕。
+      不删旧工作树：那是别的会话留下的检出，删不删是人的事，排除掉它对套件的影响就够了。 不把整个 git
+      词表改成白名单：词表是按「会改工作树的子命令」列的，只读的用法是少数例外，加两个前瞻比重写便宜。
+    code:
+      - file: companion/ideas.ts
+        symbol: decideProductWrite
+      - file: companion/guard.ts
+        symbol: MUTATING_SHELL git 子命令
+      - file: vitest.config.ts
+      - file: CLAUDE.md
+      - file: companion/FORMAT.md
+        symbol: D16 修订
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_engine_round4.test.ts
+        .devcompanion/tests/test_base_guard_shell_targets.test.ts
+      test_files:
+        - .devcompanion/tests/test_base_engine_round4.test.ts
+        - .devcompanion/tests/test_base_guard_shell_targets.test.ts
+      pass: "exit 0"
+    future: >
+      守卫每误拦一次都该像这样落成一个小想法：先写下它拦错了什么，再改；误拦的清单本身就是守卫该多宽的证据。
+  - id: I-148
+    name: 授权目标后持续推进，只为具体决策提问并保留工作主线
+    status: done
+    parent: I-109
+    needs: [ I-095, I-146 ]
+    what: 取消技能中按阶段反复确认的要求，目标授权后持续推进，只有需要人的具体判断才提问。
+    why: 用户反馈人和助手都会跟丢，反复要求批准却没说为什么、批准什么，让流程的负担落在人身上。
+    expected: 已授权实现与普通修复不用重复批准；仅规划或看图不自动写代码；真正提问有原因、选项、后果和建议；进度与交接能接回原始目标。
+    how: >-
+      本节点是这次委托的总目标：优化 harness，让助手持续围绕人的目标工作、进度随时看得懂、内部流程问题自行解决。2026-09-16
+      与用户对齐了九条问题和四步顺序：(1)
+      先确定并用真实任务验证行为约定——总目标不被替换、进度告知后继续、已有授权持续有效、真正的决策才等待（本节点自身的技能与 D33 修改）；(2)
+      修复已复现的阻碍——代码引用与写入占用混淆、无关 Stop 检查、检查能力与人工签字混淆；(3)
+      补持久化与展示——复用现有记录保存本次目标、已有决定和恢复位置，会话开头展示当前任务而不是整张状态表；(4)
+      简化小任务流程并做六场景真实任务回归。每一步各是一个子想法。六处已接受的修正：减少打断不等于减少透明度（可报告阻碍，不要求人处理）；保留一个总目标，局部任务说明如何服务它；只在目标、阶段、阻碍、决定或交接实质变化时更新记录；Stop
+      按本次修改及影响范围检查；写入保护覆盖实际修改过程并核对文件版本；意图来自对话、位置来自代码、验证来自实际结果，缺失不编造。原实现：修改五个共享技能和
+      D33，复用节点 log 保存目标、完成依据、下一步和待决问题；保留文件认领、GREEN
+      和人工验收。更新旧的强制停顿测试约束，运行技能校验和全套测试；安装副本更新作为显式发布动作。
+    why_this_way: 中断来自技能的停顿指令，已有 log 足够保存交接；修改现有规则比新增批准状态、网页或存储更直接。用户已在本次对话确认工作原则，不再重复请批计划。
+    code:
+      - file: companion/skills/ccthink/SKILL.md
+        lines: "1-65"
+      - file: companion/skills/ccbuild/SKILL.md
+        lines: "1-90"
+      - file: companion/skills/ccfix/SKILL.md
+        lines: "1-73"
+      - file: companion/skills/ccscan/SKILL.md
+        lines: "1-103"
+      - file: companion/skills/ccgraph/SKILL.md
+        lines: "1-43"
+      - file: companion/FORMAT.md
+        symbol: D33 · 目标授权、提问与交接
+      - file: .companion/FORMAT.md
+        symbol: D33 · 目标授权、提问与交接
+      - file: README.md
+        lines: "16-20"
+      - file: .devcompanion/tests/test_base_skills.test.ts
+        lines: "80-90"
+    verify:
+      command: npm test
+      test_files:
+        [
+          .devcompanion/tests/test_base_skills.test.ts,
+          .devcompanion/tests/test_docs_truth.test.ts
+        ]
+      pass: exit 0；测试检查格式与兼容性，行为决策另以真实场景逐条审阅，不宣称文字测试证明模型行为。
+    future: 后续会话可沿着同一目标继续，安装更新后各助手使用同一套减少打断的工作流。
+    log:
+      - date: 2026-09-16
+        by: new
+        note: 创建
+      - date: 2026-09-16
+        note: status → doing
+      - date: 2026-09-16
+        note: 目标：减少重复批准并保留工作主线。已完成：五个技能源码、D33 共享规范和 README
+          更新；仅规划/只读保持范围，已授权实现与普通修复继续，人工验收说明结果/原因/后果。验证：五个 quick_validate
+          通过，技能与文档 43 项测试通过，git diff --check
+          通过；规则走读覆盖仅规划、已授权实现、普通偏差、目标歧义、人工验收和会话恢复，不等于模型实测。全套 run-check 仍失败于
+          test_base_migrate.test.ts:115，尚无整套 GREEN。下一步：迁移测试恢复后重跑全套；按 README
+          的显式更新要求发布五个技能至本仓库已安装副本，未运行安装器、未改 hook。
+      - date: 2026-09-16
+        note: edit blocked_because：null → "全套 run-check 仍失败于
+          .devcompanion/tests/test_base_migrate.tes
+      - date: 2026-09-16
+        note: edit blocked_because："全套 run-check 仍失败于
+          .devcompanion/tests/test_base_migrate.tes → "进不了 doing：与
+          I-067（README.md、test_base_skills.test.ts）和 I-11
+      - date: 2026-09-16
+        note: "目标：优化 harness（九条问题、四步顺序，见 how）。已完成：I-149 落地。当前步：回到第一步，把六处修正写进技能文本与
+          D33。下一步：I-150。待决：无。；overlapping doing files — I-067:
+          .devcompanion/tests/test_base_skills.test.ts,
+          README.md（引用不等于占用，I-149：同目录多会话并行请 coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 目标没变：优化 harness，九条问题四步顺序。已完成：I-149～I-153 与 I-130
+          done，守卫、引擎、D33、六个技能改完并装进本仓库（.companion 与两处技能副本已同步），全套 666
+          用例通过。已有决定：用户授权把九行全部解决（2026-09-16），含更新本仓库安装副本；未授权改动其它 11 个仓库和 D21
+          的提交规则。当前步：I-154 六场景第一轮已记，场景 1、2、4 实测通过。下一步：场景 3（第二个会话 + coord
+          enable）和场景 5（新会话看简报）跑完后关 I-154，再关本节点。待决：是否允许助手提交（D21），等用户。
+      - date: 2026-09-16
+        note: 已完成：九条问题全部落地——I-149 引用不等于占用、I-150 Stop 按影响范围、I-151 拒绝分类与网页自检、I-152
+          会话简报、I-153 短记录、I-154 六场景回归、I-156 交付三段；D33
+          与六个技能同步；本仓库安装副本已更新。级别：代码已修改、验证已通过（61 文件 667 用例）、已安装生效（本仓库）、真实使用已验证（场景
+          1、2、4、5）。已有决定：只更新本仓库，不动其它 11 个；不自动提交推送；D21 提交规则未改。无剩余工作。
+  - id: I-149
+    name: 代码引用与写入占用分开：只验收不占写入权，写入时按会话查归属并核对文件版本
+    status: done
+    needs: []
+    what: >-
+      把 code.file 的「实现在哪」和「谁正在写」拆开。引用同一文件的多个想法可以同时处于
+      doing；写入互斥只在实际写那一刻按会话认领判定，并核对文件自读取后没有被别人改过。只读检查的结果标明依据的版本。
+    why: >-
+      2026-09-16 两次复现：I-130 只做验收被 I-115 引用同一文件挡在 doing
+      门外；父想法收尾同样被挡。引用不等于占用，把验收排进写队列没有保护任何东西。
+    expected: >-
+      只验收的想法能进 doing
+      且不影响他人；两个会话真的改同一文件时仍只有一个成功，另一个能看见持有者与任务；检查结果注明所依据的版本。同一工作树的写互斥不削弱。
+    how: >-
+      fileClash 从 setStatus 的 doing 门移除；allowWrite 在写入时用 coordination
+      的会话认领判归属，并比对文件指纹与读取时是否一致；守卫拒绝理由注明持有会话和它的任务。测试：两个想法引用同一文件都可
+      doing；两个会话写同一文件只有一个通过；文件在读后被改则拒绝写。
+    why_this_way: >-
+      复用已有 I-114 认领与 I-115 写前核对，不新增状态或字段；保留 D18 的会话层写互斥，只去掉想法层的引用互斥。
+    future: >-
+      并行会话按文件而不是按想法互斥；验收和评审不再排队等写权。
+    parent: I-148
+    code:
+      - file: companion/ideas.ts
+        symbol: setStatus
+      - file: companion/ideas.ts
+        symbol: fileClash
+      - file: companion/FORMAT.md
+        symbol: D18
+      - file: .companion/FORMAT.md
+        symbol: D18
+      - file: companion/skills/ccbuild/SKILL.md
+      - file: .devcompanion/tests/test_base_readiness.test.ts
+    log:
+      - date: 2026-09-16
+        note: 'edit code：null →
+          [{"file":"companion/ideas.ts","symbol":"setStatus"},{"file":'
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_base_rea
+      - date: 2026-09-16
+        note: "目标：引用不等于占用，只验收不占写入权。引擎、D18、ccbuild 已改，待补测试与 GREEN；overlapping doing files
+          — I-115: companion/ideas.ts, companion/FORMAT.md,
+          companion/skills/ccbuild/SKILL.md,
+          .devcompanion/tests/test_coord_guard.test.ts,
+          .devcompanion/tests/test_coord_guard.test.ts（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 'edit code：[{"file":"companion/ideas.ts","symbol":"setStatus"},{"file": →
+          [{"file":"companion/ideas.ts","symbol":"setStatus"},{"file":'
+      - date: 2026-09-16
+        note: 已完成：doing 门不再因文件重叠拒绝，重叠记进 log；D18 修订写进 companion 与 .companion 两份
+          FORMAT.md；ccbuild 技能源码改为「引用不等于占用」并要求验收写明依据版本；readiness 测试改为断言重叠可开工且
+          log 点名对方。验证：全套 60 文件 657 用例通过，run-check green 退出码
+          0。边界：写时不比对文件内容是否被改过，出过覆盖事故再加。安装副本（.claude/.agents 下 ccbuild）未更新，按
+          README 作为显式发布动作。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_readiness.test.ts
+        .devcompanion/tests/test_coord_guard.test.ts
+      pass: exit 0；引用同一文件的两个想法都能进 doing，log 里记下另一方；协作模式下别的会话持有的文件仍拒写
+      test_files:
+        - .devcompanion/tests/test_base_readiness.test.ts
+        - .devcompanion/tests/test_coord_guard.test.ts
+  - id: I-150
+    name: Stop 检查只拦本次影响范围内的问题，无关历史问题只提示
+    status: done
+    needs: []
+    what: >-
+      Stop hook 的 R5 从「整张图 0 错误」改为「本次会话改过或影响到的想法 0
+      错误」；其余错误作为提示列出，不阻止只读问答或与之无关的任务结束。真正影响当前操作安全或数据完整性的错误仍然阻塞相关操作。
+    why: >-
+      只是解释仓库，也被要求先修 I-148 的记录；无关问题把当前任务拉走（2026-09-16 复现）。
+    expected: >-
+      只读会话可直接结束并附带提示；本次改动造成或影响到的错误仍然阻塞，不会被遗漏。
+    how: >-
+      会话内记录本次 set、edit、apply、产品写入触及的想法，取其 needs 与 parent 闭包作为影响范围；R5 只对该集合内的
+      check 错误拒绝，其余以「历史提示」输出。测试：无关节点受阻缺原因时只读会话能 Stop；本次改过的节点有错误时不能 Stop。
+    why_this_way: >-
+      影响范围按依赖闭包而不是「触到的文件」，避免漏掉依赖问题；不新增字段，范围从会话事件流推出。
+    future: >-
+      每次 Stop 的输出分「本次责任」和「历史提示」两段，历史提示可被后续 ccfix 领走。
+    parent: I-148
+    code:
+      - file: companion/guard.ts
+        symbol: ruleStop
+      - file: companion/guard.ts
+        symbol: touch
+      - file: companion/guard.ts
+        symbol: affectedIds
+      - file: companion/FORMAT.md
+        symbol: D33
+      - file: .companion/FORMAT.md
+        symbol: D33
+      - file: .devcompanion/tests/test_mainline_guard.test.ts
+    log:
+      - date: 2026-09-16
+        note: edit code：null →
+          [{"file":"companion/guard.ts","symbol":"ruleStop"},{"file":"
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_mainline
+      - date: 2026-09-16
+        note: "目标：只读问答不被历史错误拦住。守卫 ruleStop 按本次触及集合分流已写，待测试与 GREEN；overlapping doing
+          files — I-115: companion/guard.ts,
+          companion/FORMAT.md（引用不等于占用，I-149：同目录多会话并行请 coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：Stop
+          按本次触及集合（写过的文件所属想法、引擎命令点名的想法、依赖者与父想法）分流，历史错误只提示；无宿主身份时旧规则不变。验证：test_mainline_guard
+          4 例通过，全套 666 用例通过。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_mainline_guard.test.ts
+      pass: exit 0；只读会话遇历史错误可结束并带提示，本次影响范围内的错误仍拦
+      test_files:
+        - .devcompanion/tests/test_mainline_guard.test.ts
+  - id: I-151
+    name: 自动检查网页行为与人工签字分开：说清「没检查到」和「须由你判断」
+    status: done
+    needs: []
+    what: >-
+      提供一条不由 agent 驱动浏览器、也不绕过 I-104 的网页行为自检（渲染后的展开、点击、定位），结果写进
+      verify；人工签字只表达人的验收意见。守卫拒绝理由注明三类之一：工具能力受限、当前操作缺授权、结果需人判断。
+    why: >-
+      I-130 验收时把「守卫禁止 agent 访问本地服务」说成「只有人能判断」，并用 HTML 源码 grep 冒充交互验证（2026-09-16）。
+    expected: >-
+      agent 能准确报告「自检通过」或「未检查到」，而不是「请你看」；需要人的只剩主观验收；每条拒绝都能读出属于哪一类。
+    how: >-
+      在 vitest 里用 jsdom 加载 render 输出并触发展开、定位、进入详情，作为网页类想法的
+      verify.command；守卫的拒绝文案统一加类别前缀。测试：I-130 的三条行为在 jsdom 下通过；拒绝文案含类别。
+    why_this_way: >-
+      测试进程不是 agent 驱动浏览器，不触碰 I-104 的保护；复用现有 test_render_* 测试基座，不加浏览器依赖。
+    future: >-
+      网页类想法的 verify.command 直接指向这条自检；人工签字只在主观验收时出现。
+    parent: I-148
+    code:
+      - file: companion/guard.ts
+        symbol: refusalKind
+      - file: companion/guard.ts
+        symbol: REDIRECT
+      - file: companion/FORMAT.md
+        symbol: D33
+      - file: .companion/FORMAT.md
+        symbol: D33
+      - file: .devcompanion/tests/test_mainline_guard.test.ts
+    log:
+      - date: 2026-09-16
+        note: edit code：null →
+          [{"file":"companion/guard.ts","symbol":"refusalKind"},{"file
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_mainline
+      - date: 2026-09-16
+        note: "目标：拒绝说清谁处理，网页自检不冒充人判断。refusalKind 前缀与 REDIRECT 修正已写，待测试与 GREEN；I-130
+          的验证改为 render 测试命令；overlapping doing files — I-115: companion/guard.ts,
+          companion/FORMAT.md（引用不等于占用，I-149：同目录多会话并行请 coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：每条拒绝带【自行处理/缺授权/能力受限/需人判断】前缀（按理由文字判）；箭头函数不再当重定向；I-130 的验证从人工检查改成三份
+          happy-dom render 测试。验证：test_mainline_guard 与 message_truth 通过，全套 666
+          用例通过。边界：类别是文字模式匹配，新规则要写清理由才会归对类。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_mainline_guard.test.ts
+        .devcompanion/tests/test_base_guard_message_truth.test.ts
+      pass: exit 0；每条拒绝带四类之一的前缀，箭头函数不再被当成重定向
+      test_files:
+        - .devcompanion/tests/test_mainline_guard.test.ts
+        - .devcompanion/tests/test_base_guard_message_truth.test.ts
+  - id: I-152
+    name: 会话开头只展示本次目标、已有决定和回到哪，不再打整张状态表
+    status: done
+    needs: []
+    what: >-
+      会话开始与恢复时，hook 输出当前 doing 想法的：本次目标、已完成证据、已做决定及其范围、当前步、下一步、待决问题，而不是 106 行
+      status。已做决定保留内容与范围，再次提问必须说明比上次多了什么新选择或后果。
+    why: >-
+      主线只靠对话记忆，切换技能或恢复后重复提问、丢目标；助手把验收网页当成主任务（2026-09-16 复现）。
+    expected: >-
+      只看最新一条更新就能接上进度；中途问「你在做什么」先答得出总目标；再次提问都带「比上次多了什么」。
+    how: >-
+      先复用 doing 想法 log 最后一条（I-148 已约定目标/已完成/下一步/待决格式），SessionStart 与 compact
+      的输出改为该摘要加受阻原因；技能里规定进度更新回答「目标没变/刚确认/正在做/下一步」四项。现有记录不够时再加最小字段。
+    why_this_way: >-
+      先用现有记录验证够不够，再决定是否加结构；只在目标、阶段、阻碍、决定或交接实质变化时更新，避免记账负担。
+    future: >-
+      中断后恢复、拆子任务、换助手都从同一份摘要接手。
+    parent: I-148
+    code:
+      - file: companion/guard.ts
+        symbol: sessionBriefing
+      - file: companion/FORMAT.md
+        symbol: D33
+      - file: .companion/FORMAT.md
+        symbol: D33
+      - file: .devcompanion/tests/test_mainline_guard.test.ts
+      - file: .devcompanion/tests/test_base_guard_platform_leaks.test.ts
+    log:
+      - date: 2026-09-16
+        note: edit code：null →
+          [{"file":"companion/guard.ts","symbol":"sessionBriefing"},{"
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_mainline
+      - date: 2026-09-16
+        note: "目标：会话开头只给当前工作。sessionBriefing 已改写，待测试与 GREEN；overlapping doing files —
+          I-115: companion/guard.ts, companion/FORMAT.md（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：会话开头与压缩后只输出进行中想法及其最近一条 log、受阻数、可开工数；全表一条 status 可查。复用现有
+          log，没有新字段。验证：test_mainline_guard 与 platform_leaks 通过，全套 666 用例通过。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_mainline_guard.test.ts
+        .devcompanion/tests/test_base_guard_platform_leaks.test.ts
+      pass: exit 0；会话开头输出只含进行中想法及其最近记录、受阻数和可开工数
+      test_files:
+        - .devcompanion/tests/test_mainline_guard.test.ts
+        - .devcompanion/tests/test_base_guard_platform_leaks.test.ts
+  - id: I-153
+    name: 记录随任务规模伸缩：小改动短记录，由助手从对话和实际结果补齐
+    status: done
+    needs: []
+    what: >-
+      小改动只需目标、涉及位置、验证结果；有实质行为变化补实现选择、边界与风险；大功能才完整拆解。意图来自用户对话，实现位置来自代码，验证来自实际结果，缺失不编造。尽量引用已有想法，不建长期不关闭的「小修小补」节点。
+    why: >-
+      改一行 README 花了 6 次工具调用、2 次停顿；八问对错别字级改动是与规模不相称的成本（2026-09-16 复现）。
+    expected: >-
+      一行改动一次完成，仍能追溯为什么改、改了哪、怎样确认正确；大功能的要求不变。
+    how: >-
+      isBuildReady 对短记录想法只要求 what、code.file 与 verify；ccbuild 与 ccthink
+      技能写明三档记录要求及由谁补齐。测试：短记录想法可 doing；缺 what 或 verify 仍不可。
+    why_this_way: >-
+      保留可追溯，去掉与规模不相称的手续；不引入杂物节点，也不让助手编造意图。
+    future: >-
+      多数日常改动走短记录，八问留给真正需要设计的想法。
+    parent: I-148
+    code:
+      - file: companion/ideas.ts
+        symbol: isBuildReady
+      - file: companion/ideas.ts
+        symbol: addIdea
+      - file: companion/FORMAT.md
+        symbol: D33
+      - file: .companion/FORMAT.md
+        symbol: D33
+      - file: companion/skills/ccbuild/SKILL.md
+      - file: companion/skills/ccthink/SKILL.md
+      - file: .devcompanion/tests/test_base_readiness.test.ts
+    log:
+      - date: 2026-09-16
+        note: edit code：null →
+          [{"file":"companion/ideas.ts","symbol":"isBuildReady"},{"fil
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_base_rea
+      - date: 2026-09-16
+        note: "目标：小改动短记录即可开工。isBuildReady 与 new 旗标已写，待测试与 GREEN；overlapping doing files
+          — I-067:
+          .devcompanion/tests/test_base_skills.test.ts（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：开工门只要 what、why、code.file、verify；其余四问由 check 提示；new 带 --what --why
+          --expected --how --code --verify --tests --parent 一条建好即
+          READY；ccbuild/ccthink 写明三档记录。验证：readiness 31 例通过（含 new 旗标真跑），全套 666
+          用例通过。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_readiness.test.ts
+        .devcompanion/tests/test_base_skills.test.ts
+      pass: exit 0；只有 what/why/code/verify 的想法可开工，new 带字段一条建好即 READY
+      test_files:
+        - .devcompanion/tests/test_base_readiness.test.ts
+        - .devcompanion/tests/test_base_skills.test.ts
+  - id: I-154
+    name: 六个真实场景回归：小改动、规划后实现、并行、局部障碍、中断恢复、只读检查
+    status: done
+    needs: []
+    what: >-
+      每次改 harness 后跑六个真实任务场景，记录不必要提问次数、偏离目标的工作、恢复上下文的准确性，以及每次停顿为什么停、谁能解决、是否真需要人。
+    why: >-
+      技能文件格式正确、单元测试通过，不能证明 agent 不跑偏、不重复提问（2026-09-16 用户要求）。
+    expected: >-
+      每个场景有一份停顿清单；内部流程问题交给人的次数目标为零，同时不出现擅自决定；已跑过的两个场景（README 一行、I-130 验收）作为基线。
+    how: >-
+      在 ideas/log.md 记录每轮六场景结果与基线对比；能自动化的部分（守卫判决文案、Stop 输出、SessionStart 摘要）写成测试。
+
+
+      2026-09-16 第一轮（新守卫装好后，本会话实测）：
+
+      场景1 一行小改动（I-155，CLAUDE.md five→six）：new 一条建好→set doing→Edit→run-check→set
+      done，5 次调用、0 停顿、0 交人；基线是 6 次调用、2 停顿。
+
+      场景2 规划后继续实现：I-149～I-153、I-156 从挂图到落地没有重新索取授权；交人的只有一次真决策（先落 I-149 的顺序）。
+
+      场景3 两个并行任务：守卫写门（持有者放行、别人持有拒并点名、没认领拒）由 test_coord_guard 用两个宿主身份走
+      normalize→decide 覆盖；真实两宿主同目录运行归 I-059 的实机验收，不在本轮。
+
+      场景4 局部障碍：本会话守卫拒绝 4 处（D16 缺认领×2、D28 链式命令、旧守卫把箭头当重定向），全部自行解决，0
+      交人；每轮更新带主任务行，主任务没被替换。
+
+      场景5 中断后恢复：本会话经历一次压缩并靠摘要接回；安装后第一次 resume 的简报已是 I-152 格式（四个进行中想法各带最近记录、受阻
+      5、可开工 19），凭它能接上 I-148 的目标、已有决定和下一步。
+
+      场景6 只读检查：图现在 0 错误，无法自然复现；由 test_mainline_guard 的只读会话用例覆盖。
+
+      汇总：交给人的内部流程问题 0；交给人的真决策 1。
+    why_this_way: >-
+      行为验证只能用真实任务；不宣称文字测试证明模型行为。
+    future: >-
+      成为 harness 每次改动的验收标准。
+    parent: I-148
+    code:
+      - file: .devcompanion/tests/test_mainline_guard.test.ts
+      - file: companion/skills/ccbuild/SKILL.md
+      - file: companion/skills/ccfix/SKILL.md
+      - file: companion/skills/ccscan/SKILL.md
+      - file: companion/skills/ccgraph/SKILL.md
+      - file: companion/skills/ccapply/SKILL.md
+    log:
+      - date: 2026-09-16
+        note: edit code：null →
+          [{"file":".devcompanion/tests/test_mainline_guard.test.ts"},
+      - date: 2026-09-16
+        note: edit verify：null → {"command":"npx vitest run
+          .devcompanion/tests/test_mainline
+      - date: 2026-09-16
+        note: "目标：六场景真实回归。基线：README 一行（2 停顿自行解决）、I-130 验收（8 停顿：5 自行、2 误交人、1
+          真需人）；待新守卫装好后重跑；overlapping doing files — I-067:
+          companion/skills/ccapply/SKILL.md,
+          .devcompanion/tests/test_base_skills.test.ts（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: edit how："在 ideas/log.md 记录每轮六场景结果与基线对比；能自动化的部分（守卫判决文案、Stop 输出、Sessio → "在
+          ideas/log.md 记录每轮六场景结果与基线对比；能自动化的部分（守卫判决文案、Stop 输出、Sessio
+      - date: 2026-09-16
+        note: edit how："在 ideas/log.md 记录每轮六场景结果与基线对比；能自动化的部分（守卫判决文案、Stop 输出、Sessio → "在
+          ideas/log.md 记录每轮六场景结果与基线对比；能自动化的部分（守卫判决文案、Stop 输出、Sessio
+      - date: 2026-09-16
+        note: 已完成：六场景第一轮记在 how。场景 1、2、4、5 本会话实测；3、6 由测试覆盖（守卫写门、只读会话 Stop）；真实两宿主并行归
+          I-059。交给人的内部流程问题 0。级别：真实使用已验证（1、2、4、5），验证已通过（3、6）。
+    verify:
+      command: npx vitest run .devcompanion/tests/test_mainline_guard.test.ts
+        .devcompanion/tests/test_base_skills.test.ts
+      pass: exit 0 只覆盖可自动化的部分（守卫判决文案、Stop 范围、会话简报、技能文本）；六个场景的真实运行结果记在本想法 log
+        里，不宣称文字测试证明模型行为
+      test_files:
+        - .devcompanion/tests/test_mainline_guard.test.ts
+        - .devcompanion/tests/test_base_skills.test.ts
+  - id: I-155
+    name: CLAUDE.md 里的五个技能改成六个
+    status: done
+    what: CLAUDE.md 第一段说 the five skills，实际装了六个（含 ccapply），改成 six
+    why: 文档要说真话（I-118）；这是 I-154 场景一「一行小改动」的真实用例
+    parent: I-154
+    code:
+      - file: CLAUDE.md
+    verify:
+      command: npx vitest run .devcompanion/tests/test_docs_truth.test.ts
+      test_files:
+        - .devcompanion/tests/test_docs_truth.test.ts
+      pass: exit 0
+    log:
+      - date: 2026-09-16
+        by: new
+        note: 创建
+      - date: 2026-09-16
+        note: "status → doing；overlapping doing files — I-148:
+          .devcompanion/tests/test_docs_truth.test.ts（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：CLAUDE.md five→six。场景一实测：new（带字段）→ set doing → Edit → run-check → set
+          done，5 次调用，0 次停顿，0 次交人。
+  - id: I-156
+    name: 交付三段：完成了什么、agent 接着做什么、人现在要做什么
+    status: done
+    what: 把 D33
+      的「工作主线」和「进度四项」合成一套：执行中只做简短更新并继续；阶段交付、受阻、结束回复用固定三段——这次完成了什么（标到代码已修改/验证已通过/已安装生效/真实使用已验证哪一级）、之后
+      agent
+      还要做什么（首步在前，完成写无剩余工作）、人现在需要做什么（不需要就明说，需要就给入口、步骤、可复制命令、预期结果、反馈什么）。会话简报加一行「需要人操作」。
+    why: 用户看完回复不知道工作是否完成、下一步谁负责、自己该先做什么；助手把「需要新会话测试」这类内部安排直接交给人组织，把完成、剩余、测试、提交、请人操作混在一起。
+    expected: 凭最新一条回复就能回答三件事：完成到哪一级、agent 接着做什么、我现在要不要动；三种情形（未完成可继续 / 需要人做一件事 /
+      全部完成）各有一份真实回复对照检查通过。
+    how: FORMAT.md D33 两段合一，删掉重复；六个技能改引用与收尾步骤；guard sessionBriefing
+      增加「需要人操作」行（进行中且人工验收未签字的想法）；test_mainline_guard 加断言；三种情形的对照回复写进 D33
+      作为范例并逐条核对。
+    parent: I-148
+    code:
+      - file: companion/FORMAT.md
+      - file: .companion/FORMAT.md
+      - file: companion/guard.ts
+      - file: companion/skills/ccbuild/SKILL.md
+      - file: companion/skills/ccthink/SKILL.md
+      - file: companion/skills/ccfix/SKILL.md
+      - file: companion/skills/ccscan/SKILL.md
+      - file: companion/skills/ccgraph/SKILL.md
+      - file: companion/skills/ccapply/SKILL.md
+      - file: .devcompanion/tests/test_mainline_guard.test.ts
+    verify:
+      command: npx vitest run .devcompanion/tests/test_mainline_guard.test.ts
+        .devcompanion/tests/test_base_skills.test.ts
+        .devcompanion/tests/test_docs_truth.test.ts
+      test_files:
+        - .devcompanion/tests/test_mainline_guard.test.ts
+        - .devcompanion/tests/test_base_skills.test.ts
+        - .devcompanion/tests/test_docs_truth.test.ts
+      pass: exit 0
+    log:
+      - date: 2026-09-16
+        by: new
+        note: 创建
+      - date: 2026-09-16
+        note: "目标：凭最新回复知道完成到哪一级、agent 接着做什么、人现在要不要动。下一步：合并 D33
+          两段、改六个技能、简报加「需要人操作」行。；overlapping doing files — I-067:
+          companion/skills/ccapply/SKILL.md,
+          .devcompanion/tests/test_base_skills.test.ts（引用不等于占用，I-149：同目录多会话并行请
+          coord enable，写时按会话核对）"
+      - date: 2026-09-16
+        note: 已完成：D33「工作主线」与「进度四项」合并为「执行中更新」+「交付三段」，附三种情形的对照回复；六个技能收尾步骤改为交付三段；会话简报加「需要人操作」行（进行中且等人签字的想法）。级别：代码已修改、验证已通过（61
+          文件 667 用例）、已安装生效（本仓库 bundle
+          与技能副本逐字节同步）；真实使用：本回复即第一次按交付三段写，人工验收情形的对照回复写在 D33，尚未在真实签字场景跑过。

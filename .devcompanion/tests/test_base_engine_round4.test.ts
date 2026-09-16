@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { platform } from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   load, graphPath, requestApproval, applyApproval, decideProductWrite,
@@ -119,6 +120,25 @@ ideas:
     expect(decideProductWrite(dir, loadGraph(), join(dir, "ideas", "log.md")).allow).toBe(true);
     expect(decideProductWrite(dir, loadGraph(), join(dir, "ideas", "graph.yaml")).allow).toBe(true);
     expect(decide(ev({ paths: [graphPath(dir)], edit: { old_string: "W", new_string: "W2" } }), dir).allow).toBe(true);
+  });
+
+  // ── I-147：项目外的路径不是这个项目的产品文件 ──────────────────────────
+  describe("a path outside the project root (I-147)", () => {
+    it("the OS temp directory is scratch by definition — allowed, and the guard agrees", () => {
+      // dir 自己就在 tmpdir 下，所以往上走一级、换个名字，仍在临时目录里但不在项目里。
+      const scratch = resolve(dir, "..", "companion-scratch-i147", "dump.mjs");
+      const v = decideProductWrite(dir, loadGraph(), scratch);
+      expect(v.allow, v.reason).toBe(true);
+      expect(decide(ev({ paths: [scratch] }), dir).allow).toBe(true);
+    });
+
+    it("anywhere else outside the root is still refused, and the reason says the graph does not govern it", () => {
+      const elsewhere = platform === "win32" ? "C:/some-other-project/src/x.ts" : "/srv/some-other-project/src/x.ts";
+      const v = decideProductWrite(dir, loadGraph(), elsewhere);
+      expect(v.allow).toBe(false);
+      expect(v.reason).toMatch(/项目之外/);
+      expect(v.reason).not.toMatch(/没有进行中的想法认领/);
+    });
   });
 });
 

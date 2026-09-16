@@ -21,7 +21,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|NotebookEdit|Bash|bash|PowerShell|powershell|pwsh|shell|local_shell",
+        "matcher": "Edit|Write|NotebookEdit|Bash|bash|PowerShell|powershell|pwsh|shell|local_shell|WebFetch",
         "hooks": [
           {
             "type": "command",

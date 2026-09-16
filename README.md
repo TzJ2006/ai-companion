@@ -1,6 +1,6 @@
 # ai-companion
 
-AI Companion source repository. On 2026-09-05, all discovered local Companion installations, hooks, installed skills, and legacy commands were retired at the owner's request; later the same day the base was installed here again. This checkout is running its own guard: `.companion/companion.mjs`, wired into five hook events in `.claude/settings.json` and into `.cursor/hooks.json` and `.codex/hooks.json`, with the five skills installed under `.claude/skills/` and `.agents/skills/`. It really refuses commands in this repository.
+AI Companion source repository. On 2026-09-05, all discovered local Companion installations, hooks, installed skills, and legacy commands were retired at the owner's request; later the same day the base was installed here again. This checkout is running its own guard: `.companion/companion.mjs`, wired into five hook events in `.claude/settings.json` and into `.cursor/hooks.json` and `.codex/hooks.json`, with the six skills installed under `.claude/skills/` and `.agents/skills/`. It really refuses commands in this repository.
 
 ## Current source
 
@@ -13,6 +13,8 @@ AI Companion source repository. On 2026-09-05, all discovered local Companion in
 
 The ccscan reading workflow is unchanged. Thoughts form a tree: `parent` names the thought an idea sits under, at most seven top-level thoughts and at most seven direct children per thought (fewer are fine). The page is one file, one page per thought addressed by `#I-xxx`: the home page shows the top level; a thought's page shows its own eight questions and its children's dependency diagram.
 
-Each thought is approved once, on its complete content (name, parent, prerequisites, the eight answers; code down to the symbol, verification without the signature). Approval persists while that content is unchanged: sessions, retries, status, logs, test results, line numbers written back after implementing, signatures, and unrelated thoughts do not invalidate it. One challenge may name several thoughts; each is approved on its own. Changing a thought's content requires renewed approval for that thought only.
+Since 2026-09-16, plan approval and RED-before-implementation are no longer gates (I-146). Work requires a ready `doing` idea claiming its files; completion still requires current GREEN evidence or human sign-off for manual checks.
+
+The shared skill sources now carry an authorized goal through planning, implementation, and verification without repeated stage approvals (I-148). Questions identify a concrete decision, why the user must make it, consequences, and a recommendation. Progress and handoffs retain the goal, completed evidence, current step, next step, and pending decisions in the existing idea log. Planning-only and read-only requests keep their scope. See FORMAT.md D33; installed skill copies adopt this on an explicit update.
 
 Reinstallation is a separate action. Do not automatically reinstall hooks or skills while working on the source.

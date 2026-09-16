@@ -72,6 +72,11 @@ const PATCH_TOOLS = ["apply_patch"];
 /** MCP is a name PREFIX rather than a name; Cursor also spells it `MCP:`. */
 const MCP_TOOLS = ["mcp__.*"];
 const CURSOR_MCP_TOOLS = ["mcp__.*", "MCP:.*"];
+/** The host's own page-fetching tool (I-106). R8 judges a fetch by its TARGET
+ *  (a loopback address is refused, the open web passes), but that rule only
+ *  ever fires if the event reaches the guard — and this tool wears neither the
+ *  write nor the `mcp__` shape. Cursor and Codex expose no such named tool. */
+const CLAUDE_FETCH_TOOLS = ["WebFetch"];
 
 const matcher = (...groups: string[][]) => [...new Set(groups.flat())].join("|");
 /** Codex anchors its matchers; the prefix patterns keep their own `.*` inside. */
@@ -85,7 +90,7 @@ export function claudeHooks(): Record<string, unknown[]> {
   }];
   return {
     PreToolUse: [
-      { matcher: matcher(CLAUDE_WRITE_TOOLS, SHELL_TOOLS), hooks: guard() },
+      { matcher: matcher(CLAUDE_WRITE_TOOLS, SHELL_TOOLS, CLAUDE_FETCH_TOOLS), hooks: guard() },
       { matcher: matcher(MCP_TOOLS), hooks: guard() },
     ],
     // Reads strike the scan worklist (R7); the MCP group is here too because an

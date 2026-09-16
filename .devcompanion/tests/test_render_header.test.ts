@@ -170,3 +170,97 @@ describe("I-086 撞名守门：新加的东西不许踩已有的选择器", () =
     expect(html).not.toContain('open="false"');
   });
 });
+
+// I-131 —— 标题和流程图之间三条要点：「是什么」首句、「预期结果」首句、算出来的图上事实。
+// 一个字都不用回填；首页没有这一块；换页跟着换；对编辑、草稿、签字三套机制不可见。
+const POINTS = `${HEAD}overview: >
+  项目一句话。
+endpoints: [I-003]
+ideas:
+  - id: I-001
+    name: "地基"
+    status: done
+    needs: []
+    what: |
+      地基是第一行
+      地基是第二行
+    expected: 地基站得住
+  - id: I-002
+    name: "中间层"
+    status: doing
+    needs: [I-001]
+    parent: I-001
+    what: 中间层是什么
+    expected: 中间层站得住
+  - id: I-003
+    name: "屋顶"
+    status: todo
+    needs: [I-002]
+    parent: I-001
+    what: 屋顶是什么
+  - id: I-004
+    name: "烟囱"
+    status: todo
+    needs: [I-002, I-003]
+    parent: I-003
+    what: 烟囱是什么
+    expected: 会冒烟
+`;
+const points = (document: any) => [...document.querySelectorAll("#keypoints li")].map(text);
+
+describe("I-131 每一页顶上三条要点", () => {
+  it("首页没有要点块", () => {
+    const { document } = boot(POINTS);
+    const box = document.getElementById("keypoints");
+    expect(box).not.toBeNull();
+    expect(box.hasAttribute("hidden")).toBe(true);
+    expect(points(document)).toEqual([]);
+  });
+
+  it("点进一个想法：恰好三条 —— 是什么首句、预期结果首句、算出来的事实", () => {
+    const { document, goto } = boot(POINTS);
+    goto("I-001");
+    const p = points(document);
+    expect(p).toHaveLength(3);
+    expect(p[0]).toBe("是什么：地基是第一行");
+    expect(p[0]).not.toContain("第二行");
+    expect(p[1]).toBe("预期结果：地基站得住");
+    expect(p[2]).toContain("已完成");
+    expect(p[2]).toContain("顶层想法");
+    expect(p[2]).toContain("直接子想法做完 0/2");     // 数的是直接子想法，不是整棵子树
+    expect(p[2]).toContain("没有前置挡着它");
+  });
+
+  it("事实那一条按对端当前状态算：在等的是没做完的前置，不是全部链接", () => {
+    const { document, goto } = boot(POINTS);
+    goto("I-004");
+    const p = points(document);
+    expect(p[2]).toContain("归在「屋顶」下面");
+    expect(p[2]).toContain("没有子想法");
+    expect(p[2]).toContain("在等 2 个没做完的前置想法");   // I-002 doing、I-003 todo；I-001 已完成不算
+  });
+
+  it("没写预期结果的想法：那一条是「—」，不是空着也不是少一条", () => {
+    const { document, goto } = boot(POINTS);
+    goto("I-003");
+    const p = points(document);
+    expect(p).toHaveLength(3);
+    expect(p[1]).toBe("预期结果：—");
+  });
+
+  it("换一个想法三条跟着换；退回首页整块收起", () => {
+    const { document, goto } = boot(POINTS);
+    goto("I-001");
+    goto("I-002");
+    expect(points(document)[0]).toBe("是什么：中间层是什么");
+    goto("");
+    expect(document.getElementById("keypoints").hasAttribute("hidden")).toBe(true);
+  });
+
+  it("要点块对编辑、草稿、签字不可见：没有编号、没有 data-*、没有输入框", () => {
+    const { document, goto } = boot(POINTS);
+    goto("I-001");
+    const box = document.getElementById("keypoints");
+    expect(box.querySelectorAll("[id], [data-idea], [data-field], [data-row], input, textarea, button").length).toBe(0);
+  });
+});

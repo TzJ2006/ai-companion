@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 
 // I-145 — 这个仓库的测试套件默认会吃满机器：并发上限是「处理器核数减一」，在这台
 // 24 核开发机上就是 23 个 worker，而五十六个测试文件里有十六个自己还要再启动真正的
@@ -30,6 +30,8 @@ const MAX_WORKERS = Number.parseInt(process.env.VITEST_MAX_WORKERS ?? "", 10) ||
 export default defineConfig({
   test: {
     maxWorkers: MAX_WORKERS,
+    // I-147：.claude/worktrees/ 下是别的会话留下的旧检出，里面的测试副本不属于这份代码。
+    exclude: [...configDefaults.exclude, "**/.claude/worktrees/**"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },
