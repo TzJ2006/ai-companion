@@ -91,7 +91,8 @@ describe("companion shared skills (I-095)", () => {
   });
 
   it("the workflow mechanics of the shared base are actually referenced", () => {
-    expect(bodyOf("ccthink")).toMatch(/request-approval/);         // 一道关卡
+    expect(bodyOf("ccthink")).toMatch(/render/);                   // 交人看的是渲染出的图（I-146 后无口令）
+    expect(bodyOf("ccthink")).not.toMatch(/request-approval --node/); // 计划批准门已拆（D7 修订）
     expect(bodyOf("ccbuild")).toMatch(/run-check/);                // RED→GREEN
     expect(bodyOf("ccbuild")).toMatch(/--phase red/);
     expect(bodyOf("ccscan")).toMatch(/migrate/);                   // 旧图迁移入口

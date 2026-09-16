@@ -90,16 +90,20 @@ ideas:
   });
 
   it("(1) …while a same-named file somewhere else is still not the engine", () => {
-    const elsewhere = mkdtempSync(join(tmpdir(), "not the engine-")).replaceAll("\\", "/");
+    // 不带引号的路径里不放空格 —— 见 test_base_guard_engine_identity 里同一处的说明。
+    const elsewhere = mkdtempSync(join(tmpdir(), "not-the-engine-")).replaceAll("\\", "/");
     dirs.push(elsewhere);
     denies([
       "node ideas/companion.mjs check",                    // 账本目录那条任意代码执行链
       "npx tsx ideas/ideas.ts check",
       "npx tsx evil-claude-companion/ideas.ts check",      // 名字带上目录也不算
-      "npx tsx claude-companion/evil.ts check",
       `npx tsx ${elsewhere}/claude-companion/ideas.ts check`,
       "npx tsx claude-companion/ideas.ts guard --platform=claude",  // hook 入口永远够不着
     ]);
+    // `claude-companion/evil.ts` 从这张名单上撤了：它压根不是引擎白名单认得出的名字，
+    // 以前拒它的是解释器墙。I-144 之后它就是一个普通脚本，照跑 —— 说它「不是引擎」
+    // 仍然对，但那已经不是一条拒绝。
+    allows(["npx tsx claude-companion/evil.ts check"]);
   });
 
   // ── (2) 还没建图 ≠ 守卫崩了 ─────────────────────────────────────────────

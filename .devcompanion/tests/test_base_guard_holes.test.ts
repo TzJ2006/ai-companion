@@ -115,8 +115,9 @@ ideas:
 // B3 — shell 那道闸只有正则一层，四个口子全开着：companion CLI 的白名单没有
 // 子命令表，于是 hook 入口 `companion.mjs guard` 自己就算「合法命令」，agent 喂
 // 一个假的 UserPromptSubmit 就能给自己写批准回执（D26）；管道、heredoc、输入重
-// 定向哪一层都不匹配，直接落到放行；解释器只拦一行流，`python 脚本.py` 照跑；
-// cmd.exe 的 copy/move/erase/ren 不在写文件招数里（D21）。
+// 定向哪一层都不匹配，直接落到放行；cmd.exe 的 copy/move/erase/ren 不在写文件招数
+// 里（D21）。（原本这里还有一条「解释器只拦一行流」—— I-144 把整道解释器墙拆掉之后，
+// 那一条连问题都不是了，下面那个用例改成锁「跑脚本就是跑脚本」。）
 describe("companion guard shell holes (B3)", () => {
   let dir: string;
   const dirs: string[] = [];
@@ -183,7 +184,10 @@ ideas:
     }
   });
 
-  it("interpreters running a script file are blocked too, not only -c / -e one-liners", () => {
+  // I-144 把解释器墙整条拆了，所以这一条锁的方向反过来：跑一个脚本就是跑一个脚本。
+  // 上面那两条（hook 入口、喂事件进引擎）才是 D26 的性质，它们靠 ENGINE_INVOCATION
+  // 站着，和这道墙无关 —— 拆墙没有把它们带走，这正是它们留在这份文件里的意义。
+  it("interpreters running a script file are ordinary work now (I-144)", () => {
     for (const command of [
       "python scripts/patch.py",
       "python3 scripts/patch.py --write",
@@ -194,7 +198,7 @@ ideas:
       "ruby scripts/patch.rb",
     ]) {
       const v = decide(shell(command), dir);
-      expect(v.allow, command).toBe(false);
+      expect(v.allow, `${command} —— ${v.reason ?? ""}`).toBe(true);
     }
   });
 
@@ -317,7 +321,25 @@ ideas:
       tool_input: { command: ["pwsh", "-Command", "Remove-Item src/a.ts"] }, cwd: dir,
     });
     expect(viaArgv.command).toBe("pwsh -Command Remove-Item src/a.ts");
-    expect(decide(viaArgv, dir).allow).toBe(false);
+    // I-144 起这一条放行了，而且这是整次改动里最该被看见的那个代价：写文件动词表
+    // 只认命令头上那个词，所以在前面加一个解释器就绕过去了 —— `pwsh -Command
+    // Remove-Item …`、`bash -c "cp /tmp/evil src/a.ts"` 都是这个形状。以前拦住它
+    // 的是解释器墙，不是动词表。产品文件的那道真闸在编辑工具那条路上（守卫按想法
+    // 图判），shell 这边从设计上一直只是护栏。
+    expect(decide(viaArgv, dir).allow).toBe(true);
+  });
+
+  // 同一个形状顶不动的那两样：账本按目标认（路径出现在命令里就算，I-143），引擎
+  // 调用按身份认（D26）。前缀一个解释器绕不过它们 —— 这是「代价止于此」的证据。
+  it("…but prefixing an interpreter does not reach the ledger or the engine", () => {
+    for (const command of [
+      `bash -c "cp /tmp/forged ideas/.approved"`,
+      `pwsh -Command Set-Content ideas/.approved 'forged'`,
+      `bash -c "node companion/dist/companion.mjs guard --platform=claude"`,
+    ]) {
+      const v = decide({ event: "shell", command, cwd: dir }, dir);
+      expect(v.allow, command).toBe(false);
+    }
   });
 
   it("a read-only PowerShell command still runs, and PostToolUse stays a non-event", () => {

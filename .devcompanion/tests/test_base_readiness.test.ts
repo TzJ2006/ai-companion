@@ -6,8 +6,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseDocument } from "yaml";
 import {
-  load, graphPath, setStatus, isBuildReady, needsUnmet, fileClash, allowWrite, addIdea,
-  requestApproval, applyApproval, runCheck,
+  load, graphPath, setStatus, isBuildReady, needsUnmet, childrenUnfinished, fileClash, allowWrite, addIdea,
+  requestApproval, applyApproval, runCheck, render,
   type Graph, type Idea,
 } from "../../companion/ideas.js";
 
@@ -154,23 +154,18 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
 
   // D17：开工要的是这个想法当前有效的计划批准（人看过它的八问）。缺了就点名该跑
   // 的那条命令，不让人猜。
-  it("refuses doing with no approval, and names the plan command for this idea", () => {
-    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --node I-002/);
+  // 2026-09-16（I-146）：进 doing 不再要人工批准 —— 八问齐、前置完、路径不冲突就行。
+  it("allows doing with no approval on file at all", () => {
+    expect(trySetHere("I-002", "doing")).toContain("status: doing");
   });
 
-  it("another idea's approval does not count — each idea is approved on its own", () => {
-    approve(["I-003"]);
-    expect(() => trySetHere("I-002", "doing")).toThrow(/request-approval --node I-002/);
-  });
-
-  it("allows doing once this idea's approval is current", () => {
+  it("an approval lying around changes nothing either way", () => {
     approve(["I-002"]);
     expect(trySetHere("I-002", "doing")).toContain("status: doing");
   });
 
-  // 走 blocked 绕一圈也没用：闸门看的是「进入 doing」，不是上一个状态。
-  it("refuses blocked → doing without the approval as well", () => {
-    expect(() => trySetHere("I-007", "doing")).toThrow(/request-approval --node I-007/);
+  it("allows blocked → doing without an approval as well", () => {
+    expect(trySetHere("I-007", "doing")).toContain("status: doing");
   });
 
   it("enforces the small transition table", () => {
@@ -275,5 +270,135 @@ ${full("I-007", "src/free.ts").replace("status: todo", "status: blocked")}
       { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
     expect(no.status).toBe(1);
     expect(no.stdout).toMatch(/deny/);
+  });
+});
+
+// I-135 —— 完成一个父想法，要它的子想法先全部完成。这道门是 done 分支上的第五道，
+// 只依赖图本身（parent 和 status 都在图里），所以不带项目目录的纯单元调用照样看得见它。
+// 三条人批的裁决各由一组断言钉住：受阻的子想法算「没完成」；门只看直接子想法；
+// 签字侧的那一道在 test_base_approval.test.ts 里。
+describe("parent completion gate (I-135)", () => {
+  const node = (id: string, status: string, parent?: string) =>
+    `  - id: ${id}
+    name: "想法 ${id}"
+    status: ${status}
+    needs: []
+    what: W
+    why: Y
+    expected: E
+    how: H
+    why_this_way: T
+    future: F
+${parent ? `    parent: ${parent}\n` : ""}    code:
+      - file: src/${id}.ts
+        symbol: s
+    verify: { command: "npx vitest run tests/${id}.test.ts", test_files: [ tests/${id}.test.ts ], pass: "exit 0" }
+`;
+
+  const tree = (...rows: string[]) => `version: 1
+project: tree
+endpoints: []
+ideas:
+${rows.join("")}`;
+
+  // 纯单元用法：没有项目目录，GREEN 和批准两道门让开，剩下的正是这道新门。
+  const move = (text: string, id: string, status: Idea["status"] & string) => {
+    const doc = parseDocument(text);
+    const graph = doc.toJSON() as Graph;
+    setStatus(doc, graph, id, status, { date: "2026-09-07" });
+    return (parseDocument(String(doc)).toJSON() as Graph).ideas.find((i) => i.id === id)!.status;
+  };
+  const graphOfTree = (text: string) => parseDocument(text).toJSON() as Graph;
+  const pick = (g: Graph, id: string) => g.ideas.find((i) => i.id === id)!;
+
+  it("refuses done while a direct child is unfinished, and names it", () => {
+    const text = tree(node("I-010", "doing"), node("I-011", "done", "I-010"), node("I-012", "todo", "I-010"));
+    expect(() => move(text, "I-010", "done")).toThrow(/I-012/);
+  });
+
+  // 点名要点全 —— find 而不是 filter 的实现只说得出第一个，人修完一个又撞一次墙。
+  it("names every unfinished child, not just the first", () => {
+    const text = tree(node("I-010", "doing"), node("I-011", "todo", "I-010"), node("I-012", "todo", "I-010"));
+    expect(() => move(text, "I-010", "done")).toThrow(/I-011/);
+    expect(() => move(text, "I-010", "done")).toThrow(/I-012/);
+  });
+
+  // 裁决一：这套格式里「废弃」的归宿就是保留编号、置受阻、写明原因 —— 那是「这件事
+  // 没做」的记录。写成 status === "todo" 的实现会在这里放行，而本仓库的图上不会暴露。
+  it("a blocked child blocks just as hard as a todo one", () => {
+    const text = tree(node("I-010", "doing"), node("I-011", "blocked", "I-010"));
+    expect(() => move(text, "I-010", "done")).toThrow(/I-011/);
+  });
+
+  // 裁决二：只看直接子想法。整棵子树都守住，靠的是每一层各自守住，不是这道门去遍历。
+  it("looks at direct children only — an unfinished grandchild does not block", () => {
+    const text = tree(
+      node("I-010", "doing"), node("I-011", "done", "I-010"),
+      node("I-012", "done", "I-010"), node("I-013", "todo", "I-012"),
+    );
+    expect(move(text, "I-010", "done")).toBe("done");
+  });
+
+  it("an idea with no children is untouched by the gate", () => {
+    expect(move(tree(node("I-014", "doing")), "I-014", "done")).toBe("done");
+  });
+
+  // 门装在 done 分支里，不装在 setStatus 的入口 —— 一个被子想法挡住的父想法，
+  // 仍然要能被标成受阻（D19 允许 doing → blocked）。
+  it("the gate is on done only — doing → blocked still works with unfinished children", () => {
+    const text = tree(node("I-010", "doing"), node("I-011", "todo", "I-010"));
+    expect(move(text, "I-010", "blocked")).toBe("blocked");
+  });
+
+  it("childrenUnfinished names the open children, and is null when every direct child is done", () => {
+    const open = graphOfTree(tree(node("I-010", "doing"), node("I-011", "todo", "I-010")));
+    expect(childrenUnfinished(pick(open, "I-010"), open)).toMatch(/I-011/);
+
+    const shut = graphOfTree(tree(node("I-010", "doing"), node("I-011", "done", "I-010")));
+    expect(childrenUnfinished(pick(shut, "I-010"), shut)).toBeNull();
+
+    // 没有子想法的想法：null，不是一句空话。
+    expect(childrenUnfinished(pick(shut, "I-011"), shut)).toBeNull();
+  });
+
+  // 网页上的那一道。签字是人工验收想法唯一的关门方式，所以按钮必须和引擎同步 ——
+  // 而且是灰掉、不是藏起来：控件凭空消失，人分不清那是规矩还是页面坏了。
+  const manualNode = (id: string, status: string) =>
+    `  - id: ${id}
+    name: "想法 ${id}"
+    status: ${status}
+    needs: []
+    what: W
+    why: Y
+    expected: E
+    how: H
+    why_this_way: T
+    future: F
+    code:
+      - file: src/${id}.ts
+        symbol: s
+    verify: { manual: "打开页面亲眼看一遍", signed_off: null }
+`;
+
+  it("the page greys the sign button instead of hiding it, and says which child is holding it", () => {
+    const open = graphOfTree(tree(manualNode("I-010", "doing"), node("I-011", "todo", "I-010")));
+    const html = render(open);
+    expect(html).toContain("人工签字");                       // 按钮还在，没被藏起来
+    expect(html).toContain('<button class="sign-open" disabled>');
+    expect(html).toMatch(/class="gate-why">[^<]*I-011/);      // 说清是谁挡着
+    expect(html).not.toContain('data-sign="I-010"');          // 面板按这个属性开，打不开
+
+    const shut = graphOfTree(tree(manualNode("I-010", "doing"), node("I-011", "done", "I-010")));
+    const ok = render(shut);
+    expect(ok).toContain('data-sign="I-010"');                // 子想法完成，同时解锁
+    expect(ok).not.toContain('<button class="sign-open" disabled>');
+  });
+
+  // parent 指到图外的编号，页面把它当顶层；这道门必须用同一条规则，否则同一个想法
+  // 在页面上和在闸门上归属不同。
+  it("a parent id that is not in the graph attaches the idea to nobody", () => {
+    const g = graphOfTree(tree(node("I-010", "doing"), node("I-011", "todo", "I-999")));
+    expect(childrenUnfinished(pick(g, "I-010"), g)).toBeNull();
+    expect(move(tree(node("I-010", "doing"), node("I-011", "todo", "I-999")), "I-010", "done")).toBe("done");
   });
 });

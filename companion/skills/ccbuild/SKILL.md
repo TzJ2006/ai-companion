@@ -1,6 +1,6 @@
 ---
 name: ccbuild
-description: 按依赖顺序实现已批准的想法 —— 先跑出一次真实失败的测试记录，再写实现，再拿到最新的通过记录，才能标完成。触发词：ccbuild、开始实现、动手做。
+description: 按依赖顺序实现想清楚了的想法 —— 建议先跑出一次真实失败的测试记录，再写实现，拿到最新的通过记录才能标完成。触发词：ccbuild、开始实现、动手做。
 ---
 
 # ccbuild — 把 todo 变成 done，顺序由图决定
@@ -31,10 +31,12 @@ node .companion/companion.mjs set I-0XX doing
 
 进不去 doing 时，拒绝理由会说清缺什么：计划字段没答完 → 回 ccthink；
 前置没完成 → 先做前置；文件和别的进行中想法重叠 → 等它完成。
-计划还没被人批过的，写实现时守卫会拦 —— 先补一道批准（`request-approval --node I-0XX`）。
-写之前可以自检：`node .companion/companion.mjs allow src/那个文件`。
+进 doing 不需要人工批准（2026-09-16 起）。进去之后把这个想法的八问用一条独立可见的消息
+贴给人看一眼再动手 —— 人不吭声就继续，人说不对就 `set I-0XX todo` 停下改图。
+写之前可以自检：`node .companion/companion.mjs allow src/那个文件`。守卫只认认领：
+文件必须在这个想法的 `code.file` 或 `verify.test_files` 里，不在就先补进图。
 
-## 第 2 步 — 测试先行，看着它失败
+## 第 2 步 — 测试先行，看着它失败（建议，不是闸）
 
 1. 写 `verify.test_files` 里点名的测试文件，断言 `expected` 说的真实输入输出。
 2. 跑出失败记录：
@@ -43,9 +45,10 @@ node .companion/companion.mjs set I-0XX doing
 node .companion/companion.mjs run-check I-0XX --phase red
 ```
 
-**失败必须是「东西还没实现」造成的**，读输出确认。意外先绿（unexpected_pass）
-会挡住实现写入 —— 要么测试写错了，要么真有现成实现；请人裁决一次豁免
-（`request-approval --gate red-waiver --node I-0XX`），不许自己糊弄过去。
+**失败应当是「东西还没实现」造成的**，读输出确认。意外先绿（unexpected_pass）
+说明要么测试写错了，要么真有现成实现 —— 停下告诉人，不许自己糊弄过去。
+守卫不再因为没有红记录而拦实现（2026-09-16 起）；先红后绿是这里的做法，不是门。
+逻辑简单到没什么可失败的想法，可以直接进第 3 步。
 
 ## 第 3 步 — 实现
 

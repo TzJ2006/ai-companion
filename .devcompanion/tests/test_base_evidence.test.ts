@@ -133,9 +133,9 @@ ideas:
 
   // ── GREEN：先红才能绿；实现再动一笔就过期 ────────────────────────────────
 
-  it("green refuses to run before the red gate is ready", () => {
-    approvePlan();
-    expect(() => runCheck(dir, loadGraph(), "I-001", "green")).toThrow(/red|RED/i);
+  // 2026-09-16（I-146）：green 不再等 red；先红后绿是建议，不是闸。
+  it("green runs without a prior red", () => {
+    expect(() => runCheck(dir, loadGraph(), "I-001", "green")).not.toThrow();
   });
 
   it("red → implement → green → done; another write staleness-kills green", { timeout: 60_000 }, () => {

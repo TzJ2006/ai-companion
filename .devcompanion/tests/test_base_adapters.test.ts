@@ -190,7 +190,7 @@ ideas:
     const viaCursor = normalizeCursor({ hook_event_name: "beforeSubmitPrompt", prompt: `批准 ${challenge}`, cwd: dir });
     const outcome = handlePrompt(viaCursor, dir);
     expect(outcome?.ok).toBe(true);
-    expect(existsSync(join(paths(dir).runtime, "approvals", `${challenge}.json`))).toBe(true);
+    expect(existsSync(join(paths(dir).approvals, "receipts", `${challenge}.json`))).toBe(true);
 
     const again = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-001"]);
     const viaClaude = normalizeClaude({ hook_event_name: "UserPromptSubmit", prompt: `APPROVE ${again.challenge}`, cwd: dir, session_id: "s", turn_id: "t" });

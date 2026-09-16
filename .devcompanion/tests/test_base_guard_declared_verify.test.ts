@@ -47,11 +47,19 @@ ideas:
   };
   const shell = (command: string): NormalizedEvent => ({ event: "shell", command, cwd: dir });
 
+  // 这份 fixture 声明的命令必须是**仍然有闸拦着**的那种，否则这整份文件问的问题就不
+  // 存在了：这道门的作用是「让一条本来会被拒的验证命令，因为人批过计划而放行」，拿一条
+  // 本来就放行的命令去问，不管有没有批准都是绿的，测试什么也没守住。I-144 拆掉解释器墙
+  // 之后 `node checker.cjs` 正是变成了后者，所以换成打本地服务健康检查的 curl ——
+  // curl 在下载器族里，是单条命令（带重定向会先撞上「不许是命令串」那条），而且作为验证
+  // 手段本身讲得通。
+  const SCREENED = "curl -sS http://localhost:4173/health";
+
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "declared-verify-"));
     dirs.push(dir);
     mkdirSync(join(dir, "ideas"), { recursive: true });
-    write("node checker.cjs");
+    write(SCREENED);
   });
   afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -81,28 +89,27 @@ ideas:
     expect(decide(shell(command), dir).allow).toBe(false);
   });
 
-  it("without a current plan approval a declared command earns nothing", () => {
-    // node <脚本>.cjs 本来就是解释器那一条（D21）拦下的形状；只有人批过的计划才
-    // 让它作为验证命令通过。
-    expect(decide(shell("node checker.cjs"), dir).allow).toBe(false);
-    approvePlan();
-    expect(decide(shell("node checker.cjs"), dir).allow).toBe(true);
+  // 2026-09-16（I-146）：声明即放行，不再看批准 —— 一条单命令写进图里，代理在 Bash 里
+  // 本来也敲得出来。守卫留下的只有「必须是一条命令」那一道（下面那组测）。
+  it("a declared single command passes with no approval on file", () => {
+    expect(decide(shell(SCREENED), dir).allow).toBe(true);
   });
 
-  it("editing the declared command after the approval invalidates the allowance", () => {
-    approvePlan();
-    expect(decide(shell("node checker.cjs"), dir).allow).toBe(true);
-    write("node other.cjs");                          // 改一个字，计划快照就变了
-    expect(decide(shell("node other.cjs"), dir).allow).toBe(false);
+  it("only the command the graph declares is honoured; a sibling that is not declared meets the pattern screen", () => {
+    const other = "curl -sS http://localhost:4173/ready";
+    expect(decide(shell(other), dir).allow).toBe(false);
+    write(other);                                     // 改图，声明的换成了这条
+    expect(decide(shell(other), dir).allow).toBe(true);
+    expect(decide(shell(SCREENED), dir).allow).toBe(false);
   });
 
   it("only a doing idea's command counts, and only an exact match", () => {
     approvePlan();
-    writeFileSync(graphPath(dir), graphWith("node checker.cjs").replace("status: doing", "status: todo"));
-    expect(decide(shell("node checker.cjs"), dir).allow).toBe(false);
-    write("node checker.cjs");
+    writeFileSync(graphPath(dir), graphWith(SCREENED).replace("status: doing", "status: todo"));
+    expect(decide(shell(SCREENED), dir).allow).toBe(false);
+    write(SCREENED);
     approvePlan();
-    expect(decide(shell("node checker.cjs --extra"), dir).allow).toBe(false);
+    expect(decide(shell(`${SCREENED} --max-time 5`), dir).allow).toBe(false);
   });
 
   it("ordinary approved work still runs: npx vitest run <file> and the read-only screen", () => {

@@ -1,7 +1,8 @@
 version: 1
 project: ai-companion
 overview: >
-  把一个项目里的每个想法都写下来、连成一张能一层层点开来读的图，再让程序盯着流程走：想法没想清楚不许写代码，测试没先失败过不许写实现，计划没有人亲手回一句批准不许开工
+  把一个项目里的每个想法都写下来、连成一张能一层层点开来读的图，再让程序盯着流程走：想法没想清楚不许写代码，写的文件必须是这个想法的八问里点名的文件（2026-09-16
+  起不再要人工批准计划、不再要求测试先失败，见 I-146）
   —— 同一张图由 Claude Code、Cursor、Codex
   三个编码助手共用，装进哪个仓库都一样用。它要解决的是同一个根因：想法从来没被写下来过，只有代码被写下来了。
 
@@ -17,8 +18,8 @@ overview: >
 # 什么叫「这个项目做完了」（2026-08-25 由人在 /ccscan 第 2 步选定；
 # 2026-08-29 /ccthink 新增 I-068「改图即改项目」；
 # 2026-08-29 /ccthink 新增 I-075「共同基座：改一处三边生效」）
-endpoints: [ I-057, I-058, I-059, I-068, I-075 ]
-next_id: 130
+endpoints: [ I-057, I-058, I-059, I-068, I-075, I-142 ]
+next_id: 147
 
 ideas:
 
@@ -3119,7 +3120,7 @@ ideas:
     parent: I-109
   - id: I-103
     name: 网页上印出正在等你批：口令、关卡和被批内容的全文
-    status: todo
+    status: done
     needs:
       - I-102
       - I-079
@@ -3160,13 +3161,13 @@ ideas:
     code:
       - file: companion/ideas.ts
         symbol: render (submit 成功回调)
-        lines: "3002-3011"
+        lines: "3424-3433"
       - file: companion/ideas.ts
         symbol: render (verifyOf)
-        lines: "2296-2307"
+        lines: "2474-2478"
       - file: companion/ideas.ts
         symbol: render (worklist / 待答口令面板)
-        lines: "2314-2344"
+        lines: "2537-2573"
       - file: .devcompanion/tests/test_render_pending.test.ts
     verify:
       command: "npx vitest run --dir .devcompanion/tests test_render_pending"
@@ -3178,6 +3179,11 @@ ideas:
       - date: 2026-09-05
         by: new
         note: 创建
+      - date: 2026-09-12
+        note: status → doing
+      - date: 2026-09-12
+        note: 首页多一块「正在等你批」面板：口令、关卡、覆盖的想法、当前图重投影的全文，指纹对不上标已作废；提交回调显示服务端送回的签字口令；命令验证的想法卡片显示签字和
+          test_files，父页展开摘要同样
     parent: I-124
   - id: I-104
     name: 守卫看得见 agent 在驱动浏览器，冲着本地服务去的调用一律拦下
@@ -3255,7 +3261,7 @@ ideas:
     parent: I-121
   - id: I-105
     name: 裁决网页上的一次动作凭什么算人做的，并据此修订已有的两条裁决
-    status: todo
+    status: done
     needs:
       - I-104
     what: >
@@ -3283,6 +3289,12 @@ ideas:
       （automaticPresenceSimulation 默认为 true），所以指纹、面容和硬件密钥这条路同样是死的。 三，D26 和 D27
       各补一段落地情况：这次维持原判、多了哪条新证据，以及形同虚设的四种情况 —— 逃生开关打开、守卫看不见的出口（I-104 和 I-106
       补的正是这一类）、 守卫自己在归一化那一步崩掉、以及人不看内容就粘口令（这一条守卫一个字都管不着， 它正是 I-102 存在的全部理由）。
+      四（2026-09-09 补，I-139
+      的前提），同一行裁决再加一段「带外的例外」：上面说「唯一结构上成立的带外办法是第二台设备」，这一段把它写成条件而不是否决。
+      一个宿主（LifeCopilotBeta
+      的门户）有自己的登录，人过了登录之后宿主把人的那句原话连同一份凭证转给本地小服务的批准入口（I-139），这算人做的，
+      条件三条缺一不可：凭证只经环境变量交给小服务，不出现在页面、标准输出和记录里；宿主的登录不是 agent 能拿到的东西（密钥不进仓库、不进
+      agent 能读的文件）；回执只由引擎写，宿主不生成、不改写。三条里任何一条不成立，就退回本行原判：只能发起，不能落地。
     why_this_way: >
       为什么维持原判而不是想办法做成：三条证据都指向「本地服务分不出人和自动化」， 而唯一结构上成立的带外办法是第二台设备 ——
       对一个本地单人的想法图守卫，那是重型方案。 更要紧的是收益账：网页直接批准想省的九成，I-102 和 I-103 已经给了（内容送到人眼前，
@@ -3294,15 +3306,30 @@ ideas:
       下一轮一定会有人再提一次。 为什么是人工验收：这条的产出是散文，机器判不了它写清楚没有。
     code:
       - file: companion/FORMAT.md
+        symbol: D36
+        lines: "1149-1183"
+      - file: companion/FORMAT.md
+        symbol: D26 落地情况
+        lines: "949-953"
+      - file: companion/FORMAT.md
+        symbol: D27 落地情况
+        lines: "971-974"
     verify:
       manual: "找一个没参与这次讨论的人（或者你自己隔一个月之后）只读这三条裁决行，让他做两件事：一，照着理由里写的步骤自己把那个实测重跑一遍；二，用自己的\
         话说出这套批准机制防住了什么、明确防不住什么。两件里有一件做不到，就是没写清楚。"
+      signed_off: ccbuild 2026-09-12 —— 经一次性口令 CC-695FA878 批准；回执
+        ideas/.runtime/approvals/CC-695FA878.json
     future: >
       以后任何「看起来该做、查下来不该做」的事，都照这条的样子留一份带证据的否决记录 —— 项目里最贵的返工是同一个方案被反复提出、反复调研、反复否掉。
     log:
       - date: 2026-09-05
         by: new
         note: 创建
+      - date: 2026-09-10
+        note: status → doing
+      - date: 2026-09-12
+        note: 裁决表新增 D36（三段齐全：现状、裁决含带外例外三条件、理由含 2026-09-05 实测和四种形同虚设），D26、D27
+          各补一段落地情况；人工验收已签
     parent: I-122
   - id: I-106
     name: 三份接线清单补上取网页的工具，并让漏配这件事有测试守着
@@ -4277,3 +4304,829 @@ ideas:
           也套映射表，剩余检查同步覆盖这两处；FORMAT.md「四个位置」改成五个；test_apply_parent_tmp 4
           条先红后绿。待办：.companion/FORMAT.md 未同步（本想法未认领它，守卫拒写；安装器被宿主分类器拦），请人跑 npx tsx
           companion/install.ts --update，跑完 test_docs_truth 的逐字相同那条才会转绿
+  - id: I-130
+    name: 打开任何一页，不点开也知道它在讲什么、卡在哪、最近动过什么
+    status: todo
+    needs: []
+    what: >-
+      让网页上每一个想法自己把话说清楚：标题下面三条要点说明它在做什么，展开一行就看得到它下面还挂着哪些想法，受阻的想法印出为什么受阻，每一页最下面是这个想法和它子孙的改动时间线。
+    why: >-
+      今天要看懂一个想法，必须点进去把八个问题读完；受阻的想法只写着「受阻」两个字，谁也不知道被什么挡着；改动记录藏在每张卡片里，看不出最近这几天项目在动哪一块。把这张图发给没打开过这个仓库的人，他读不下去。
+    expected: >-
+      打开任何一层，标题下面有三条要点说清这一页在讲什么；展开一行能看到它自己的子想法有哪些、各是什么状态；受阻的想法带着一句「为什么受阻」；页面最下面按时间倒序列着这个想法和它子孙的每一次改动。
+    how: >-
+      三条要点导语（I-131）、展开行里列出它自己的子想法（I-132）、受阻原因（I-133）、每一页最下面的改动时间线（I-134）。四件都只改
+      companion/ideas.ts 里 render 那一段和它旁边的引擎函数，不新增文件、不新增依赖。
+    why_this_way: >-
+      这四件事本可以各挂各的，放在同一个想法下面是因为它们共用同一批只读派生物 —— 子想法清单（kidsOf）、状态计数（tally 加
+      countsOf）、取首句（行摘要和页头今天逐字相同的那条表达式）、可收起的折叠块（worklist）——
+      仓库里每一样都已经只有一份。归在一起，四次改动才会都从那一份取；分散进 I-123 和 I-124，第二份一定会长出来。另一条路是全塞进
+      I-124，被「每层最多七个」否掉，而且 I-124 讲的是「谁在等你处理」，和「这一页自己说清楚了没有」不是同一件事。
+    future: >-
+      往后再想在页面上多说一件事（比如某个想法的测试最近红过），加的是这一层下面的第五个想法，取的还是同一批派生物。
+    parent: I-110
+    code:
+      - file: companion/ideas.ts
+        symbol: render
+    verify:
+      {
+        manual: "打开
+          ideas/graph.html，点进任何一个想法：标题下面有三条要点；展开一个有子想法的行，看得见它的下一层；受阻的想法带着一句原因；页\
+          面最下面是按时间倒序的改动列表",
+        signed_off: null
+      }
+  - id: I-131
+    name: 每一页顶上用三条要点说清这一页的想法，由程序从八个问题和前后关系里自动总结
+    status: todo
+    needs: []
+    what: >-
+      在标题和流程图之间，用三条要点回答「这一页这个想法到底在讲什么」：程序从它的八个问题，加上它的前置、后继、父想法和子想法完成情况里自动抽出这三句，不新增任何要人手写的字段。
+    why: >-
+      今天那个位置只有「是什么」的第一行 —— 一句掐头去尾的话。读的人还是得点开八个问题，才知道这个想法在做什么、为什么做、做完算什么样。
+    expected: >-
+      点进任何一个想法，标题下面稳定出现三条要点；八十九个已有想法一个字都不用回填；换一个想法，三条要点跟着换。
+    how: >-
+      扩 companion/ideas.ts 的 showHeader —— 它是页面上唯一的页头重绘点，换页和地址栏变化都走它 ——
+      在面包屑和流程图之间插一个只读块，写进三条要点：第一条是「是什么」的首句，第二条是「预期结果」的首句，第三条是算出来的图上事实（归在哪个想法下面、直接子想法做完几个写成「2/4」并写明数的是直接子想法、还在等哪几个没做完的前置、它挡着谁）。取首句沿用页面里已有的那条表达式（行摘要和页头今天逐字相同），先按段落边界再按句号，带缩写守卫；取不到就退回上一问，再取不到就写「这个想法还没写清楚」，不编。关系数据从
+      snapshot 和 pageGraph 派生，不新建索引；八个问题的措辞从 QUESTIONS
+      取。整块无编号、无定位标记，和展开行的只读摘要一样，对编辑、草稿和签字三套按编号找元素的机制不可见。超过五十词在渲染时报一句警告，不做静默截断。
+    why_this_way: >-
+      调研查了四类现成做法。Jira、Linear、Notion、Backstage 都不自动总结散文，那行字必须人手写 ——
+      照抄等于给八十九个想法各回填一段，这条已经被否掉。文档生成器（Sphinx、rustdoc、Doxygen）确实做首句抽取，但三家都把它当成「人没写摘要时的兜底」，Doxygen
+      默认还关着；所以只抄它的算法（Sphinx 的 extract_summary
+      约十五行，含缩写守卫），不抄它的地位。第三条要点交给算出来的事实而不是交给总结，理由来自 ACL 2023
+      那份抽取式摘要不忠实性的分类：从散文里抽的句子会歪曲原意，图上的事实不会，因为它根本不碰原文。「2/4」这个写法、以及「必须写明数的是直接子想法还是整棵子树」来自
+      Org mode；「说在等 2 个没做完的想法，而不是说有 3 条链接」来自 Linear ——
+      关系事实要按对端当前状态过滤，否则那个数字是死的。超长报警告而不静默截断，来自 Clippy 的做法。
+    future: >-
+      页面上任何一处「一句话说清一个想法」都可以调这三条要点 —— 展开行的摘要、待签清单的说明、将来发给别人看的分享页，不必各写一版。
+    parent: I-130
+    code:
+      - file: companion/ideas.ts
+        symbol: showHeader
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_render_header.test.ts",
+        test_files: [ .devcompanion/tests/test_render_header.test.ts ],
+        pass: "exit 0"
+      }
+  - id: I-132
+    name: 在父想法页面上展开一行，就能看到它自己的子想法有哪些、各是什么状态
+    status: todo
+    needs: []
+    what: >-
+      父想法页面上每个子想法是一行，点开能看它的八个问题、前置和改动记录；再给这个展开区补一节「它自己的子想法」，列出下一层的名称和状态，不换页就能往下多看一层。
+    why: >-
+      图上点一个节点会定位到本页那一行并展开，这条路已经通了；但展开之后看不到这个想法下面还挂着什么 ——
+      要知道它有没有子想法、做完了几个，只能点「进入」换页，看完再退回来。
+    expected: >-
+      展开任何一个有子想法的行，里面多出一节列着它的下一层；每一项都能点回那个想法；没有子想法的行不多出这一节。
+    how: >-
+      在 companion/ideas.ts 的 briefDetail 末尾加一节「它自己的子想法」：调同一个闭包里已有的 kidsOf 取下一层，用
+      links 产出跳转链接，用 STATUS_ZH 和 cls 给状态文字与配色；没有子想法就整节不输出。新那一节里不放 data-row ——
+      图上点节点定位到本页那一行用的正是 .children 下的 data-row 选择器，嵌套一个就把定位和四组断言一起打坏；子想法名字也不用
+      .bname 这个类名，改名同步的选择器是整份文档级的，会被夺走。整块继续保持无编号、无编辑标记、无签字标记。
+    why_this_way: >-
+      另外两条路在纸上都试过。一是把子想法也做成可展开的行（把行摘要递归下去），被定位方式否掉 —— 页面靠 data-row
+      找行，嵌套之后同一个编号会在页面上出现两次。二是让展开区直接嵌一整页，那会把可编辑的卡片复制一份出来，而编辑、草稿恢复、签字三套机制都按编号找元素，复制品一出现就有两个同号元素。所以只列名称和状态、只给链接，不给第二份可交互的东西
+      —— 这也正是这个展开区当初定下的规矩，测试已经用四条计数为零的断言封着。
+    future: >-
+      这一节一旦存在，图上点一个节点就能一路往下看两层而不换页；将来要在行里多显示派生信息（比如子想法的完成比例），加的是同一节里的一个字段。
+    parent: I-130
+    code:
+      - file: companion/ideas.ts
+        symbol: briefDetail
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_render_expand.test.ts",
+        test_files: [ .devcompanion/tests/test_render_expand.test.ts ],
+        pass: "exit 0"
+      }
+  - id: I-133
+    name: 受阻的想法必须写明为什么受阻，这句话印在八个问题下面
+    status: todo
+    needs: []
+    what: >-
+      给想法加一个显式字段装「为什么受阻」；状态是受阻却没写这句话，校验当场报出来；网页的卡片和展开行都在八个问题下面把它印出来。
+    why: >-
+      今天受阻的想法在命令行和网页上都只有「受阻」两个字。为什么停下来、要等到什么才能重新开始，只散落在修改记录里，而修改记录的最后一条不保证是在说这件事。本仓库现在有四个受阻的想法，没有一个说得出原因。
+    expected: >-
+      把一个想法设成受阻必须同时给出一句原因；校验会报出没写原因的受阻想法；网页上受阻的想法在八个问题下面多一行「受阻原因」；现有四个受阻想法各补上一句。
+    how: >-
+      给想法类型加一个可选字段 blocked_because，位置放在 status 旁边，不进八个问题那一行。强制只改一个函数：setStatus
+      是全仓库唯一给已有想法写状态的地方（命令行、网页信封、本地服务三条路都落到它），在那里判「转成受阻必须带一句原因」，命令行用 --because
+      传；行为字段被改而自动退回受阻的那条路已有现成文案，直接写进新字段。check
+      照「完成」那几条的模板加一条错误：状态是受阻却没有这句话就报出来，并点名是哪个想法。网页上卡片用 field
+      加一格（编辑态、转义、草稿接线全带），展开行手写一对标签和值，两处都排在第八问之后。不扩计划字段清单、不进八个问题的措辞表、不进
+      questionLines —— 它被批准提示共用，加一栏会踩中两条断言；命令行要印在八问下面，就在 show
+      的循环之后单独打一行。四个现有受阻想法的原因和校验规则同一次落地：守卫会把 check 的每条错误变成「会话不许结束」，先加规则后回填会把会话卡死。
+    why_this_way: >-
+      网上没有一个跟踪工具原生强制这件事 —— Jira 的 Flagged 是个锁死的布尔值，原因只能写在可选的评论里，要求把它变成必填的那张单子从
+      2021 年 11 月挂到今天、59 票、没实现；Trello
+      的自定义字段连条件必填都没有。所以没有产品可抄，只抄了实践里的两条：在状态转移的那一刻强制，而不是对静止的文件强制（Azure DevOps
+      把必填规则挂在状态变化上，本仓库的 setStatus
+      正好是这个位置）；以及条件校验必须自带一句点名的话，否则报错没人读得懂。两条被建议、我没有采纳：原因从固定分类里选 ——
+      它的收益是统计同一个原因反复出现，本仓库四个受阻想法还不到这个量；另存一个受阻起始日期 —— 那是白加的字段，setStatus
+      本来就会自动追一条带日期的修改记录，受阻多久从那里算得出来。两条都是明写的推迟，不是漏掉。
+    future: >-
+      「受阻」从一个状态变成一条说得出理由的记录，往后可以按原因归类、可以把受阻的想法连同原因排在页面最上面，也可以在原因指向另一个想法时把它变成一条真正的链接，随对方完成自动解除。
+    parent: I-130
+    code:
+      - file: companion/ideas.ts
+        symbol: setStatus · check · field
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_base_readiness.test.ts
+          .devcompanion/tests/test_base_engine.test.ts
+          .devcompanion/tests/test_render_expand.test.ts",
+        test_files:
+          [
+            .devcompanion/tests/test_base_readiness.test.ts,
+            .devcompanion/tests/test_base_engine.test.ts,
+            .devcompanion/tests/test_render_expand.test.ts
+          ],
+        pass: "exit 0"
+      }
+  - id: I-134
+    name: 每一页最下面列出这个想法和它子孙的改动，按时间倒序
+    status: todo
+    needs: []
+    what: >-
+      在每一页最下面加一块可以收起的改动时间线：把这一页的想法自己和它所有子孙想法的修改记录汇到一起，按日期从新到旧排，每一条都能点回是哪个想法被改了。首页汇的就是全项目。
+    why: >-
+      每个想法的修改记录今天藏在它自己那张卡片里。要知道最近几天项目在动哪一块，只能一张卡片一张卡片地翻。
+    expected: >-
+      每一页最下面出现一块按时间倒序的改动列表，只含这一页的想法和它的子孙；点一条能到那个想法；条目很多的时候不把页面撑爆。
+    how: >-
+      在 companion/ideas.ts 的 page 末尾、子想法那一块之后加一个折叠块：取这一页的想法自己加上 descendants
+      给出的全部子孙，把它们的修改记录合成一条时间线，按日期从新到旧排、按天分组，每条印日期、是谁改的、改了什么，并带一个跳回那个想法的链接。首页走同一条路，汇的就是全图。容器沿用
+      worklist 那种原生折叠元素（标题上带条数），行样式沿用已有的两族样式，一行 CSS 都不加。整块只读，不带编辑标记 ——
+      修改记录是生命周期字段，网页写回的白名单里没有它。不分页：全部渲染，把旧的收进一个默认合上的折叠元素，标题上写明确切的隐藏条数；折叠标题里不放标题元素。
+    why_this_way: >-
+      「条目多了怎么办」这一条是调研直接推翻原打算的地方。GitHub 那种「还有 N
+      条／加载更多」是为了省服务器往返，而这里是一个静态文件、根本没有服务器；社区讨论记录了它把页内查找和深链接打坏的经过。而从 Chrome M96
+      起，合上的折叠元素会因为页内查找、文本片段跳转和锚点导航自动展开 —— 所以「全部渲染 +
+      旧的收进合上的折叠元素」既不丢查找也不丢链接，还不用一行脚本。倒序加按天分组、每条汇上来的记录都要能点回具体那个子想法，来自 GitHub 和
+      Google Drive 的活动流；「汇不汇子孙必须是明确的两个参数、不能含糊」来自 Drive 活动接口把「这一个」和「这一支」分成两个参数的做法
+      —— 这里的选择是每一页都汇它自己的子孙，并在标题上写明。代价明写：同一条记录会静态复制进它每一级祖先的页面，现有两个索引已经在付这个代价。
+    future: >-
+      有了这条时间线，「最近谁在动哪一块」不必再问人；将来要按人筛、按日期跳，加的是同一块里的一个筛选，数据已经在页面上了。
+    parent: I-130
+    code:
+      - file: companion/ideas.ts
+        symbol: page
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_render_timeline.test.ts",
+        test_files: [ .devcompanion/tests/test_render_timeline.test.ts ],
+        pass: "exit 0"
+      }
+  - id: I-135
+    name: 子想法没有全部完成，父想法就不许标完成、也不许签字
+    status: done
+    needs: []
+    what: >-
+      给「完成」这道门加一条判定：一个想法只要还有子想法不是完成，它自己就不能被设成完成、不能提人工签字请求、人回口令也签不上，网页上那个签字按钮是灰的；每一处都说清还差哪几个子想法。
+    why: >-
+      今天父想法可以在子想法一个都没做完的时候先被标完成、先被签字，那个签名等于没有意义。这条规矩现在只写在几个父想法自己的人工验证句子里 ——
+      I-121 写着「七个子想法全部完成」、I-124 写着「六个子想法全部完成」——
+      那是手写的散文，没有任何程序在管它，而且一加子想法这句话就变成假话。
+    expected: >-
+      子想法没做完时，命令行标完成被拒并说出还差哪几个；提签字请求被拒；网页上人工签字的按钮变灰、旁边写明是哪几个子想法挡着；子想法全部完成之后这三处同时解锁；手写的「N
+      个子想法全部完成」不再需要有人去数。网页上的「完成」不在这个想法的范围里 —— 任何想法都改不出完成，那要有当前有效的 GREEN
+      证据，只能在命令行上完成（D20）。
+    how: >-
+      在 companion/ideas.ts 的 setStatus
+      里，「完成」分支已有的四道拦截后面加第五道：这个想法只要还有直接子想法不是完成，就拒绝，并点名还差哪几个。判定形状照 needsUnmet
+      逐字仿造（返回空或一句点名的话），只依赖图本身（parent 和 status
+      都在图里），因为不带项目目录的纯单元调用也走这个函数；把渲染闭包里私有的 kidsOf 和 parentKey
+      提到模块作用域共用，不写第二份「谁是谁的子想法」。签字侧堵两处：requestApproval
+      的人工检查前置块挡住发口令，applyApproval 写签字之前再判一次 ——
+      口令发出去之后子想法退回未完成，只挡第一处的话那句口令照样能落签。网页上把人工签字按钮置灰而不是藏起来、旁边用文字写明谁挡着；先把这个按钮改成调已有的
+      awaitingSignature，否则同一件事要改两处；灰掉的按钮不带 data-sign，签字面板就打不开。网页上的「完成」不碰 —— 那道门是
+      D20 的，任何想法都改不出完成。受阻的子想法按裁决算「没完成」，一样挡着。FORMAT.md 里「parent
+      是包含不是先后」那三处各补一句：父想法的完成蕴含它子想法全部完成，这是包含关系的直接后果，不是第二种先后关系；装在引擎旁边的那份副本同步。
+    why_this_way: >-
+      调研看过的每个工具都收敛到同一个骨架：状态带一个终态标记，不变量写在那个标记上，不写在某个叫「完成」的状态名上。抄不了的是它们的失败 —— Jira
+      和 Redmine
+      架构完全不同，用户抱怨一模一样，因为两家都把拦截做成「控件消失」，人分不清那是规矩还是缺陷；所以这里灰掉不藏掉，并且拒绝时点名。明确没抄的是「父想法完成时自动把子想法一起标完成」：Linear
+      做成默认关闭的选项，GitHub
+      直接拒绝了，理由是父想法完成推不出子想法都完成，有些子想法本来就是可选范围。只看直接子想法而不看整棵子树，是因为每一层各自守住之后整棵树自动成立，而拒绝的话能点名一个当前这一页就看得见的想法；两者等价的前提是全仓库只有
+      setStatus 一处能改状态，今天成立。受阻的子想法不算完成，是因为这套格式里「废弃」的归宿正是保留编号、置受阻、写明原因 ——
+      那是「这件事没做」的记录，不是「这件事办完了」；代价明写：一个废弃的子想法会一直挡着它的父想法，真被卡住时要么把它从图里删掉，要么另加一个「已取消」状态（网上更讲究的那条做法是子想法取消算满足父想法，但子想法全被取消的父想法应该算取消而不是完成），现在不做。
+    future: >-
+      这条规矩一落地，几个中间层想法上那种手写的「七个子想法全部完成」「六个子想法全部完成」就可以删掉 ——
+      不再需要有人去数，也不会因为多挂一个子想法就变成假话。往后每一个中间层想法都自动带着这道门。
+    parent: I-108
+    code:
+      - file: companion/ideas.ts
+        symbol: setStatus · applyApproval · verifyOf
+        lines: "768-804,995-999,1048-1067,1777-1783,2482-2492"
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_base_readiness.test.ts
+          .devcompanion/tests/test_base_approval.test.ts",
+        test_files:
+          [
+            .devcompanion/tests/test_base_readiness.test.ts,
+            .devcompanion/tests/test_base_approval.test.ts
+          ],
+        pass: "exit 0"
+      }
+    log:
+      - date: 2026-09-07
+        by: ccbuild
+        note: 开工：父想法的完成门与签字门
+      - date: 2026-09-07
+        by: ccbuild
+        note: 完成门与签字门落地：childrenUnfinished 一处判定，setStatus 第五道、requestApproval
+          挡发口令、applyApproval 挡落签、网页签字按钮置灰
+  - id: I-136
+    name: 多个仓库共用一个管理网站
+    status: todo
+    needs: []
+    what: >-
+      让人在任何设备上打开一个网址，看到自己所有装了这套工具的仓库的想法图；在那里改想法、给计划批准，各仓库拉取代码之后想法图文件已经是新内容，不用手碰
+      YAML。分工：这个仓库的引擎负责每个仓库自己的图页面、写回、批准和 git 提交；网址、登录、多仓库索引由门户仓库 LifeCopilotBeta
+      负责（它的想法图里 I-009 一支）。先在本机把两边接通，再搬到一台常开的机器上。
+    why: >-
+      仓库多了以后，没有一个地方能总览全部项目、在任何设备上直接管理它们。每个仓库的想法图只能在那台机器、那个目录里看和改。要的是一个共同的管理终端。
+    expected: >-
+      在门户里点进某个仓库的图，把一个想法改成受阻并写上原因，另一处检出的同一个仓库 git pull 之后 graph.yaml
+      里那个想法已经是受阻、原因也在；在门户的图页面上回一句批准口令，效力等同在终端里回。本机先跑通，再从手机上重复一遍。
+    how: >-
+      引擎侧三件事在本仓库：I-137 让本地小服务接上 git，I-138 把口令和回执搬进 git，I-139 开一个只认宿主凭证的批准入口（连带给
+      I-105 补一段）。门户侧在 LifeCopilotBeta 的想法图 I-009
+      一支：起子进程并代理（I-010）、项目页做最高层级（I-011）、登录（I-012）、
+      转发批准（I-013）、上常开机器（I-014）。做的顺序：I-137 → 门户 I-010、I-011 → I-138 → I-139 → 门户
+      I-013 → 本机终点 I-142 → 门户 I-014、I-015。companion/FORMAT.md
+      加一节「门户」，写清分工和三条边界：宿主凭证不出现在页面和日志里；同步和批准用的身份永远不是人的登录； 回执只由引擎写，门户不生成、不改写。
+    why_this_way: >-
+      为什么门户放在 LifeCopilotBeta 而不是让引擎自己长出多仓库索引：用户要最终合并进 LifeCopilot，而它已经有
+      graph_repos 扫描 （lifecopilot/graphs.py:82）、/projects
+      接口（lifecopilot/api.py:274）、FastAPI 和每分钟一次的后台任务；引擎再长一份就是两份。 为什么不走
+      Plane（2026-09-09 调研）：免费档的工作区 webhook 不能加请求头，叫不醒 GitHub
+      Actions；前置关系接口云端和自建版路径不同， 2024
+      年底还不存在；八个问题挤进工作项描述框，依赖图看不见；对应表、推、拉三块全是新代码。常开机器方案把 serve 和 graph.html
+      已经做完的编辑、签字、提交能力原样搬过去，新写的只有 git 三条命令、一个目录搬家和一个入口。为什么不用 rclone 同步到网盘：它只搬文件，
+      没有编辑界面，不产生 git 提交，而且和 git 里那份变成两个真相。
+    code:
+      - file: companion/FORMAT.md
+        symbol: 门户
+    verify:
+      manual: 只读 FORMAT.md「门户」一节，能用自己的话说出引擎和门户各管什么、三条边界是什么、为什么不走 Plane。
+      signed_off: null
+    future: >-
+      任何能起子进程、能代理 HTTP、有自己登录的宿主都能接上同一套引擎：别的网页、Discord 机器人、公司内网门户，引擎一行不改。
+  - id: I-137
+    name: >-
+      本地小服务接上 git：起服务前先拉取，写回成功后提交并推送，别的程序能把它当后台起起来
+    status: done
+    needs: []
+    what: >-
+      给 serve 加一个开关：打开时，每次渲染页面前先 git pull，每次写回成功后把 graph.yaml、log.md
+      和回执目录提交并推送；拉取或推送失败就把错误印在页面上，不吞掉。同时保证 serve
+      能被别的程序当后台进程起起来：指定端口、不开浏览器、把自己的地址和令牌打到标准输出的第一行，退出时干净。
+    why: >-
+      「各仓库 pull 之后已经更新」的前提是有人替人做了提交和推送。serve
+      已经是唯一接住网页改动的地方，让它顺手提交，就不用另造一条同步管道。门户要替每个仓库起一个
+      serve，所以它得像一个后台程序，而不是一个双击打开的窗口。
+    expected: >-
+      同一个仓库的两处检出：在一处的 serve 页面上改一个想法并提交，另一处 git pull 之后 graph.yaml 已是新内容，git log
+      多一条由 serve 写的提交；开关不打开时 serve 行为和今天一模一样，一个 git 命令都不跑。
+    how: >-
+      serve() 多一个选项 gitSync，命令行标志 --git-sync，默认关。开着时：GET / 渲染之前先跑 git pull
+      --ff-only，失败就回 503 的纯文本页，正文是 git 的错误输出；POST /changes 带 confirm 且
+      atomicWrite 成功之后，依次 git add ideas/graph.yaml ideas/log.md
+      ideas/approvals（后者存在才加）、git commit -m「网页写回 N 处（serve）」、git
+      push；任何一步失败不回滚文件，把错误放进响应的 git 字段并追加进 log.md。三条命令都走一个小函数 gitRun(projectDir,
+      args)，用 execFileSync，30 秒超时。后台契约不新加东西：--port、 --no-open
+      已有，标准输出第一行已经是「想法图开在 http://127.0.0.1:端口」，测试把这一行钉住，门户按它读地址。
+    why_this_way: >-
+      为什么放在 serve 而不是 apply：apply 是人手搬改动文件的路，提交由人自己做本来就合理；serve
+      是无人值守的路，只有它需要替人提交。 为什么 --ff-only 而不是合并：serve
+      不替人解决冲突，冲突就停下报出来，和信封指纹锁（FORMAT.md「The change file」baseDigest）同一个原则。 为什么
+      execFileSync 而不是 simple-git 之类的库：只有三条命令，而且单文件产物（D28）不为它多带一个依赖。为什么默认关：
+      本机双击打开的那份不该悄悄推送到远端。为什么不把令牌打到标准输出：页面自己带着令牌回来，门户是透明代理，不需要它。
+    code:
+      - file: companion/ideas.ts
+        symbol: serve
+        lines: "3653-3749"
+      - file: companion/ideas.ts
+        symbol: gitRun
+        lines: "3641-3651"
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_serve_git.test.ts
+      test_files: [ .devcompanion/tests/test_base_serve_git.test.ts ]
+      pass: "exit 0"
+    future: >-
+      常开机器上每个仓库一个 serve，就是完整的同步管道，不需要 CI，也不需要另一份守护进程。
+    parent: I-136
+    log:
+      - date: 2026-09-10
+        note: status → doing
+      - date: 2026-09-10
+        note: serve 加 --git-sync：渲染前 git pull --ff-only（失败回 503 印错误），写回后
+          add/commit/push（失败进响应 git 字段和 log.md）；gitRun
+          一个小函数；四条测试含两处检出往返和标准输出首行契约
+  - id: I-138
+    name: >-
+      批准回执有一份进 git：常开机器上产生的回执，人的电脑 pull 之后也认
+    status: done
+    needs: [ I-137, I-103 ]
+    what: >-
+      今天等待回答的口令和回执都只写在每台机器各自的 ideas/.runtime/，不进 git。把这两样搬进一个进 git 的目录
+      ideas/approvals/ （pending/ 放等回答的口令，receipts/ 放回执），守卫对它的保护和 .runtime/
+      一样：只能由 CLI 和 hook 写。旧目录 .runtime/approvals/ 里的回执继续算数，只读兼容。测试红绿证据不搬，留在
+      .runtime/。格式规范 D24 和「Generated files」清单补上这一条。
+    why: >-
+      口令在人的电脑上由 request-approval 生成，批准要在常开机器上回，回执又要回到人的电脑给 set doing 看。三处只有 git
+      相通。 口令不进 git，常开机器不知道有什么在等批；回执不进 git，人的电脑永远看不到那次批准，网页批准就等于没批。
+    expected: >-
+      在一处检出请批准并提交，另一处 pull 之后能回答那个口令、回执落在 ideas/approvals/receipts/；提交回去，第一处
+      pull 之后对同一个想法跑 set doing 放行；改了那个想法的内容再跑，照旧拒绝（回执绑内容这条不变）；agent 直接写
+      ideas/approvals/ 下任何文件被守卫拦下。
+    how: >-
+      paths() 多一个字段 approvals 指向 ideas/approvals；pendingDir 和 approvalsDir
+      改指向它下面的 pending/ 和 receipts/。 applyApproval 找口令文件时先看新目录，再看旧的
+      .runtime/pending/；validApproval 先扫 receipts/，再扫旧的 .runtime/approvals/。
+      decideProductWrite 把 ideas/approvals 加进「只能由 CLI 和 hook 产生」那一组，理由文字引
+      D24。回执里写进图的那句话（signed_off） 路径字样改成新目录。install.ts 的 GITIGNORE_SEED
+      不动：新目录本来就要进 git。FORMAT.md：D24 补一段落地情况，Generated files 清单加一行
+      ideas/approvals/。
+    why_this_way: >-
+      为什么口令文件也进 git 而不是只搬回执：常开机器要知道有哪些口令在等人回，而口令文件里只有关卡和内容指纹，request-approval
+      本来就把它们全文打到终端上（I-102），没有秘密。为什么不改成从内容算出来的确定性口令（那样不用搬文件）：它会改掉 D7/D26 的
+      「一次性、随机」语义，动的面比搬一个目录大得多。为什么红绿证据留在 .runtime/：那是这台机器跑过测试的证据，搬到别的机器上就不是证据了。
+      为什么旧目录只读兼容而不是迁移：已经存在的回执不多，扫两处比写一条迁移便宜。
+    code:
+      - file: companion/ideas.ts
+        symbol: paths
+        lines: "56-70"
+      - file: companion/ideas.ts
+        symbol: applyApproval
+        lines: "981-987, 1033-1050"
+      - file: companion/ideas.ts
+        symbol: validApproval
+        lines: "1110-1123"
+      - file: companion/ideas.ts
+        symbol: decideProductWrite
+        lines: "1327-1332"
+      - file: companion/FORMAT.md
+        symbol: D24
+        lines: "371-373, 935-946"
+      - file: .devcompanion/tests/test_base_approval.test.ts
+        symbol: 口令和回执的路径断言跟着搬到 ideas/approvals
+      - file: .devcompanion/tests/test_base_adapters.test.ts
+        symbol: 回执路径断言
+      - file: .devcompanion/tests/test_base_contract.test.ts
+        symbol: 回执路径断言
+      - file: .devcompanion/tests/test_base_engine_file_flag.test.ts
+        symbol: 口令路径断言
+      - file: .devcompanion/tests/test_base_engine.test.ts
+        symbol: paths 子命令多印 ideas/approvals
+      - file: .devcompanion/tests/test_render_pending.test.ts
+        symbol: 面板读新目录
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_approval_tracked.test.ts
+      test_files: [ .devcompanion/tests/test_base_approval_tracked.test.ts ]
+      pass: "exit 0"
+    future: >-
+      回执进 git 之后，谁在什么时候批了什么内容，成为仓库历史的一部分，git log 就能审。
+    parent: I-136
+    log:
+      - date: 2026-09-12
+        note: status → doing
+      - date: 2026-09-12
+        note: 口令和回执搬进进 git 的 ideas/approvals/{pending,receipts}，旧的 .runtime/
+          两处只读兼容；paths() 多 approvals；decideProductWrite 按 D24 保护新目录；FORMAT.md
+          D24 落地情况和 Generated files 补齐；六个旧测试的路径断言跟着搬
+  - id: I-139
+    name: >-
+      网页批准落地：小服务多一个只认宿主凭证的批准入口，走和终端同一条校验
+    status: done
+    needs: [ I-138, I-105 ]
+    what: >-
+      serve 多一个 POST /approve 入口，收人回的那一句「批准 CC-XXXXXXXX」和一份宿主凭证；凭证是门户起 serve
+      时通过环境变量交给它的一个随机串，页面里不出现、日志里不打印。校验和终端那条完全相同（口令存在、内容指纹没变、只用一次），通过就写回执到进 git
+      的目录。没有凭证或凭证不对，一律拒绝，和今天一样。
+    why: >-
+      用户要求批准也能在网页上做。I-105
+      裁的是本地页面分不出人和自动化，但它自己写了唯一结构上成立的办法是带外的第二处；门户的登录就是那第二处：人过了门户的登录，门户才把这句话连同凭证转给
+      serve，而 agent 既没有登录也没有凭证。所以这条不推翻 I-105，只给它加一段：带外登录之后的转发算数，条件是凭证不出现在页面和日志里。
+    expected: >-
+      带正确凭证发一句批准，回执落在进 git 的目录，set doing
+      放行；同一口令第二次发被拒；不带凭证、凭证错、或者内容改过之后发，都被拒且不留回执；serve 的页面源码和标准输出里搜不到那个凭证。
+    how: >-
+      serve() 启动时读环境变量 AIDEV_APPROVE_SECRET。没设：POST /approve 回
+      404，和今天没有这个入口一样。设了：请求体 {secret, words}， 用 timingSafeEqual 比较 secret，不对回
+      403；对了就调 applyApproval(projectDir, words, {date, session_id: "serve",
+      turn_id: 请求序号})， 把它的返回原样送回；返回 ok 且 gitSync 开着，就按 I-137 的路提交
+      ideas/approvals/。凭证不进 render 的输出、不进 console、不进
+      log.md；标准输出只多一行「批准入口已开」。I-105 的 how 加第四段：带外登录之后的转发算数，条件三条（凭证不出现在页面和日志里；
+      门户的登录不是 agent 能拿到的东西；回执只由引擎写）。FORMAT.md D26 补一段落地情况，引这三条。
+    why_this_way: >-
+      为什么凭证走环境变量而不是命令行参数：参数在任务管理器和 ps 里谁都看得见。为什么由 serve 收而不是门户直接跑
+      CLI：applyApproval 要在仓库所在的机器上跑，serve 就在那里；而且守卫拦 agent
+      打本地服务的规则（I-104）照旧对这个入口生效。为什么 ANSWER 正则一个字不改：
+      门户转发的就是人的那句原话，校验和终端完全相同，才能说「效力等同」。为什么没设环境变量就 404 而不是默认开：本机双击打开的那份不该多一个入口。
+    code:
+      - file: companion/ideas.ts
+        symbol: serve
+        lines: "3803-3805, 3882-3908, 3922, 4304"
+      - file: companion/FORMAT.md
+        symbol: D26
+        lines: "968-975"
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_serve_approve.test.ts
+      test_files: [ .devcompanion/tests/test_base_serve_approve.test.ts ]
+      pass: "exit 0"
+    future: >-
+      任何有自己登录的宿主都能接这道入口：Discord 机器人、MCP 服务器、公司内网门户，都是「登录之后转发那句原话」。
+    parent: I-136
+    log:
+      - date: 2026-09-12
+        note: status → doing
+      - date: 2026-09-12
+        note: serve 多 POST /approve：只在 AIDEV_APPROVE_SECRET 设了才开（否则 404），定长比较凭证（错
+          403、不消费），对了把原话交给 applyApproval（session_id 写 serve），git
+          同步开着就提交回执；凭证不进页面、响应和标准输出；D26 补落地情况
+  - id: I-142
+    name: >-
+      终点：本机两处检出，在门户里改一处想法、批一处计划，另一处 git pull 之后两处都已生效
+    status: todo
+    needs: [ I-138, I-137, I-139 ]
+    what: >-
+      一次真实演练，全在本机：同一个仓库检出两份，门户（LifeCopilotBeta）替第一份起
+      serve；在门户里改一个想法的文字、回一句批准口令；不手动跑任何引擎命令；到第二份检出 git pull，graph.yaml
+      里那处已改、那个想法 set doing 放行。搬上常开机器、从手机再演一遍，是门户那边的终点。
+    why: >-
+      这是整个顶层想法的验收标准，做不到就等于没做。
+    expected: >-
+      演练一次通过，两份检出的 git log 和 set doing 的输出留在记录里。
+    how: >-
+      人手按步骤做，不写代码：一，把本仓库 clone 两份到临时目录 A 和 B，共用一个 bare 远端；二，LifeCopilotBeta 的
+      graph_repos 指向 A， 起门户（门户 I-010 到 I-013 已完成）；三，浏览器打开门户，进本仓库的图，改一个想法的 what
+      并提交；四，在 A 的终端对那个想法 request-approval，提交口令文件；五，在门户页面回「批准 CC-XXXXXXXX」；六，到 B
+      里 git pull，看 graph.yaml 里那处已改，对那个想法跑 set doing 放行；七，把两边的 git log 和 set
+      的输出粘进 ideas/log.md 的 I-142 一段。
+    why_this_way: >-
+      为什么两份检出而不是一份：一份看不出「pull 之后生效」，两份才证明改动和回执真的经过了 git。为什么全在本机：常开机器和手机是门户那边的终点
+      （LifeCopilotBeta
+      I-015），引擎这边只证明链路通，不证明网络。为什么是人工验收：整条链跨两个仓库、一个浏览器和两处检出，机器判不了。
+    code:
+      - file: ideas/log.md
+        symbol: I-142 演练记录
+    verify:
+      manual: 按 how 的七步做一遍，第六步 set doing 放行，第七步记录在 log.md 里。
+      signed_off: null
+    future: >-
+      同一套七步换成常开机器和手机，就是 LifeCopilotBeta I-015 的演练。
+    parent: I-136
+  - id: I-143
+    name: 账本路径藏在引号里也算写账本：守卫按子串认，不只认整个参数
+    status: done
+    what: >-
+      账本保护那一层（批准回执、两份扫描清单、生成的网页、想法图、运行期证据）现在是按 shell 的「一个参数」认路径的：整个参数拿去
+      resolve，对得上五个受保护文件之一就拦。改成参数**内部**出现这些路径也算 —— `ideas/.approved`
+      写在一段带引号的代码里、拼在一个更长的字符串里，都照样拦下来，并且理由照旧点名是哪个文件。
+    why: >-
+      今天挡住 `node -e "require('fs').writeFileSync('ideas/.approved', …)"`
+      的**不是**账本保护，是解释器墙 —— 账本保护看见的是一整个 token，认不出藏在引号里的那段路径。I-144
+      要把解释器墙整条拆掉，墙一走，agent 就能自己给自己写批准回执、自己给人工验收签字，而 D23/D26
+      挡的正是这一件事。这一处加固是拆墙的前置，不是顺手的优化。
+    expected: >-
+      解释器一行流里点到五个账本文件之一的命令被拦，理由点名文件（和今天拦下来时说的话一样）；正常的读照旧放行 —— `cat
+      ideas/.approved`、`git diff ideas/graph.yaml`、`rg approved
+      companion/guard.ts` 都不受影响；参数里只是碰巧出现 `approved` 这类词、并不构成那五个路径的命令也不误拦。
+    how: >-
+      `protectedTargetRefusal` 加第三遍扫描，前两遍（命令参数、重定向目标）一个字不动。新增的一遍按**子串**问每个
+      chained command：把命令段里的反斜杠归一成斜杠，再对 `paths()`
+      给出的五个账本相对路径（`ideas/.approved`、`ideas/.scan-todo`、
+      `ideas/.scan-done`、`ideas/graph.html`、`ideas/graph.yaml`）加
+      `ideas/.runtime` 前缀做大小写不敏感的子串匹配。头是 `LOOKING_HEAD` 的命令段照旧跳过 —— 这是 `cat
+      ideas/.approved`、`git diff ideas/graph.yaml`、`rg -n "ideas/.approved"
+      companion/guard.ts` 不受影响的原因。拒绝理由复用现有那一句，照旧点名是哪个文件。
+    why_this_way: >-
+      抄的是 `engineScreen` /
+      `ENGINE_MENTION`（companion/guard.ts:1140、1196-1210）：对整行做子串测试、按 chained
+      command 分段、命令替换整段当不透明处理 —— 这一处不是新机制，是把守卫已经在用的同一招用到第二组文件上，两处将来一起改。
+
+      否决的备选一：真正解析 shell（bashlex / shell-quote 一类），像 CARE（arxiv
+      2607.21642）那样先归一化再解析、解析失败就 fail
+      closed。否决理由不是「更复杂」，是这个引擎把「装到别的仓库不需要装任何东西」写成设计前提（I-096 的整个理由），引一个 shell
+      解析器就破掉那个前提；而且解析也对付不了 `'ideas/.appro'+'ved'` 这种拼接，收益比看上去小。
+
+      否决的备选二：不拆解释器墙，让它继续替账本挡这一层 —— 那正是 I-144 要取消的东西，把前置当成理由是循环。
+
+      诚实的天花板，现在就写下来：子串匹配挡不住字符串拼接、base64、变量和 `sh -c` 嵌套。网上的测量研究（arxiv
+      2606.15549）把这类文本匹配的绕过结果明说成「下界」，业界结论是它不是安全边界、只是纵深防御；同样的 bug
+      别人踩过（gptme#3807：shell 操作符粘在 token 上，敏感路径检查失效）。本仓库自己早就这么说过 ——
+      R6「挡的是顺手跳过，不是铁了心要绕过去的 agent」。这一处就是那一类，价值在于自批准不再是一行顺手就能写出来的东西。
+    future: >-
+      账本文件名单只有一处（`paths()`），加一个受保护文件两处都自动跟上。真要把 shell 做成安全边界，方向是隔离 —— 给 agent
+      一个受限工作目录、账本放在它够不到的地方 —— 不是更长的正则。
+    parent: I-108
+    code:
+      - file: companion/guard.ts
+        symbol: mentionedLedger · protectedTargetRefusal
+        lines: "929-969,977-1000"
+    verify:
+      {
+        command: "npx vitest run
+          .devcompanion/tests/test_base_guard_shell_targets.test.ts",
+        test_files: [ .devcompanion/tests/test_base_guard_shell_targets.test.ts ],
+        pass: "exit 0"
+      }
+    log:
+      - date: 2026-09-14
+        by: new
+        note: 创建
+      - date: 2026-09-14
+        note: status → doing
+      - date: 2026-09-14
+        note: 账本屏幕加第三遍扫描 mentionedLedger：账本路径藏在参数内部（node -e 的引号里、反斜杠拼法）也按目标认，路径边界保住
+          graph.yaml.bak 这类邻居
+  - id: I-144
+    name: 拆掉解释器墙，scp 不再当下载器：守卫不再因为「把代码交给运行时」这件事本身拦人
+    status: done
+    needs:
+      - I-143
+    what: >-
+      把守卫 shell screen 的第五道门整条去掉：不再因为「把代码交给一个运行时」这件事本身拦命令。`python -c`、`python
+      脚本.py`、`node --eval`、`bash setup`、`deno run x.ts`、heredoc、输入重定向、`cat x.py
+      | python`、`pwsh -enc <base64>` 一律放行。同时 `scp`
+      从下载器族里去掉。墙一走，只为它存在的那块「本仓库安装器和打包入口豁免」也一起删 —— 门没了，豁免就没有对象。其余各道照旧：写文件动词族（cp /
+      mv / rm / sed -i / 重定向 / git 写盘子命令 / 包管理器 / curl · wget · rsync
+      等下载器）、账本文件保护（由 I-143 加固过）、引擎调用限制（手跑 guard 入口永远拒，D26）。
+    why: >-
+      日常工作被误拦。conda 环境跑 python、scp
+      往集群传文件，是这台机器上真实的工作方式；守卫把它们当成写文件招数拦下来，活干不了。这两条拦到的真实恶意写入接近于零，而摩擦每天都在发生 ——
+      本次会话里一条 `grep -rn "scp\|python…"` 就被第五道门拦下，那甚至是一次只读的搜索。
+    expected: >-
+      上面列出的每种解释器写法和 `scp` 都放行；账本文件和引擎调用两道照旧拦 —— 前面加一个解释器也绕不过去（`bash -c "cp
+      /tmp/forged ideas/.approved"`、`bash -c "node …companion.mjs guard"`
+      都拒），有测试锁着；FORMAT.md 里关于五道门的叙述与代码对得上，不留假话。
+
+      **写文件动词那一道说不出「照旧拦」这四个字**，说了就是假话：它只认命令头上那个词，所以 `pwsh -Command Remove-Item
+      src/a.ts`、`bash -c "cp /tmp/evil src/a.ts"` 一律放行。这是本次改动被接受的代价本身，不是遗漏 ——
+      断言写成「放行」，让它在测试里看得见，别粉饰成还拦着。
+    how: >-
+      主体是一次纯删除。`screenShell` 末尾那段 INTERPRETER 判定整段去掉；常量
+      `INTERPRETER`、`CODE_FLAG`、`COMMAND_HEAD`
+      删掉；只为这道门存在的安装器豁免一起删（`SANCTIONED_SCRIPT`、`sanctionedScript`、`INSTALL_PATHS`，以及
+      screenShell 里那块）。`MUTATING_HEAD` 的下载器那一行和 `DOWNLOADER_HEAD` 去掉 `scp`。
+
+      `INTERPRETER`
+      有**三个**读者，不是一个，所以「删掉常量」要点清：`screenShell`（删）、`inertStage`（去掉这一项，但
+      `PIPED_RUNTIME` 留着 —— 它答的是「这一段能不能蹭引擎调用的放行」，属 D28，不是这道墙）。而
+      **`INTERPRETER_NAME` 和 `LAUNCHER` 必须留下**：`ENGINE_INVOCATION`
+      靠它们认出「解释器后面跟着引擎文件」，那是 D26 立得住的形状，跟着删等于放开手跑 guard 入口自己造事件；两个常量的注释重新指向
+      ENGINE_INVOCATION。
+
+      **拆墙暴露出两个 D26 的真口子，一并补掉 —— 它们今天被墙顺手挡着，墙一走就是通的**：(1) `ENGINE_FILE` 的目录分支要求
+      companion 前面是路径分隔符，于是 `npx tsx claude-companion/ideas.ts
+      guard`（ENGINE_PATHS 里的遗留引擎路径）认不出来 —— 分支改成
+      `(?:claude-|cursor-)?companion[\\/](ideas|guard|cli)\.ts`；(2) 嵌套解释器 `bash
+      -c "node …companion.mjs guard"` 里引擎文件不在路径位置上，`ENGINE_INVOCATION` 认不出 —— 新增
+      `NESTED_ENGINE_INVOCATION`（解释器 + 至少一个旗标 + 后面任意位置出现引擎文件），要求带旗标是为了不误伤 `npx
+      tsx companion/ideas.ts check` 和 `cat companion/guard.ts`。代价明写：`node -e
+      "console.log('companion/guard.ts')"`
+      这种只打印路径的一行流也会被拒，方向和账本屏幕一致（拒错一次只是重打，漏一次是伪造批准）。
+
+      测试是**十个**文件，不是八个。真实波及面是把改动落地后跑整套量出来的，不是预先猜的：nested_repo（scp、管道右边的解释器）、rules（`python
+      -c`）、holes（脚本文件、`pwsh -Command Remove-Item`
+      那条代价、以及新增「前缀解释器碰不到账本和引擎」）、readonly（安装器豁免整条性质消失、命令替换、新增账本兜底）、shell_wall（整份文件的主题从「墙的口子」换成「墙拆掉之后哪些性质必须留着」）、engine_identity
+      与 message_truth（「任意脚本」不再是拒绝；带空格的未加引号路径本来就不是有效命令，不该拿它当身份检查的证据）、overblock 与
+      **declared_verify**（这两处的 fixture 命令 `node checker.cjs`
+      已经没有任何一道闸拦它，一条本来就放行的命令问不出「拒绝理由对不对」，换成仍被闸拦的单条命令 `curl -sS
+      http://localhost:4173/health`）、**test_docs_truth**（它比对源码 FORMAT.md
+      和安装副本逐字相同，所以 FORMAT.md 改完必须走一次 install 才会绿；这条在本次改动之前就是红的）。
+
+      FORMAT.md 讲五道门的那几段（第四屏）改成四道，装在引擎旁边的那份副本由 install 同步 —— 留着「有一道解释器墙」的叙述，正是
+      I-118 要消灭的那种假话。
+    why_this_way: >-
+      不新增任何东西：最短的改动就是删掉那道门本身，所以这里没有「借还是自建」的取舍，只有「删多少」。
+
+      为什么删整条，而不是只把 python 从名单里摘出来：名单这个形状本身是问题。守卫自己的注释就写着「这是护栏不是沙箱，enumeration
+      是墙的错误形状」（companion/guard.ts:662-666），而且上一轮光是补漏就往里加了八个动词。网上的结论一致（arxiv
+      2606.15549 denylist fragility；dev.to「为什么命令允许名单保护不了 coding
+      agent」）：一旦名单里有任何能跑别人代码的东西，参数检查就是表演。摘一个词，就是下次再摘一个词。
+
+      否决的备选：保留墙、加一个解释器白名单。否决理由是它要维护，而且第一次遇到 conda 的 `python.exe` 全路径、`py -3`、`uv
+      run python` 就又拦一次 —— 摩擦原封不动地回来。
+
+      代价明写，不藏：拆墙之后 `node -e "…"`、`python -c "…"` 写任何产品文件都不再经守卫。这条被接受，理由是 (a)
+      写产品文件本来还有编辑工具那条路在守卫下判，shell 这条从设计上就只是护栏；(b) 真正要命的那一个口子 —— 自己给自己写批准回执 —— 由
+      I-143 单独堵住，这也正是 I-143 是前置而不是并行的原因。
+    future: >-
+      守卫少一道门，往后读 shell 判决只要看四层：写文件动词、账本文件、引擎调用、重定向。真要把 shell
+      做成安全边界，方向是隔离而不是更长的名单。
+    parent: I-108
+    code:
+      - file: companion/guard.ts
+        symbol: screenShell · MUTATING_HEAD · DOWNLOADER_HEAD · ENGINE_FILE ·
+          NESTED_ENGINE_INVOCATION · inertStage
+        lines: "674-720,1165,1190-1209,1275-1282,1340-1385"
+      - file: companion/FORMAT.md
+        lines: "755-793,825-860"
+    verify:
+      {
+        command: "npx vitest run .devcompanion/tests/test_base_guard_nested_repo.test.ts
+          .devcompanion/tests/test_base_guard_rules.test.ts
+          .devcompanion/tests/test_base_guard_holes.test.ts
+          .devcompanion/tests/test_base_guard_readonly.test.ts
+          .devcompanion/tests/test_base_guard_shell_wall.test.ts
+          .devcompanion/tests/test_base_guard_engine_identity.test.ts
+          .devcompanion/tests/test_base_guard_message_truth.test.ts
+          .devcompanion/tests/test_base_guard_overblock.test.ts
+          .devcompanion/tests/test_base_guard_declared_verify.test.ts
+          .devcompanion/tests/test_docs_truth.test.ts",
+        test_files:
+          [
+            .devcompanion/tests/test_base_guard_nested_repo.test.ts,
+            .devcompanion/tests/test_base_guard_rules.test.ts,
+            .devcompanion/tests/test_base_guard_holes.test.ts,
+            .devcompanion/tests/test_base_guard_readonly.test.ts,
+            .devcompanion/tests/test_base_guard_shell_wall.test.ts,
+            .devcompanion/tests/test_base_guard_engine_identity.test.ts,
+            .devcompanion/tests/test_base_guard_message_truth.test.ts,
+            .devcompanion/tests/test_base_guard_overblock.test.ts,
+            .devcompanion/tests/test_base_guard_declared_verify.test.ts,
+            .devcompanion/tests/test_docs_truth.test.ts
+          ],
+        pass: "exit 0"
+      }
+    log:
+      - date: 2026-09-14
+        by: new
+        note: 创建
+      - date: 2026-09-14
+        note: status → doing
+      - date: 2026-09-14
+        note: 解释器墙整条删掉，scp 出下载器族；顺带补掉拆墙暴露的两个 D26 口子（claude-/cursor- 前缀引擎路径、bash -c
+          嵌套调用）；FORMAT.md 改成五道并写明代价
+  - id: I-145
+    name: 给测试套件定一个并发上限，几个助手同时跑测试也不会把开发机跑死
+    status: done
+    parent: I-112
+    what: >
+      在仓库根目录新建一个测试运行器的配置文件，同时定两件事：一是并发上限，二是把默认五秒的单测
+      超时抬高。谁来跑、用哪条命令跑，都受这同一份配置约束，不依赖任何人记得在命令行上多打参数。
+      两件事写在一个想法里，是因为它们是同一份配置文件的两半：不抬超时，套件本来就是红的， 「加了上限之后还绿着」这个断言根本没法成立。
+    why: >
+      测试运行器默认的并发数是「这台机器的处理器核数减一」—— 用户的开发机 24 核，一次就起 23 个 worker。实测一次完整跑的真实峰值是约
+      50 个可归因于测试的 node 进程、373 个线程、2225 MB 常驻内存，比 worker
+      数大一倍，因为五十六个测试文件里有十六个自己还要再启动真正的 node 子进程去跑引擎，而那些孙子进程不受 worker
+      上限管辖。Claude、Codex、Cursor 三个助手各跑一次
+      完整测试，用户的开发机直接卡死到没法操作。上限如果只存在于某个人记得手动加的命令行参数里， 等于不存在，而且图里六十七条验证命令一条都继承不到。
+      第二半：这个仓库一个测试运行器配置文件都没有，所以吃的是五秒默认单测超时，而那十六个文件要在 Windows 上启动 npx tsx
+      子进程，本来就慢 —— 现在固定有三个文件、九到十条测试因为撞这个五秒超时
+      而红着，和并发数毫无关系。不先把它修好，这个想法就没有一个能说「做完了」的绿。
+    expected: >
+      每个助手自己跑一次完整测试时，可归因的 node 进程峰值从约 50 降到十几个，线程从 373 降到一百 出头，常驻内存从 2225 MB
+      降到一千 MB 以内；三个助手同时跑的总占用相应降到约三分之一，机器仍然
+      能正常操作。三个原本因为五秒超时而红的文件（引擎、引擎命令面、本地小服务批准入口）变绿。 没有人需要记住额外的命令行参数或环境变量，直接跑 `npm
+      test`、`npx vitest run`，或者引擎的 run-check 跑图里任意一条验证命令，都自动受这份配置约束。
+      诚实的边界，必须写在这里：这个上限不跨会话组合 —— 三个助手各自受限，总量仍然是三份预算，
+      不是一份。要让多个会话共享同一份预算，需要另一个想法做跨会话租约。
+    how: >
+      在仓库根目录新建 vitest.config.ts，一个文件里两件事。并发上限借 Fission-AI/OpenSpec 的形状： 先读环境变量
+      VITEST_MAX_WORKERS，读不到才回落到硬编码的数字，这样临时调整不用改文件。超时借 rpamis/comet
+      的成对做法，同一个文件里把 testTimeout 和 hookTimeout 一起抬到三十秒。 硬编码那个数字不靠猜，按测试运行器官方
+      doctor 命令的办法测出来：先只加超时让套件真的绿，再从 当前有效值的一半开始减半实测（先 12、再
+      6），只有当这一档比当前最好成绩快百分之五以上才继续 往下减，把胜出的那一档写死进配置。在不绿的套件上测拐点，测的是超时次数不是并行度，所以顺序
+      不能反。 不写 poolOptions（测试运行器第 4 版已经删掉它，写了只打弃用告警）、不写 fileParallelism （它只是把上限压成
+      1 的别名）、不改 pool（forks 本来就是默认值，已经实跑确认）。 不动 package.json 的 test
+      脚本，也不动图里六十七条验证命令 —— 引擎跑验证命令时用仓库根当工作
+      目录（companion/ideas.ts:1455），配置会被自动继承，一条都不用改。 测试新建
+      .devcompanion/tests/test_base_test_concurrency.test.ts，调用测试运行器自己导出的
+      resolveConfig 读出真实生效的配置来断言，而不是去读配置文件的文本。
+    why_this_way: >
+      逐条说明考虑过什么、为什么没选它。 环境变量或命令行参数当最终形态：实测可行（VITEST_MAX_WORKERS=4 跑通了，峰值从约 50
+      降到约 16），但每次调用都要带，谁忘了谁就跑回默认，而且图里六十七条验证命令继承不到。所以它留作逃生口， 不当最终形态。 百分比写法
+      "50%"：测试运行器支持，但百分比是按机器算而不是给机器封顶，24 核仍然给 12；更要命的 是环境变量那条路径用 parseInt
+      解析，VITEST_MAX_WORKERS=50% 会变成 50 个 worker，是个能炸机器 的陷阱。不采纳。 按实测并行度定
+      4：这是我最早的建议，查不到任何成文依据，而且实测 4 比默认慢百分之二十三点七， 正是这条直觉的反例 ——
+      尾巴主导的套件里平均并发度被尾巴压低了，照它设上限会连带砍掉前二十秒真正 有用的宽扇出。两份独立基准（peterbe 的 jest
+      基准、模型上下文协议 inspector 的 issue 2336）都是 U 形曲线，最优点分别是 3/8 和 8/8，都不是百分之五十。所以改成按
+      doctor 的减半法测拐点。 只给那十六个起子进程的文件用文件级标签放宽超时：更精准，但要动十七处；全局三十秒一行就够，而且 三十秒比
+      rpamis/comet 用的一百二十秒更早报错，本地反馈不至于太钝。先用全局，不够再上标签。 复用仓库里 coordination.ts 的
+      withProjectLock：它是持有者只能有一个的互斥锁，不是能表达 N 个
+      名额的计数信号量；默认超时三秒、硬上限三十秒，对一次一百一十九秒的测试跑差两个数量级；而且它
+      自己的源码注释明文禁止跨测试跑持有（companion/coordination.ts:101）。三条各自独立地否掉它。 jobserver 协议或
+      Windows 的 Job Object：唯一能同时管住 worker 和孙子进程的机制，Windows 上 jobserver
+      本来就是一个进程间信号量。但 node 的测试生态一个实现都没有，要用就得在每个起子进程的 地方自己写取令牌还令牌，是真代码不是配置；Windows
+      侧的现成工具（jobrun、proclimit）分别停更在 2017 和 2019。这个方向记进以后的想法，不在本想法里做。
+      最慢文件优先排序：对尾巴主导的套件，这是比降并发严格更优的一步（测试运行器的 issue 1532）。
+      但它买的是速度不是机器占用，和本想法要解决的问题不是同一件事，另立想法更清楚。
+    code:
+      - file: vitest.config.ts
+        symbol: default export
+        lines: "28-36"
+      - file: .devcompanion/tests/test_base_test_concurrency.test.ts
+        lines: "36-59"
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_test_concurrency.test.ts
+        .devcompanion/tests/test_base_engine.test.ts
+        .devcompanion/tests/test_base_engine_cli_surface.test.ts
+        .devcompanion/tests/test_base_serve_approve.test.ts
+      test_files:
+        - .devcompanion/tests/test_base_test_concurrency.test.ts
+        - .devcompanion/tests/test_base_engine.test.ts
+        - .devcompanion/tests/test_base_engine_cli_surface.test.ts
+        - .devcompanion/tests/test_base_serve_approve.test.ts
+      pass: "exit 0"
+    future: >
+      仓库从此有了一份自带的测试运行器配置，后续任何关于怎么跑测试的决定都有地方落：拐点的实测结果、
+      慢文件优先排序、只给起子进程的文件放宽超时的标签定义。真正的跨会话并发预算（多个助手共享一份
+      名额，而不是各拿一份）也有了一个明确的挂靠点和一条已经写清楚的边界。
+    log:
+      - date: 2026-09-15
+        by: new
+        note: 创建
+      - date: 2026-09-15
+        by: ccthink
+        note: 用户确认高空对齐的三个答案；归在 I-112 同目录协作下面（机器资源是按文件认领保护不到的那类共享状态）；先记前三问，调研中
+      - date: 2026-09-15
+        by: ccthink
+        note: 四路调研完成。实测：基线 Duration 119.19s、可归因进程约 50、线程 373、内存 2225 MB；
+          VITEST_MAX_WORKERS=4 为 147.40s（慢 23.7%）、进程约 16、线程 122、内存 965 MB，没有测试
+          因此新变红。推翻了「按实测并行度定 4」这个最初建议（查无依据，且 4 慢 23.7% 就是反例）， 改成按官方 doctor
+          的减半法测拐点。用户拍板把「抬高五秒默认超时」算进本想法。借用清单： Fission-AI/OpenSpec
+          的环境变量逃生口形状、rpamis/comet 的上限与超时成对改法。已记边界： 单仓上限不跨会话组合（模型上下文协议 inspector
+          issue 2339）。verify 改用 vitest 自己导出的 resolveConfig 断言真实生效值，实跑确认今天返回
+          maxWorkers=undefined、testTimeout=5000， 所以这条断言今天就是红的。
+      - date: 2026-09-15
+        by: ccthink
+        note: 人以一次性口令 CC-245D053E 批准了这个想法的计划；八问齐全，ccthink 到此结束，交给 ccbuild
+      - date: 2026-09-15
+        note: status → doing
+      - date: 2026-09-15
+        note: 仓库根新建 vitest.config.ts：并发上限 6（按官方 doctor 的减半法实测 12/6/3 得出的拐点）加三十秒超时，环境变量
+          VITEST_MAX_WORKERS 可覆盖；测试用 vitest 自己的 resolveConfig 断言真实生效值
+
+  - id: I-146
+    name: 拆掉计划批准和测试先行两道闸：守卫只查写的文件是不是八问点名的文件
+    status: done
+    parent: I-108
+    log:
+      - date: 2026-09-16
+        by: Claude
+        note: 创建；用户说守卫过严，每个小想法、每处代码、每份文档都要批准，用起来很难受；同日实现并装回
+    what: >
+      守卫和引擎里所有以「这个想法的 plan 批准当前有效」为条件的门都拆掉：set doing 不再要口令，
+      写产品文件不再重查批准，run-check 和守卫放行图里声明的 verify.command 也不再看批准。
+      同时拆掉「写实现前必须先有一次失败记录」这道 RED 门：写实现文件不再等 red，green 不再等 red。
+      留下的是三样：D16 的认领（写的文件必须在某个 doing 想法的 code.file 或 verify.test_files 里）、
+      D20 的 done 要当前有效 GREEN、D27 的手工验收要人签字。request-approval、approvals/ 目录、
+      POST /approve、red-waiver 命令都保留不删。
+    why: >
+      用了十一天的真实感受：每一个小想法都要口令，改一个字口令就作废，加一行文档和改守卫核心一样贵。
+      三道闸叠在同一次写上（认领、批准、先红），代理为了过闸写必败的空测试，人为了过闸反复重批同一个
+      想法，两边都在应付流程而不是在想问题。人对守卫的期待其实只有一句：检查写的东西和八问是否一致。
+      hook 没有模型，能机器判定的一致只有第六问和第七问的路径 —— 那就是 D16，本来就在。
+    expected: >
+      一个想法从「建想法 → 填八问 → 请批准 → 人贴口令 → 写失败测试 → 写代码」变成「建想法 → 填八问 →
+      set doing → 写 → 跑绿 → set done」；写没被任何 doing 想法点名的文件仍然被拒，理由仍然说清该去补
+      code.file 还是 verify.test_files；done 仍然要绿；手工验收仍然要人签字。
+    how: >
+      companion/ideas.ts：decideProductWrite 去掉两处 validApproval 和一处 redGateReady，只留认领；
+      verifyCommandRefusal 只留 chainedCommandRefusal；runCheck 的 green 不再查 red 门；setStatus 进
+      doing 不再查批准；applyChanges 里「拿不到项目目录就拒 doing」那块删掉。companion/guard.ts：
+      ruleShell 里声明的单命令直接放行，去掉批准检查和那段「拦住它的不是命令本身」的长理由。
+      FORMAT.md 的 D7、D8、D17 各补一段修订；ccbuild、ccthink、ccfix 三份技能正文改流程；
+      对应测试改预期（九个文件），重建 bundle，--update 装回十个仓库。
+    why_this_way: >
+      考虑过三档：只放文档；批准只在 set doing 收一次并把 code.file/verify 在 doing 期间锁死；
+      全拆。用户选了全拆，理由是「其实就是检查一下写的东西和八问的要求是否一致」—— 批准这道门
+      本来守的是「代理写代码前一定有人看过计划」，但实测里人看的是口令不是计划，这条保证名存实亡；
+      与其留一道形式上的门，不如让人在渲染出的网页里随时看、不对就 set todo。锁 code.file 的方案
+      也放弃了：批准拆了之后它没有东西可保护。声明的 verify.command 不再要批准的理由：一条单命令代理
+      在 Bash 里本来就能敲，写进图里不多不少，D21/D28 的「必须是一条命令」原样保留。
+    code:
+      - file: companion/ideas.ts
+        symbol: decideProductWrite
+      - file: companion/ideas.ts
+        symbol: verifyCommandRefusal
+      - file: companion/ideas.ts
+        symbol: setStatus
+      - file: companion/guard.ts
+        symbol: ruleShell
+    verify:
+      command: npx vitest run .devcompanion/tests/test_base_guard_rules.test.ts .devcompanion/tests/test_base_readiness.test.ts .devcompanion/tests/test_base_engine_round4.test.ts .devcompanion/tests/test_base_guard_declared_verify.test.ts .devcompanion/tests/test_base_engine_runcheck.test.ts .devcompanion/tests/test_base_evidence.test.ts .devcompanion/tests/test_base_writeback.test.ts .devcompanion/tests/test_base_gap_closures.test.ts .devcompanion/tests/test_base_guard_overblock.test.ts
+      test_files:
+        - .devcompanion/tests/test_base_guard_rules.test.ts
+        - .devcompanion/tests/test_base_readiness.test.ts
+        - .devcompanion/tests/test_base_engine_round4.test.ts
+        - .devcompanion/tests/test_base_guard_declared_verify.test.ts
+        - .devcompanion/tests/test_base_engine_runcheck.test.ts
+        - .devcompanion/tests/test_base_evidence.test.ts
+        - .devcompanion/tests/test_base_writeback.test.ts
+        - .devcompanion/tests/test_base_gap_closures.test.ts
+        - .devcompanion/tests/test_base_guard_overblock.test.ts
+      pass: "exit 0"
+    future: >
+      用一阵之后如果发现代理经常写和八问不一致的东西，下一步不是把批准门装回来，而是让 ccfix 那一步
+      「对照八问逐条列出偏差」跑得更勤；如果确认没人想念，再清掉 request-approval、approvals/ 和
+      red-waiver。

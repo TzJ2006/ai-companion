@@ -12,7 +12,8 @@ import {
 } from "../../companion/ideas.js";
 
 // I-090 — Codex 版批准机制进入共同基座：一次性口令绑定内容摘要，只有整条消息
-// 就是「批准 CC-XXXXXXXX」的真实回复才消费得掉；回执由程序保管在 ideas/.runtime/。
+// 就是「批准 CC-XXXXXXXX」的真实回复才消费得掉；回执由程序保管在 ideas/approvals/
+//（I-138 之前在 ideas/.runtime/；进 git 是为了跨机器批准，见 D24 落地情况）。
 // 裁决依据：D7（一道常规关卡，按想法绑内容）、D26（一次性 challenge + 内容摘要 + 元数据）、
 // D27（人工验证只走 manual-check challenge）。
 describe("companion approval machinery (I-090)", () => {
@@ -68,7 +69,7 @@ ideas:
   it("requestApproval mints a CC-XXXXXXXX challenge bound to each named idea's digest", () => {
     const r = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     expect(r.challenge).toMatch(/^CC-[A-F0-9]{8}$/);
-    const pending = JSON.parse(readFileSync(join(paths(dir).runtime, "pending", `${r.challenge}.json`), "utf8"));
+    const pending = JSON.parse(readFileSync(join(paths(dir).approvals, "pending", `${r.challenge}.json`), "utf8"));
     expect(pending.v).toBe(2);
     expect(pending.gate).toBe("plan");
     expect(pending.snapshots).toEqual({ "I-002": approvalSnapshot(loadGraph(), "I-002") });
@@ -98,7 +99,7 @@ ideas:
   it("a token wrapped in prose consumes nothing", () => {
     const { challenge } = requestApproval(dir, loadGraph(), "plan", ["I-002"]);
     expect(applyApproval(dir, `我觉得可以，批准 ${challenge} 吧`, meta)).toBeNull();
-    expect(existsSync(join(paths(dir).runtime, "pending", `${challenge}.json`))).toBe(true);
+    expect(existsSync(join(paths(dir).approvals, "pending", `${challenge}.json`))).toBe(true);
   });
 
   it("approve consumes once: receipt written with provenance, replay fails", () => {
@@ -106,7 +107,7 @@ ideas:
     const first = applyApproval(dir, `批准 ${challenge}`, meta);
     expect(first?.ok).toBe(true);
 
-    const receipt = JSON.parse(readFileSync(join(paths(dir).runtime, "approvals", `${challenge}.json`), "utf8"));
+    const receipt = JSON.parse(readFileSync(join(paths(dir).approvals, "receipts", `${challenge}.json`), "utf8"));
     expect(receipt.decision).toBe("approved");
     expect(receipt.session_id).toBe("sess-1");
     expect(receipt.turn_id).toBe("turn-1");
@@ -127,7 +128,7 @@ ideas:
 
   // 旧版回执（v1：node_ids + 一份 snapshot）没有按想法的摘要，什么都证明不了。
   it("a v1 receipt on disk is not a valid approval", () => {
-    const dirPath = join(paths(dir).runtime, "approvals");
+    const dirPath = join(paths(dir).approvals, "receipts");
     mkdirSync(dirPath, { recursive: true });
     writeFileSync(join(dirPath, "CC-OLD00001.json"), JSON.stringify({
       v: 1, challenge: "CC-OLD00001", gate: "plan", node_ids: ["I-002"],
@@ -144,7 +145,7 @@ ideas:
     writeFileSync(file, readFileSync(file, "utf8").replace("how: H2", "how: H2改"));
     const r = applyApproval(dir, `批准 ${challenge}`, meta);
     expect(r?.ok).toBe(false);
-    expect(existsSync(join(paths(dir).runtime, "pending", `${challenge}.json`))).toBe(false); // 自毁
+    expect(existsSync(join(paths(dir).approvals, "pending", `${challenge}.json`))).toBe(false); // 自毁
   });
 
   it("validApproval re-derives on every use — drift after approval invalidates it", () => {
@@ -182,8 +183,8 @@ ideas:
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/CC-[A-F0-9]{8}/);
     expect(r.stdout).toMatch(/批准/);
-    const [name] = readdirSync(join(paths(dir).runtime, "pending"));
-    const pending = JSON.parse(readFileSync(join(paths(dir).runtime, "pending", name), "utf8"));
+    const [name] = readdirSync(join(paths(dir).approvals, "pending"));
+    const pending = JSON.parse(readFileSync(join(paths(dir).approvals, "pending", name), "utf8"));
     expect(pending.gate).toBe("plan");
     expect(Object.keys(pending.snapshots).sort()).toEqual(["I-001", "I-002"]);
   });
@@ -281,5 +282,91 @@ ideas:
     expect(r.stdout).not.toContain("[todo]");
     // 内容在前，口令在后 —— 人先读到要批的东西，再读到怎么回答。
     expect(r.stdout.indexOf("H2")).toBeLessThan(r.stdout.search(/CC-[A-F0-9]{8}/));
+  });
+});
+
+// I-135 的签字侧。完成门装在 setStatus 上还不够：人工验收的想法是靠签字关上的，
+// 而签字走的是另一条路（manual-check 口令 → 人回一句 → applyApproval 写 signed_off）。
+// 两处都要判，而且第二处才是真门 —— 全仓库只有 applyApproval 写得出 signed_off。
+describe("signing waits for the children (I-135)", () => {
+  let dir: string;
+  const dirs: string[] = [];
+  const meta = { date: "2026-09-07", session_id: "sess-2", turn_id: "turn-2" };
+
+  const yaml = (childStatus: string) => `version: 1
+project: fixture
+endpoints: []
+ideas:
+  - id: I-010
+    name: "要人亲眼验收的父想法"
+    status: doing
+    needs: []
+    what: W
+    why: Y
+    expected: E
+    how: H
+    why_this_way: T
+    future: F
+    code:
+      - file: src/parent.ts
+    verify: { manual: "打开页面亲眼看一遍", signed_off: null }
+  - id: I-011
+    name: "它的子想法"
+    status: ${childStatus}
+    needs: []
+    what: W
+    why: Y
+    expected: E
+    how: H
+    why_this_way: T
+    future: F
+    parent: I-010
+    code:
+      - file: src/child.ts
+    verify: { command: "npx vitest run tests/child.test.ts", test_files: [ tests/child.test.ts ], pass: "exit 0" }
+`;
+
+  const write = (text: string) => {
+    dir = mkdtempSync(join(tmpdir(), "sign-"));
+    dirs.push(dir);
+    mkdirSync(join(dir, "ideas"), { recursive: true });
+    writeFileSync(join(dir, "ideas", "graph.yaml"), text);
+  };
+  const signedOff = () =>
+    load(graphPath(dir)).graph.ideas.find((i) => i.id === "I-010")!.verify!.signed_off;
+
+  afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+
+  it("refuses to mint a manual-check challenge while a child is unfinished", () => {
+    write(yaml("todo"));
+    expect(() => requestApproval(dir, load(graphPath(dir)).graph, "manual-check", ["I-010"]))
+      .toThrow(/I-011/);
+  });
+
+  // 计划关卡不受这道门影响 —— 拦住「还没做完就先请人审计划」，整个 ccthink 当场就死了。
+  it("the plan gate is untouched — a parent with unfinished children still gets reviewed", () => {
+    write(yaml("todo"));
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "plan", ["I-010"]);
+    expect(applyApproval(dir, `批准 ${challenge}`, meta)?.ok).toBe(true);
+  });
+
+  it("signs normally once every child is done", () => {
+    write(yaml("done"));
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "manual-check", ["I-010"], { by: "张三" });
+    expect(applyApproval(dir, `批准 ${challenge}`, meta)?.ok).toBe(true);
+    expect(signedOff()).toBeTruthy();
+  });
+
+  // 这一条是整组的理由。口令发出时子想法是完成的，之后退回了 —— 而子想法的状态
+  // 不进父想法的内容摘要，所以漂移那道门看不见它。只挡「发口令」的实现会在这里落签。
+  it("refuses the signature when a child regressed after the challenge was minted", () => {
+    write(yaml("done"));
+    const { challenge } = requestApproval(dir, load(graphPath(dir)).graph, "manual-check", ["I-010"], { by: "张三" });
+    writeFileSync(graphPath(dir), readFileSync(graphPath(dir), "utf8").replace("status: done", "status: doing"));
+
+    const r = applyApproval(dir, `批准 ${challenge}`, meta);
+    expect(r?.ok).toBe(false);
+    expect(r?.reason).toMatch(/I-011/);
+    expect(signedOff()).toBeFalsy();
   });
 });

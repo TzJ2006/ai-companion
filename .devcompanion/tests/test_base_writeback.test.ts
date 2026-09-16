@@ -324,11 +324,11 @@ ideas:
     ops: [{ op: "status", id: "I-002", from: "todo", to: "doing" }],
   }, TODAY, dir);
 
-  it("没有人工批准，信封推不动 doing，而且话里点名去哪儿要批准", () => {
+  // 2026-09-16（I-146）：进 doing 不再要人工批准，信封和命令行一样直接推进。
+  it("没有人工批准，信封也推得动 doing", () => {
     const r = toDoing(project());
-    expect(r.ok, "一个批准都没有，改动文件却把想法推进了 doing").toBe(false);
-    expect(r.reason).toMatch(/request-approval --node I-002/);
-    expect(r.text).toBeUndefined();
+    expect(r.ok, r.reason).toBe(true);
+    expect(r.text).toContain("status: doing");
   });
 
   it("这个想法的批准齐了，同一份信封照常写得进去", () => {
@@ -343,11 +343,10 @@ ideas:
 
   // 没有项目目录就没有地方读批准回执，所以这里只能拒 —— 和 done 那条一样的
   // 道理（D20 的注释里写着：拿不到项目目录的调用方必须自己拒）。
-  it("拿不到项目目录时，doing 一律拒，而不是悄悄放行", () => {
+  it("拿不到项目目录时，doing 也照常：进 doing 的三个条件全在图里，不需要回执目录", () => {
     const r = toDoing(undefined);
-    expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/项目目录|request-approval/);
-    expect(r.text).toBeUndefined();
+    expect(r.ok, r.reason).toBe(true);
+    expect(r.text).toContain("status: doing");
   });
 });
 

@@ -87,7 +87,7 @@ ideas:
     const { code } = run(["request-approval", "--gate", "plan", "--node", "I-999",
       "--file", legacy, "--project", dir, "--date", "2026-09-02"]);
     expect(code).not.toBe(0);
-    const pending = join(dir, "ideas", ".runtime", "pending");
+    const pending = join(dir, "ideas", "approvals", "pending");
     expect(existsSync(pending) ? readdirSync(pending) : []).toEqual([]);
   });
 

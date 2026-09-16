@@ -238,7 +238,7 @@ ideas:
       { encoding: "utf8", shell: process.platform === "win32", timeout: 120_000 });
     expect(r.status).toBe(0);
     for (const name of ["ideas/graph.yaml", "ideas/graph.html", "ideas/log.md",
-      "ideas/.scan-todo", "ideas/.scan-done", "ideas/.approved", "ideas/.runtime"]) {
+      "ideas/.scan-todo", "ideas/.scan-done", "ideas/.approved", "ideas/.runtime", "ideas/approvals"]) {
       expect(r.stdout).toContain(name);
     }
     expect(r.stdout).not.toMatch(/\.claude|\.cursor|\.codex/);

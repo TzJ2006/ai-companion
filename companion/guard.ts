@@ -6,11 +6,10 @@
 // allowed in here.
 //
 // The rules, each adjudicated in companion/FORMAT.md:
-//   D16  a product file no ready `doing` idea claims is denied by default
-//   —    the doing idea's own test files are writable from the start:
-//        writing the failing test IS the only legal first move (D8)
-//   D7   implementation needs a current, content-bound plan approval
-//   D8   implementation needs a fresh RED — run-check recorded a real failure
+//   D16  a product file no ready `doing` idea claims is denied by default;
+//        the doing idea's own code and test files are writable from the start
+//        (2026-09-16 / I-146: the D7 approval re-check and the D8 RED gate
+//        came off the write door — see FORMAT.md D7/D8 修订)
 //   D24  runtime evidence, receipts, scan lists, generated html: CLI-only
 //   R2   the graph stays editable prose, but status/signed_off flips must go
 //        through `set` / a manual-check challenge (D27)
@@ -28,7 +27,7 @@ import { join, resolve, dirname } from "node:path";
 import { platform } from "node:process";
 import { parseDocument } from "yaml";
 import {
-  load, graphPath, paths, check, recordChange, decideProductWrite, validApproval, SUBCOMMANDS,
+  load, graphPath, paths, check, recordChange, decideProductWrite, SUBCOMMANDS,
   chainedCommandRefusal,
   type Graph, type Status,
 } from "./ideas.js";
@@ -707,10 +706,17 @@ const MUTATING_HEAD = new RegExp([
   // way the copy family above is; the cost, stated: a read-only `curl` that
   // prints a URL to stdout is refused with them — reading a URL is the agent's
   // own fetch tool's job, not a shell write's (D21).
-  String.raw`^(curl|wget|aria2c|scp|rsync|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)(\.exe)?\b`,
+  // `scp` stood on this list until I-144 and is deliberately gone. What it was
+  // doing here was true — `scp remote:/tmp/a.ts src/a.ts` lands a file exactly as
+  // `cp` does — and the cost is accepted rather than denied: on this machine
+  // copying files to and from a cluster is the ordinary way work gets done, and a
+  // guardrail that refuses it every day to stop an attack nobody has mounted is
+  // paying its cost in the wrong currency. `rsync` stays: the owner's decision
+  // named scp and only scp, and widening it is theirs to make, not this line's.
+  String.raw`^(curl|wget|aria2c|rsync|iwr|irm|Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer)(\.exe)?\b`,
 ].join("|"), "i");
 
-const DOWNLOADER_HEAD = /^(curl|wget|aria2c|scp|rsync|iwr|irm|Invoke-)/i;
+const DOWNLOADER_HEAD = /^(curl|wget|aria2c|rsync|iwr|irm|Invoke-)/i;
 
 /** `git commit`, however many global options stand between the two words. The
  *  one verb on the mutating list that records HISTORY rather than landing a
@@ -927,11 +933,53 @@ const LOOKING_HEAD = new RegExp([
   String.raw`^(basename|dirname|realpath|readlink|start|open|xdg-open|explorer|Invoke-Item|ii)$`,
 ].join("|"), "i");
 
+/** The same ledger file, spelled INSIDE an argument rather than as one. The pass
+ *  above asks whether a token IS a ledger path — it resolves the whole token, so
+ *  `node -e "…writeFileSync('ideas/.approved',…)"` hides the path in a quoted run
+ *  of code, resolves to nothing, and walked straight through. Until now the only
+ *  thing refusing that line was the interpreter wall; that wall is gone (I-144),
+ *  so this layer has to hold on its own or an agent writes its own approval
+ *  receipt in one line (D23/D24/D26).
+ *
+ *  The technique is not new here — it is the one the engine's own screen already
+ *  uses (ENGINE_MENTION / engineScreen): a substring test over the command. Two
+ *  things it insists on. The paths come from `paths()` rather than being retyped,
+ *  so a new protected file lands in BOTH passes at once (D11). And the match has
+ *  to end on a path BOUNDARY: `ideas/.runtime/I-001.json` is the runtime evidence,
+ *  while `ideas/graph.yaml.bak` and `ideas/.approved-old` are other files and must
+ *  stay writable — matching by bare prefix would refuse them.
+ *
+ *  Its ceiling, stated rather than hidden: `'ideas/.appro'+'ved'`, a base64 blob,
+ *  a variable and a nested `sh -c` all walk past a substring. That is R6's own
+ *  position — this stops the shortcut taken without thinking, not an agent that
+ *  has decided to get around it. Making it a real boundary means isolation (the
+ *  ledger somewhere the agent cannot reach), not a longer regex. */
+function mentionedLedger(projectDir: string, part: string): [string, string] | null {
+  const line = part.replaceAll("\\", "/");
+  const lower = line.toLowerCase();
+  const p = paths(projectDir);
+  const ledger: [string, string][] = [
+    [p.approved, "批准回执"], [p.worklist, "扫描清单"], [p.done, "已读记录"],
+    [p.html, "生成的网页"], [p.graph, "想法图"], [p.runtime, "运行期证据"],
+  ];
+  for (const [file, label] of ledger) {
+    const needle = relTo(projectDir, file).replaceAll("\\", "/");
+    const at = lower.indexOf(needle.toLowerCase());
+    if (at < 0) continue;
+    // Case-insensitive on every platform on purpose: being wrong that way costs a
+    // refusal, being wrong the other way costs a forged approval (D9's direction).
+    if (/[A-Za-z0-9_.\-]/.test(line[at + needle.length] ?? "")) continue;
+    return [label, needle];
+  }
+  return null;
+}
+
 /** The protected-evidence screen: a refusal naming the FILE, or null when the
- *  line goes nowhere near one. Two passes, because a write names its target in
- *  two places: an argument of a command whose head is not a reader, and the file
+ *  line goes nowhere near one. Three passes, because a write names its target in
+ *  three places: an argument of a command whose head is not a reader, the file
  *  after a redirect operator — that one whatever the head is, since `cat x >
- *  ideas/.approved` reads at the front and writes at the back (D21/D24). */
+ *  ideas/.approved` reads at the front and writes at the back (D21/D24) — and,
+ *  since I-143, anywhere inside a command whose head is not a reader. */
 function protectedTargetRefusal(command: string, projectDir: string): string | null {
   const hits: [string, string][] = [];
   for (const part of shellCommands(command)) {
@@ -942,6 +990,8 @@ function protectedTargetRefusal(command: string, projectDir: string): string | n
       const label = protectedTarget(projectDir, token);
       if (label) hits.push([label, token]);
     }
+    const mentioned = mentionedLedger(projectDir, part);
+    if (mentioned) hits.push(mentioned);
   }
   for (const hit of command.matchAll(REDIRECT_TARGET)) {
     const label = protectedTarget(projectDir, hit[1]);
@@ -955,51 +1005,27 @@ function protectedTargetRefusal(command: string, projectDir: string): string | n
     + `看它照常放行 —— cat / rg / gc / sls / git diff / git add ideas/graph.yaml 都不拦。`;
 }
 
+/** The runtimes a program can be handed to. This list no longer gates anything on
+ *  its own — D21's interpreter wall, which used to ask «is code being handed to a
+ *  runtime?» and refuse when the answer was yes, was removed whole by I-144: on
+ *  this machine `python` and a script file are how work gets done, and a list is
+ *  the wrong shape for a wall anyway (the same thing MUTATING_HEAD's own comment
+ *  says out loud, and the same thing the measurements on denylist fragility found).
+ *
+ *  It survives for ONE reader, and the distinction matters: ENGINE_INVOCATION uses
+ *  it to recognise the engine standing where a PROGRAM goes — `node
+ *  .companion/companion.mjs guard` — because a hand-run hook entry is a
+ *  hand-written event, and that is how an agent mints its own approval receipt
+ *  (D26). So this is not dead code left behind by a deletion; deleting it opens
+ *  that door. Keep it in step with the runtimes that can launch the engine, not
+ *  with the runtimes an agent might use. */
 const INTERPRETER_NAME = String.raw`(python[0-9.]*|py|node|nodejs|deno|bun|ruby|perl|tsx|ts-node|bash|sh|zsh|pwsh|powershell|iex|Invoke-Expression)`;
 
 /** The launchers an interpreter arrives behind. They change nothing about what
- *  is being run: `npx tsx`, `sudo -E bash`, `env node` are the interpreter. */
+ *  is being run: `npx tsx`, `sudo -E bash`, `env node` are the interpreter. Read
+ *  by ENGINE_INVOCATION for the same reason as INTERPRETER_NAME above — `sudo npx
+ *  tsx companion/guard.ts` has to be seen as the engine (D26). */
 const LAUNCHER = String.raw`((sudo|npx|bunx|command|env|exec|time|nohup)([ \t]+-\S+)*[ \t]+)*`;
-
-/** Where one command begins — the line, or just after a separator. Only the
- *  operand branch below uses it, and it is why that branch does not read
- *  `rg node companion/guard.ts` (grep for the word "node") as running node. */
-const COMMAND_HEAD = String.raw`(^|[;&|(\r\n\`])[\s;&|(]*`;
-
-/** A flag whose argument IS the code. Named as families rather than as the five
- *  spellings that used to stand here (`-c`, `-e`, `-File`, `-Command`,
- *  `-EncodedCommand`), which missed every long form — `--eval`, `--print`, the
- *  short `-p` — and PowerShell's usual base64 spellings `-enc` / `-ec` (D21). */
-const CODE_FLAG = String.raw`-{1,2}(c(ommand)?|e(val)?|enc(odedcommand)?|ec|p(rint)?|f(ile)?)\b`;
-
-/** An interpreter, however it is fed. What is caught is the ACT of handing code
- *  to a runtime, not a list of spellings for it (D21): a flag whose argument is
- *  the code; a script named by a known extension; an interpreter INVOKED with
- *  any operand at all — an extensionless script (`bash setup`), a subcommand
- *  and then a script (`deno run patch.ts`), a base64 blob; a heredoc or an input
- *  redirect; and the receiving end of a pipe, where the program arrives on stdin
- *  with no flag and no name at all — the shape that carried the whole
- *  `curl … | bash` idiom. Ordinary pipelines are untouched: `… | grep node` ends
- *  in grep, not node.
- *
- *  What this still cannot see, said out loud rather than pretended away:
- *  an interpreter reached through a variable, an alias or a wrapper of its own
- *  (`$SHELL x.sh`, `./run.sh`, a Makefile target); a runtime whose name is not
- *  on the list above (awk, php, osascript, java, Rscript …) — that list is a
- *  list, and that is exactly its limit; code handed over through the environment
- *  instead of the command line (`PYTHONSTARTUP=…`); and, for the operand branch
- *  alone, an invocation that is not at the head of a command
- *  (`xargs -n1 bash setup`), which is the price of not refusing every grep for
- *  the word "node". PowerShell also accepts any unambiguous ABBREVIATION of a
- *  parameter name, so no flag list can ever be complete — the operand branch is
- *  what actually holds that door. */
-const INTERPRETER = new RegExp([
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s+(-\S+\s+)*${CODE_FLAG}`,
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s+(-\S+\s+)*\S+\.(py|js|mjs|cjs|ts|mts|cts|tsx|jsx|rb|pl|sh|bash|zsh|ps1|psm1|bat|cmd)\b`,
-  String.raw`${COMMAND_HEAD}${LAUNCHER}${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)*[^-\s;&|<>]`,
-  String.raw`(^|[\s;&|(])${INTERPRETER_NAME}(\.exe)?\s*<`,
-  String.raw`\|[ \t]*${LAUNCHER}${INTERPRETER_NAME}(\.exe)?\b`,
-].join("|"), "i");
 
 /** Every subcommand the engine actually offers, READ OFF the engine's own table
  *  rather than retyped (D11/D28): the hand-kept copy that used to stand here had
@@ -1077,21 +1103,10 @@ const ENGINE_PATHS = [
   "cursor-companion/ideas.ts",
 ];
 
-/** The install and build entry points this repository owns, on the same terms.
- *  All THREE implementations' installers are here, not just the shared base's:
- *  `claude-companion/install.ts` was what this repository's own CLAUDE.md
- *  documented as the way to install when this entry landed, and the interpreter
- *  wall was refusing it — a wall that blocks the documented command teaches the
- *  human that the documentation is wrong (D21/D28). That directory is gone and
- *  CLAUDE.md documents no install command any more; the last two entries stay
- *  only for an older checkout that still has them. Codex is installed as a
- *  plugin and owns no install script, so it has no entry to add. */
-const INSTALL_PATHS = [
-  "companion/install.ts",
-  "companion/build.mjs",
-  "claude-companion/install.ts",
-  "cursor-companion/install.ts",
-];
+// INSTALL_PATHS stood here — the install and build entry points this repository
+// owns, listed so the interpreter wall could let them back in. I-144 removed the
+// wall, so the list has nothing left to except them from and is gone with it. See
+// the note above ruleShell for why keeping it would have made the guard lie.
 
 /** Is the path this command names THAT file, or merely a file spelled like it?
  *  The token is resolved against the PROJECT ROOT first, so a quoted path is a
@@ -1137,7 +1152,16 @@ const SMUGGLED_TAIL = /[\r\n]|\$\(|`/;
 /** Any mention of the engine's own files. Matching this and NOT the allowlist
  *  above is a deny, never a fall-through: heredocs and redirects into the engine
  *  are exactly the shapes the allowlist cannot vouch for (D26). */
-const ENGINE_FILE = String.raw`(companion\.mjs|companion\.js|companion\.py|companion[\\/](ideas|guard|cli)\.ts)`;
+//  The `claude-` / `cursor-` prefixes are not decoration: ENGINE_PATHS still lists
+//  `claude-companion/ideas.ts` and `cursor-companion/ideas.ts` for a checkout from
+//  before the base was unified, and without them the directory branch below reads
+//  `claude-companion/ideas.ts` as an ordinary file. That went unnoticed while the
+//  interpreter wall refused every `.ts` script anyway; I-144 removed that wall and
+//  the hole showed itself immediately — `npx tsx claude-companion/ideas.ts guard`
+//  is the hook entry, hand-run, which is how an agent writes its own approval
+//  receipt (D26). Named exactly, so an unrelated `my-companion.mjs` stays an
+//  unrelated script.
+const ENGINE_FILE = String.raw`(companion\.mjs|companion\.js|companion\.py|(?:claude-|cursor-)?companion[\\/](ideas|guard|cli)\.ts)`;
 const ENGINE_MENTION = new RegExp(ENGINE_FILE, "i");
 
 /** …except LOOKING at the engine. What D26 stops is an agent feeding a synthetic
@@ -1161,6 +1185,27 @@ const ENGINE_MENTION = new RegExp(ENGINE_FILE, "i");
  *  door through it. */
 const ENGINE_INVOCATION = new RegExp(
   String.raw`^[\s(]*${LAUNCHER}(${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)*)?["']?(\S*[\\/])?${ENGINE_FILE}`, "i");
+
+/** …and the same invocation one runtime deeper: `bash -c "node …/companion.mjs
+ *  guard"`. The shape above needs the engine to stand where a path stands, so a
+ *  nested spelling put a whole command inside an argument and walked past it. The
+ *  interpreter wall used to catch that by refusing `bash -c` outright; I-144
+ *  removed the wall, so D26 has to recognise the nesting itself — otherwise one
+ *  extra token reopens the hand-run hook entry, which is the door the approval
+ *  receipt is behind.
+ *
+ *  A FLAG is required before the engine, and that is what keeps this narrow: an
+ *  ordinary engine call (`npx tsx companion/ideas.ts check`) has no flag in front
+ *  of the path and is judged by the allowlist as before, while `cat
+ *  companion/guard.ts` is no interpreter at all. The over-block it does buy is
+ *  stated plainly: `node -e "console.log('companion/guard.ts')"` — a one-liner
+ *  that merely PRINTS the path — is refused too, because from a string this screen
+ *  cannot tell a mention from an invocation. That trade goes the same way the
+ *  ledger screen's does: a refusal costs a retype, a miss costs a forged
+ *  approval (D9's direction). Deeper nestings (base64, a variable, `sh -c sh -c`)
+ *  still walk past, as R6 already says out loud. */
+const NESTED_ENGINE_INVOCATION = new RegExp(
+  String.raw`^[\s(]*${LAUNCHER}${INTERPRETER_NAME}(\.exe)?[ \t]+(-\S+[ \t]+)+["']?[^\r\n]*?${ENGINE_FILE}`, "i");
 
 /** Second, writing the engine by a verb MUTATING_HEAD has none of its own for.
  *  `find <engine file> -delete` is a mutation wearing a search — and that is now
@@ -1202,7 +1247,7 @@ function engineScreen(command: string): string | null {
     if (ENGINE_WRITE.test(part)) {
       return `这一段是在改引擎自己的文件，不是在看它（D21/D26）：「${part.slice(0, 80)}」。引擎和守卫也是产品代码，要改就用编辑工具写，让守卫按想法图判一次；只是想看它，用什么办法都行 —— cat / git diff / gc / sls / awk 都不拦。`;
     }
-    if (ENGINE_INVOCATION.test(part) || substitution) {
+    if (ENGINE_INVOCATION.test(part) || NESTED_ENGINE_INVOCATION.test(part) || substitution) {
       return `引擎只能这样调：node/tsx/npx tsx <路径> [<子命令>]，子命令限 ${COMPANION_SUBCOMMANDS.join(" ")}（另加 ${HELP_FLAGS.join(" / ")}；一个都不写就是打印用法）。后面可以接一段只读的管道（| head、| less、| Select-Object …），但不许接第二条命令、重定向、换行续行或命令替换 —— 那些拆成两次调用（D28）。手工跑 guard/hook 入口等于自己造事件、给自己签批准，永远不放行（D26）：「${command.slice(0, 80)}」`;
     }
   }
@@ -1219,75 +1264,61 @@ function engineScreen(command: string): string | null {
  *  a fresh command whose only relation to the engine call is adjacency, and the
  *  smuggled newline proved what guessing at that costs. */
 const PIPED_RUNTIME = new RegExp(String.raw`^${LAUNCHER}${INTERPRETER_NAME}(\.exe)?\b`, "i");
+//  PIPED_RUNTIME stays after I-144 removed the interpreter wall, and the reason is
+//  that it answers a different question. The wall asked «is code being handed to a
+//  runtime?» and refused — that question is gone. This asks «may this stage ride in
+//  on the engine call's allowance?», and a runtime receiving a program on stdin may
+//  not, because that is the whole `… | bash` smuggling shape (D26/D28). The cost is
+//  small and has a remedy that is not a bypass: `node …companion.mjs status | python
+//  -c …` is refused, and the two halves run fine as two commands.
 const inertStage = (stage: string, projectDir: string) =>
   stage !== "" && !ENGINE_MENTION.test(stage) && mutatingShell(stage) === null
-  && !INTERPRETER.test(stage) && !PIPED_RUNTIME.test(stage)
+  && !PIPED_RUNTIME.test(stage)
   // …and a stage that lands on protected evidence is not inert either, however
   // it spells the landing: `… | busybox tee ideas/.approved` names no verb this
   // guard knows, and riding in behind a sanctioned engine call is exactly the
   // borrowed allowance the chain rule exists to refuse (D24/D26).
   && protectedTargetRefusal(stage, projectDir) === null;
 
-/** The repository's OWN installers and bundle build. INTERPRETER exists to stop
- *  an agent running an arbitrary script that writes files behind the path check
- *  (D21) — but these are sanctioned project tools, and nothing else reaches
- *  them: cli.ts dispatches the guard entry and the engine main only, and
- *  `install` is not an engine subcommand (D28). So they are allowed by exact
- *  entry path — `scripts/install.ts` is still an arbitrary script, and so is a
- *  same-named file anywhere but INSTALL_PATHS — and the argument tail is held to
- *  the same shape a sanctioned engine call is. */
-const SANCTIONED_SCRIPT = new RegExp(
-  String.raw`^(npx\s+tsx|node|tsx)\s+${scriptPath(String.raw`(?:companion[\\/](?:install\.ts|build\.mjs)|(?:claude|cursor)-companion[\\/]install\.ts)`)}(?:\s[^;&|<>\r\n]*)?$`, "i");
-
-/** A sanctioned install/build call: the right shape AND the right file (D26). */
-function sanctionedScript(command: string, projectDir: string): boolean {
-  const hit = SANCTIONED_SCRIPT.exec(command);
-  return hit !== null && atSanctionedPath(projectDir, hit[2], INSTALL_PATHS);
-}
+// The repository's OWN installers and bundle build used to be named here as an
+// exemption — SANCTIONED_SCRIPT plus INSTALL_PATHS — and I-144 deleted the pair.
+// The exemption existed for exactly one reason: the interpreter wall refused every
+// script, including this project's own installer and build, so those two had to be
+// let back in by exact path. With the wall gone the exemption has no object left —
+// `node companion/build.mjs` is allowed because running a script is allowed, not
+// because it appears on a list — and keeping the list would have made the guard
+// say something false: that `scripts/install.ts` is refused while
+// `companion/install.ts` is permitted, when in fact both simply run. The engine
+// allowlist is NOT this list and did not move: COMPANION_CLI and ENGINE_PATHS
+// still judge an engine call by identity, which is what keeps
+// `node ideas/companion.mjs check` refused (D26/B7).
 
 function ruleShell(event: NormalizedEvent, projectDir: string): Verdict {
   const command = (event.command ?? "").trim();
   if (!command) return OK;
 
-  // A doing idea's declared verify command is the sanctioned way to run tests —
-  // but verify.command is graph PROSE, and the graph is deliberately the
-  // agent's to write. Matching it therefore earns nothing on its own: the agent
-  // would just write the command it wants into the graph and then run it, which
-  // is every screen below wearing a verify field (D21/D26/D28). Two conditions
-  // before the allowance stands:
-  //   1. the declared command must BE one command — a chain carries a second
-  //      command the human never reviewed, so it is refused out loud rather
-  //      than quietly skipped: the graph is holding something to look at;
-  //   2. the idea's plan must carry a CURRENT human approval (D7). The plan
-  //      snapshot covers `verify`, so editing the command destroys the
-  //      approval — that self-destruct is the whole reason this can be trusted.
-  let declared: Graph["ideas"][number] | undefined;
+  // A doing idea's declared verify command is the sanctioned way to run tests.
+  // One condition before the allowance stands: it must BE one command — a chain
+  // carries a second command nobody looked at, so it is refused out loud rather
+  // than quietly skipped (D21/D28). 2026-09-16 (I-146): the second condition, a
+  // current plan approval (D7), came off — a single command is judged by the
+  // same pattern screen whether it is typed or declared, so the graph lends it
+  // nothing an agent could not already do from Bash.
   try {
     const graph = loadGraphStrict(projectDir);
-    declared = graph.ideas.find((i) => i.status === "doing" && i.verify?.command?.trim() === command);
+    const declared = graph.ideas.find((i) => i.status === "doing" && i.verify?.command?.trim() === command);
     // One rule, one definition (D11): the predicate AND the words both live on
-    // the engine side, because guard.ts imports ideas.ts and not the other way
-    // round. `run-check` asks the same function before it SPAWNS a declared
-    // command; this door asks it before it HONOURS one.
+    // the engine side. `run-check` asks the same function before it SPAWNS a
+    // declared command; this door asks it before it HONOURS one.
     const chained = declared && chainedCommandRefusal(declared, command);
     if (chained) return { allow: false, reason: chained };
-    if (declared && validApproval(projectDir, graph, "plan", declared.id)) return OK;
+    if (declared) return OK;
   } catch { /* no graph — fall through to the pattern screen */ }
 
-  const verdict = screenShell(command, projectDir);
-  if (verdict.allow || !declared) return verdict;
-  // The command IS this idea's declared verification, and what refused it is the
-  // missing plan approval (D7) — not whichever pattern happened to match first.
-  // Naming the pattern sent the human off to rewrite a command the graph already
-  // holds, instead of asking for the approval it is waiting on (D7/D28).
-  return {
-    allow: false,
-    reason: `这是 ${declared.id}「${declared.name}」在图里声明的 verify.command（「${command.slice(0, 80)}」），拦下它的不是命令本身，是这个想法的方案还没有当前有效的人工批准（D7）：去要一次 —— request-approval --node ${declared.id}，人回「批准」之后这条命令就照原样放行。（批准绑在图的内容上：之后再改 how / verify，批准作废，要重新要。若确实想改命令本身，先改图再要批准。原本挡住它的规则：${verdict.reason}）`,
-  };
+  return screenShell(command, projectDir);
 }
 
-/** The pattern screens, in the order a command meets them. Split out so the
- *  caller can keep the verdict and say something truer about WHY (D7). */
+/** The pattern screens, in the order a command meets them. */
 function screenShell(command: string, projectDir: string): Verdict {
   // A sanctioned call, alone or at the head of a read-only pipeline (D26/D28).
   // Two questions, and the second one is the one that used to go unasked: is
@@ -1300,14 +1331,6 @@ function screenShell(command: string, projectDir: string): Verdict {
         return atSanctionedPath(projectDir, engine[2], ENGINE_PATHS)
           ? OK
           : { allow: false, reason: misplacedScript(engine[2], ENGINE_PATHS) };
-      }
-      // The installers and the build keep the exemption they always had — from
-      // INTERPRETER only, never from MUTATING_HEAD.
-      const script = SANCTIONED_SCRIPT.exec(head);
-      if (script && mutatingShell(head) === null) {
-        return atSanctionedPath(projectDir, script[2], INSTALL_PATHS)
-          ? OK
-          : { allow: false, reason: misplacedScript(script[2], INSTALL_PATHS) };
       }
     }
   }
@@ -1322,13 +1345,20 @@ function screenShell(command: string, projectDir: string): Verdict {
   if (protectedFile) return { allow: false, reason: protectedFile };
   const mutation = mutatingShell(command);
   if (mutation !== null) return { allow: false, reason: mutatingReason(command, mutation) };
-  // D21's interpreter wall, minus the entry points this project owns: an install
-  // or a rebuild has no other route in, and a smuggled tail on any of them is
-  // still not a sanctioned call (D28). "Owns" means the file at that path, not a
-  // file with that name — same question as above, asked once more (D26).
-  if (INTERPRETER.test(command) && !(sanctionedScript(command, projectDir) && !SMUGGLED_TAIL.test(command))) {
-    return { allow: false, reason: `解释器（python -c / node --eval / powershell -enc <base64> / python 脚本.py / bash 没有扩展名的脚本 / deno run 脚本 / 管道右边的 … | bash …）绕得过路径检查，统一走 run-check（D21）。本仓库自己的安装器和打包入口除外：${INSTALL_PATHS.join("、")}（路径里有空格就给它加一对引号；必须是项目里的那一份，同名的别处文件不算）。` };
-  }
+  // D21's interpreter wall stood here and I-144 removed it. It asked whether code
+  // was being handed to a runtime — `python -c`, `node --eval`, `python 脚本.py`,
+  // `bash setup`, `… | bash` — and refused when the answer was yes. Four screens
+  // remain, and they are the ones above: the engine's own files (D26), the ledger
+  // files by target (D23/D24), the write-file verbs, and the redirects.
+  //
+  // What that costs, stated where the wall used to be rather than only in the
+  // graph: `python -c "open('src/a.ts','w')…"` now writes a product file without
+  // passing the idea-graph check at all. The shell screen was always a guardrail
+  // and never a sandbox — the edit tools remain the path that is actually judged —
+  // and the one consequence that would have been fatal, an agent writing its own
+  // approval receipt in a one-liner, is held by the ledger screen above instead
+  // (I-143). Its ceiling is stated there too: this stops the shortcut taken
+  // without thinking, not an agent that has decided to get around it (R6).
   return OK;
 }
 
@@ -1907,8 +1937,11 @@ export function resolvePlatform(args: string[]): Platform | null {
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
+  const timer = setTimeout(() => process.stdin.destroy(new Error("守卫 stdin 读取超时")), 2000);
+  try {
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+    return Buffer.concat(chunks).toString("utf8");
+  } finally { clearTimeout(timer); }
 }
 
 /** The hook entry, callable from the bundle's cli (I-096) or directly. */
@@ -1921,7 +1954,11 @@ export function runGuard(args: string[]): void {
   }
   readStdin().then((rawText) => {
     let raw: RawHook;
-    try { raw = JSON.parse(rawText || "{}") as RawHook; } catch { process.exit(0); return; }
+    try { raw = JSON.parse(rawText || "{}") as RawHook; } catch {
+      if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "deny", user_message: "守卫 stdin 不是 JSON" }));
+      process.exit(platformArg === "cursor" ? 0 : 2);
+      return;
+    }
     // Not the reported directory verbatim: a session that started in a
     // subdirectory would otherwise look for the graph in the wrong place (D16).
     const projectDir = projectRoot(raw.cwd ?? process.cwd());
@@ -1960,6 +1997,7 @@ export function runGuard(args: string[]): void {
     if (event.event === "post-write" && !guardOff) {
       const recorded = record(event, projectDir);
       if (recorded.warn) process.stderr.write(recorded.warn + "\n");
+      if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "allow" }));
       process.exit(0);
       return;
     }
@@ -1967,8 +2005,14 @@ export function runGuard(args: string[]): void {
     const reply = encode(event, verdict);
     if (verdict.warn) process.stderr.write(verdict.warn + "\n");
     if (reply.stdout) process.stdout.write(reply.stdout);
+    else if (platformArg === "cursor") process.stdout.write("{}");
     if (reply.stderr && !verdict.warn) process.stderr.write(reply.stderr);
     process.exit(reply.exitCode);
+  }).catch((error) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (platformArg === "cursor") process.stdout.write(JSON.stringify({ permission: "deny", user_message: reason }));
+    else process.stderr.write(reason + "\n");
+    process.exit(platformArg === "cursor" ? 0 : 2);
   });
 }
 

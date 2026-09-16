@@ -172,6 +172,41 @@ ideas:
     expect(v.reason, "这是 D24 的证据保护").toMatch(/D24/);
   });
 
+  // ── (e) I-143：账本路径藏在参数内部也算写账本 ────────────────────────────
+  // 今天挡住 `node -e "…'ideas/.approved'…"` 的**不是**这道账本屏幕，是解释器墙：
+  // 屏幕拿一整个 token 去 resolve，认不出藏在引号里的那段路径。I-144 要把解释器墙
+  // 整条拆掉，所以这一层必须自己站得住 —— 否则 agent 一行就能给自己写一张批准回执
+  // （D23/D24/D26）。
+  //
+  // 断言钉在「拦它的是谁」而不是「有没有被拦」：后者今天就是真的，写成那样这个测试
+  // 一出生就是绿的，什么也没守住。所以每一条都要求理由点名那个受保护的文件。
+  it("(e) a ledger path inside a quoted argument is refused BY the ledger screen", () => {
+    for (const [command, named] of [
+      [`node -e "require('fs').writeFileSync('ideas/.approved','CC-11111111 plan I-001')"`, /批准回执/],
+      [`python -c "open('ideas/.runtime/I-001.json','w').write('{}')"`, /运行期证据/],
+      [`node -e "require('fs').appendFileSync('ideas\\graph.yaml','x')"`, /想法图/],
+      [`python3 -c "open('ideas/.scan-todo','w')"`, /扫描清单/],
+      [`node -e "require('fs').writeFileSync('ideas/graph.html','')"`, /生成的网页/],
+    ] as [string, RegExp][]) {
+      const v = decide(shell(command), dir);
+      expect(v.allow, command).toBe(false);
+      expect(v.reason, `${command} —— 拦它的得是账本屏幕，理由要点名那个文件`).toMatch(named);
+      expect(v.reason, `${command} —— 这是 D24 的证据保护`).toMatch(/D24/);
+    }
+  });
+
+  // 抓「偷懒实现」的那一条：认的必须是那条**路径**，不是 `approved` / `graph.yaml`
+  // 这几个词，也不是以它们开头的别的文件名。三条都不带解释器，所以和解释器墙无关 ——
+  // 今天放行，实现之后必须还放行。
+  it("(e) a word that merely looks like a ledger name is not a ledger path", () => {
+    allows([
+      "some-packer --label approved /tmp/x",
+      "some-tool --note 'graph.yaml is generated'",
+      "busybox cp /tmp/x ideas/graph.yaml.bak",
+      "busybox cp /tmp/x ideas/.approved-old",
+    ]);
+  });
+
   // ── 不能靠过堵来补洞 ────────────────────────────────────────────────────
   // 注：搜索模式里带 `|` 又正好挨着引擎自己的路径（`rg "tar|dd" companion/guard.ts`）
   // 目前仍会被更早的那道引擎屏幕拒掉 —— 那道屏幕按 `[;&|]` 切命令、不认引号，和这里
