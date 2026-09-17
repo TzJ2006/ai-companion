@@ -775,3 +775,15 @@ I-116 因复用短锁新增对 I-113 的依赖；树的四块拆分不变。当�
 - 2026-09-16 20:52  Edit companion/skills/ccscan/SKILL.md
 - 2026-09-16 20:52  Edit companion/skills/ccapply/SKILL.md
 - 2026-09-16 20:52  Edit companion/skills/ccfix/SKILL.md
+- 2026-09-16 21:28  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/survey.sh
+- 2026-09-16 21:30  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/survey2.sh
+- 2026-09-16 21:31  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/purge.sh
+- 2026-09-16 21:32  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/purge.sh
+- 2026-09-16 21:32  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/purge.sh
+- 2026-09-16 21:32  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/purge.sh
+- 2026-09-16 21:32  Edit C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/purge.sh
+- 2026-09-16 21:34  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/verify.sh
+- 2026-09-16 21:34  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/diffcommits.sh
+- 2026-09-16 21:36  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/finish.sh
+- 2026-09-16 21:37  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/check.sh
+- 2026-09-16 21:40  Write C:/Users/tongt/AppData/Local/Temp/claude/D--GitHub-ai-companion/67cff2dd-99c5-4b42-abb3-015d2c4048f7/scratchpad/pushed.sh
